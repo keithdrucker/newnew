@@ -66,6 +66,20 @@ Schema: `board_members(id, departmentId, userId, role, createdAt, updatedAt)` wi
 
 **Shell layout (custom — distinct from the default sidebar template):** `components/layout/app-layout.tsx` renders three columns: a **68px navy icon rail** (`components/layout/icon-rail.tsx`) with the "EW" Carolina-blue monogram tile, vertical icon nav with a Carolina-blue active indicator and tooltips, plus the user/role switcher avatar at the bottom; a **248px white contextual panel** (`components/layout/context-panel.tsx`) that shows the EW Howell · Service Hub eyebrow, the section eyebrow + display-font title + tagline (driven by route via `SECTION_META`), and section-specific content (tickets routes show All Tickets + the department list inside a "Departments" collapsible; other routes show Quick links + a "Signed in" card); and the main content area. Admin-only rail items respect `session.role`. Replaces the previous single-pane `sidebar.tsx`.
 
+### Harmony Support (`artifacts/support`)
+Standalone end-user portal for the Harmony ITSM project — a separate React + Vite + TS web app served at `/support/` (slug `support`). Reuses `@workspace/api-client-react` and the same shadcn/Tailwind UI primitives as `itsm` (copied into `src/components/ui` so the look and feel stays consistent).
+
+**Auth model (demo, no passwords):** the portal stores the chosen end_user id in `localStorage["harmony-support-end-user-id"]` (`src/lib/portal-auth.ts`) and uses the existing global `POST /api/session/switch` endpoint via `PortalSessionProvider` (`src/components/providers/portal-session-provider.tsx`). On load, it silently re-asserts the choice if the global server session has drifted (e.g. someone switched users in the agent ITSM app). Sign-out clears local state only — it does not log other apps out. The sign-in page (`src/pages/sign-in.tsx`) lists end_users from `GET /api/people` (server already filters to `role = end_user`).
+
+**Routes (wouter, base = `BASE_URL` = `/support`):**
+- `/` → `pages/tickets-list.tsx` — the user's open conversations (server scopes `GET /api/tickets` to `reporterId = self` because the session role is `end_user`). Polls every 15s.
+- `/new` → `pages/new-conversation.tsx` — form that creates a ticket via `POST /api/tickets` with `type: "request"`, `priority: "medium"`, `source: "chat"`, defaulting `departmentId` to the user's own department when known. On success, navigates to the new chat thread.
+- `/tickets/:id` → `pages/chat-thread.tsx` — chat-style view of a ticket. Polls `GET /api/tickets/:id` every 5s, sends replies via `POST /api/tickets/:id/comments`, and renders an optimistic bubble while the request is in flight. The first bubble is the ticket description (authored by the reporter); subsequent bubbles are the ticket comments. Resolved/closed tickets hide the composer and show a "start a new request" CTA instead.
+
+**Chat surface (future LLM extension):** `components/chat-message.tsx` defines `ChatAuthorRole = "user" | "agent" | "assistant"` and renders all three bubble styles. Today only `user` and `agent` are produced from real ticket comments; the `assistant` role is reserved so an LLM-powered support assistant can be inserted into the same message stream later. `components/chat-composer.tsx` exposes a `toolbar` slot for future canned-reply chips / suggestion previews.
+
+**Theme:** same `light | dark | system` ThemeProvider as `itsm`, but persisted under `harmony-support-theme` (own localStorage key) so the two apps don't fight. Theme picker lives in the account dropdown in `components/portal-shell.tsx`. Favicon is a blue "?" mark (`public/favicon.svg`) to distinguish from the orange ITSM favicon.
+
 ### API Server (`artifacts/api-server`)
 Express 5 + Drizzle. Routes: `/api/session`, `/api/departments(/:id/settings)`, `/api/tickets(/:id/comments)`, `/api/people`, `/api/agents`, `/api/knowledge-base`, `/api/assets`, `/api/applications(/:id)`, `/api/vendors(/:id)`, `/api/dashboard(/timeseries|/breached)`.
 

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/support/"
+title = "Harmony Support"
+version = "1.0.0"
+id = "artifacts/support"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/support/" ]
+localPort = 22770
+
+[services.development]
+run = "pnpm --filter @workspace/support run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/support", "run", "build" ]
+publicDir = "artifacts/support/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22770"
+BASE_PATH = "/support/"
