@@ -115,19 +115,47 @@ export function Sidebar({ session }: { session: Session | null }) {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5 flex flex-col min-h-0">
         <Link
           href="/"
           className={cn(
             "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-slate-100 hover:text-foreground",
             location === "/" ? "bg-slate-100 text-foreground" : "text-slate-600",
           )}
+          data-testid="nav-dashboard"
         >
           <LayoutDashboard className="h-4 w-4" />
           Dashboard
         </Link>
 
-        <Collapsible open={boardOpen} onOpenChange={setBoardOpen}>
+        {navItems.slice(1).map((item) => {
+          if (item.adminOnly && session?.role !== "admin") return null;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-slate-100 hover:text-foreground",
+                isActive(item.href, item.matchPrefix)
+                  ? "bg-slate-100 text-foreground"
+                  : "text-slate-600",
+              )}
+              data-testid={`nav-${item.href.replace("/", "") || "home"}`}
+            >
+              <Icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          );
+        })}
+
+        <div className="pt-2 mt-1 border-t" />
+
+        <Collapsible
+          open={boardOpen}
+          onOpenChange={setBoardOpen}
+          className="flex flex-col min-h-0"
+        >
           <CollapsibleTrigger
             className={cn(
               "w-full flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-slate-100 hover:text-foreground",
@@ -146,7 +174,7 @@ export function Sidebar({ session }: { session: Session | null }) {
               )}
             />
           </CollapsibleTrigger>
-          <CollapsibleContent className="mt-1 space-y-0.5">
+          <CollapsibleContent className="mt-1 space-y-0.5 overflow-y-auto">
             <Link
               href="/tickets"
               className={cn(
@@ -192,27 +220,6 @@ export function Sidebar({ session }: { session: Session | null }) {
             })}
           </CollapsibleContent>
         </Collapsible>
-
-        {navItems.slice(1).map((item) => {
-          if (item.adminOnly && session?.role !== "admin") return null;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-slate-100 hover:text-foreground",
-                isActive(item.href, item.matchPrefix)
-                  ? "bg-slate-100 text-foreground"
-                  : "text-slate-600",
-              )}
-              data-testid={`nav-${item.href.replace("/", "") || "home"}`}
-            >
-              <Icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
       </div>
 
       {session && (
