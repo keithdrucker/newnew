@@ -1,0 +1,107 @@
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  boolean,
+  timestamp,
+  jsonb,
+  index,
+} from "drizzle-orm/pg-core";
+import { departmentsTable } from "./departments";
+import { usersTable } from "./users";
+
+// A "project" / initiative — a board of work. Loosely modeled on
+// Microsoft Planner: every project owns its own list of buckets
+// (columns), and each bucket has a list of tasks (cards).
+export const projectsTable = pgTable(
+  "projects",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    color: text("color").notNull().default("#4B9CD3"),
+    // active | on_hold | completed | archived
+    status: text("status").notNull().default("active"),
+    departmentId: integer("department_id").references(
+      () => departmentsTable.id,
+      { onDelete: "set null" },
+    ),
+    ownerId: integer("owner_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    deptIdx: index("projects_department_idx").on(t.departmentId),
+    updatedIdx: index("projects_updated_idx").on(t.updatedAt),
+  }),
+);
+
+export const projectBucketsTable = pgTable(
+  "project_buckets",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projectsTable.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index("project_buckets_project_idx").on(t.projectId),
+  }),
+);
+
+export type TaskLabel = { name: string; color: string };
+export type ChecklistItem = { text: string; done: boolean };
+
+export const projectTasksTable = pgTable(
+  "project_tasks",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projectsTable.id, { onDelete: "cascade" }),
+    bucketId: integer("bucket_id")
+      .notNull()
+      .references(() => projectBucketsTable.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    labels: jsonb("labels").$type<TaskLabel[]>().notNull().default([]),
+    checklist: jsonb("checklist").$type<ChecklistItem[]>().notNull().default([]),
+    assigneeId: integer("assignee_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    // low | medium | high | urgent
+    priority: text("priority").notNull().default("medium"),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    position: integer("position").notNull().default(0),
+    completed: boolean("completed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    projectIdx: index("project_tasks_project_idx").on(t.projectId),
+    bucketIdx: index("project_tasks_bucket_idx").on(t.bucketId),
+  }),
+);
+
+export type Project = typeof projectsTable.$inferSelect;
+export type ProjectBucket = typeof projectBucketsTable.$inferSelect;
+export type ProjectTask = typeof projectTasksTable.$inferSelect;

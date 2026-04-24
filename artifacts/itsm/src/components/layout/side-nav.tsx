@@ -12,6 +12,7 @@ import {
   ChevronsUpDown,
   ChevronRight,
   Layers,
+  KanbanSquare,
 } from "lucide-react";
 import {
   Session,
@@ -50,6 +51,14 @@ type NavItem = {
   adminOnly?: boolean;
 };
 
+type ProjectsSubItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  matchPrefix: string;
+  endUserHidden?: boolean;
+};
+
 const WORKSPACE: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   {
@@ -63,6 +72,16 @@ const WORKSPACE: NavItem[] = [
     label: "Knowledge",
     icon: BookOpen,
     matchPrefix: "/knowledge-base",
+  },
+];
+
+const TICKETS_SUB: ProjectsSubItem[] = [
+  {
+    href: "/projects",
+    label: "Projects",
+    icon: KanbanSquare,
+    matchPrefix: "/projects",
+    endUserHidden: true,
   },
 ];
 
@@ -94,7 +113,9 @@ export function SideNav({ session }: { session: Session | null }) {
   const [location] = useLocation();
 
   const showTicketsTree =
-    location === "/tickets" || location.startsWith("/tickets/");
+    location === "/tickets" ||
+    location.startsWith("/tickets/") ||
+    location.startsWith("/projects");
 
   return (
     <aside
@@ -130,6 +151,7 @@ export function SideNav({ session }: { session: Session | null }) {
                 item={item}
                 location={location}
                 expanded={showTicketsTree}
+                session={session}
               />
             ) : (
               <NavRow
@@ -217,19 +239,24 @@ function TicketsNavItem({
   item,
   location,
   expanded: defaultExpanded,
+  session,
 }: {
   item: NavItem;
   location: string;
   expanded: boolean;
+  session: Session | null;
 }) {
   const [open, setOpen] = useState(defaultExpanded);
   const Icon = item.icon;
   const sectionActive =
-    location === "/tickets" || location.startsWith("/tickets/");
+    location === "/tickets" ||
+    location.startsWith("/tickets/") ||
+    location.startsWith("/projects");
   const allActive = location === "/tickets";
   const [, deptMatch] = useRoute("/tickets/dept/:slug");
   const activeDeptSlug = deptMatch?.slug;
   const { data: departments } = useListDepartments();
+  const isEndUser = session?.role === "end_user";
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -278,6 +305,27 @@ function TicketsNavItem({
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           <span>All Tickets</span>
         </Link>
+        {TICKETS_SUB.map((sub) => {
+          if (sub.endUserHidden && isEndUser) return null;
+          const SubIcon = sub.icon;
+          const active = location.startsWith(sub.matchPrefix);
+          return (
+            <Link
+              key={sub.href}
+              href={sub.href}
+              data-testid={`nav-${sub.href.replace("/", "")}`}
+              className={cn(
+                "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+                active
+                  ? "bg-white/10 text-white font-medium"
+                  : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+              )}
+            >
+              <SubIcon className="h-3.5 w-3.5 text-sidebar-foreground/70" />
+              <span className="flex-1 truncate">{sub.label}</span>
+            </Link>
+          );
+        })}
         {departments?.map((dept) => {
           const DeptIcon = DEPT_ICON_MAP[dept.icon] ?? Layers;
           const active = activeDeptSlug === dept.slug;

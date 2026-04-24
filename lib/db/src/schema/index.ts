@@ -9,3 +9,4 @@ export * from "./boardMembers";
 export * from "./ticketViews";
 export * from "./applications";
 export * from "./vendors";
+export * from "./projects";

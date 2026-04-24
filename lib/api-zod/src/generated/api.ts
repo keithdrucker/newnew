@@ -1299,6 +1299,319 @@ export const DeleteVendorParams = zod.object({
 });
 
 /**
+ * @summary List projects (boards)
+ */
+export const ListProjectsQueryParams = zod.object({
+  status: zod.enum(["active", "on_hold", "completed", "archived"]).optional(),
+  departmentId: zod.coerce.number().optional(),
+  q: zod.coerce.string().optional(),
+});
+
+export const ListProjectsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string(),
+  color: zod.string(),
+  status: zod.enum(["active", "on_hold", "completed", "archived"]),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  ownerId: zod.number().nullish(),
+  ownerName: zod.string().nullish(),
+  dueAt: zod.coerce.date().nullish(),
+  bucketCount: zod.number(),
+  taskCount: zod.number(),
+  completedTaskCount: zod.number(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
+
+export const CreateProjectBody = zod.object({
+  name: zod.string(),
+  description: zod.string().optional(),
+  color: zod.string().optional(),
+  status: zod.enum(["active", "on_hold", "completed", "archived"]).optional(),
+  departmentId: zod.number().nullish(),
+  ownerId: zod.number().nullish(),
+  dueAt: zod.coerce.date().nullish(),
+});
+
+export const GetProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetProjectResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    description: zod.string(),
+    color: zod.string(),
+    status: zod.enum(["active", "on_hold", "completed", "archived"]),
+    departmentId: zod.number().nullish(),
+    departmentName: zod.string().nullish(),
+    ownerId: zod.number().nullish(),
+    ownerName: zod.string().nullish(),
+    dueAt: zod.coerce.date().nullish(),
+    bucketCount: zod.number(),
+    taskCount: zod.number(),
+    completedTaskCount: zod.number(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      buckets: zod.array(
+        zod
+          .object({
+            id: zod.number(),
+            projectId: zod.number(),
+            name: zod.string(),
+            position: zod.number(),
+            createdAt: zod.coerce.date(),
+          })
+          .and(
+            zod.object({
+              tasks: zod.array(
+                zod.object({
+                  id: zod.number(),
+                  projectId: zod.number(),
+                  bucketId: zod.number(),
+                  title: zod.string(),
+                  description: zod.string(),
+                  labels: zod.array(
+                    zod.object({
+                      name: zod.string(),
+                      color: zod.string(),
+                    }),
+                  ),
+                  checklist: zod.array(
+                    zod.object({
+                      text: zod.string(),
+                      done: zod.boolean(),
+                    }),
+                  ),
+                  assigneeId: zod.number().nullish(),
+                  assigneeName: zod.string().nullish(),
+                  priority: zod.enum(["low", "medium", "high", "urgent"]),
+                  dueAt: zod.coerce.date().nullish(),
+                  position: zod.number(),
+                  completed: zod.boolean(),
+                  createdAt: zod.coerce.date(),
+                  updatedAt: zod.coerce.date(),
+                }),
+              ),
+            }),
+          ),
+      ),
+    }),
+  );
+
+export const UpdateProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateProjectBody = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().optional(),
+  color: zod.string().optional(),
+  status: zod.enum(["active", "on_hold", "completed", "archived"]).optional(),
+  departmentId: zod.number().nullish(),
+  ownerId: zod.number().nullish(),
+  dueAt: zod.coerce.date().nullish(),
+});
+
+export const UpdateProjectResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    description: zod.string(),
+    color: zod.string(),
+    status: zod.enum(["active", "on_hold", "completed", "archived"]),
+    departmentId: zod.number().nullish(),
+    departmentName: zod.string().nullish(),
+    ownerId: zod.number().nullish(),
+    ownerName: zod.string().nullish(),
+    dueAt: zod.coerce.date().nullish(),
+    bucketCount: zod.number(),
+    taskCount: zod.number(),
+    completedTaskCount: zod.number(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      buckets: zod.array(
+        zod
+          .object({
+            id: zod.number(),
+            projectId: zod.number(),
+            name: zod.string(),
+            position: zod.number(),
+            createdAt: zod.coerce.date(),
+          })
+          .and(
+            zod.object({
+              tasks: zod.array(
+                zod.object({
+                  id: zod.number(),
+                  projectId: zod.number(),
+                  bucketId: zod.number(),
+                  title: zod.string(),
+                  description: zod.string(),
+                  labels: zod.array(
+                    zod.object({
+                      name: zod.string(),
+                      color: zod.string(),
+                    }),
+                  ),
+                  checklist: zod.array(
+                    zod.object({
+                      text: zod.string(),
+                      done: zod.boolean(),
+                    }),
+                  ),
+                  assigneeId: zod.number().nullish(),
+                  assigneeName: zod.string().nullish(),
+                  priority: zod.enum(["low", "medium", "high", "urgent"]),
+                  dueAt: zod.coerce.date().nullish(),
+                  position: zod.number(),
+                  completed: zod.boolean(),
+                  createdAt: zod.coerce.date(),
+                  updatedAt: zod.coerce.date(),
+                }),
+              ),
+            }),
+          ),
+      ),
+    }),
+  );
+
+export const DeleteProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateProjectBucketParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateProjectBucketBody = zod.object({
+  name: zod.string(),
+});
+
+export const UpdateProjectBucketParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateProjectBucketBody = zod.object({
+  name: zod.string().optional(),
+  position: zod.number().optional(),
+});
+
+export const UpdateProjectBucketResponse = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
+  name: zod.string(),
+  position: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+
+export const DeleteProjectBucketParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateProjectTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateProjectTaskBody = zod.object({
+  bucketId: zod.number(),
+  title: zod.string(),
+  description: zod.string().optional(),
+  labels: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        color: zod.string(),
+      }),
+    )
+    .optional(),
+  checklist: zod
+    .array(
+      zod.object({
+        text: zod.string(),
+        done: zod.boolean(),
+      }),
+    )
+    .optional(),
+  assigneeId: zod.number().nullish(),
+  priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
+  dueAt: zod.coerce.date().nullish(),
+});
+
+export const UpdateProjectTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateProjectTaskBody = zod.object({
+  bucketId: zod.number().optional(),
+  title: zod.string().optional(),
+  description: zod.string().optional(),
+  labels: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        color: zod.string(),
+      }),
+    )
+    .optional(),
+  checklist: zod
+    .array(
+      zod.object({
+        text: zod.string(),
+        done: zod.boolean(),
+      }),
+    )
+    .optional(),
+  assigneeId: zod.number().nullish(),
+  priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
+  dueAt: zod.coerce.date().nullish(),
+  position: zod.number().optional(),
+  completed: zod.boolean().optional(),
+});
+
+export const UpdateProjectTaskResponse = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
+  bucketId: zod.number(),
+  title: zod.string(),
+  description: zod.string(),
+  labels: zod.array(
+    zod.object({
+      name: zod.string(),
+      color: zod.string(),
+    }),
+  ),
+  checklist: zod.array(
+    zod.object({
+      text: zod.string(),
+      done: zod.boolean(),
+    }),
+  ),
+  assigneeId: zod.number().nullish(),
+  assigneeName: zod.string().nullish(),
+  priority: zod.enum(["low", "medium", "high", "urgent"]),
+  dueAt: zod.coerce.date().nullish(),
+  position: zod.number(),
+  completed: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+export const DeleteProjectTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary KPI cards + breakdown for a date range and (optionally) a department
  */
 export const getDashboardOverviewQueryRangeDaysDefault = 30;

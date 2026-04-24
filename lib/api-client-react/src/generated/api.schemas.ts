@@ -1025,6 +1025,157 @@ export interface DashboardTimeseries {
   points: TimeseriesPoint[];
 }
 
+export interface TaskLabel {
+  name: string;
+  color: string;
+}
+
+export interface ChecklistItem {
+  text: string;
+  done: boolean;
+}
+
+export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
+
+export const ProjectStatus = {
+  active: "active",
+  on_hold: "on_hold",
+  completed: "completed",
+  archived: "archived",
+} as const;
+
+export type TaskPriority = (typeof TaskPriority)[keyof typeof TaskPriority];
+
+export const TaskPriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
+export interface ProjectSummary {
+  id: number;
+  name: string;
+  description: string;
+  color: string;
+  status: ProjectStatus;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  departmentName?: string | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  dueAt?: string | null;
+  bucketCount: number;
+  taskCount: number;
+  completedTaskCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectBucket {
+  id: number;
+  projectId: number;
+  name: string;
+  position: number;
+  createdAt: string;
+}
+
+export interface ProjectTask {
+  id: number;
+  projectId: number;
+  bucketId: number;
+  title: string;
+  description: string;
+  labels: TaskLabel[];
+  checklist: ChecklistItem[];
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
+  priority: TaskPriority;
+  /** @nullable */
+  dueAt?: string | null;
+  position: number;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProjectBucketWithTasks = ProjectBucket & {
+  tasks: ProjectTask[];
+};
+
+export type ProjectDetail = ProjectSummary & {
+  buckets: ProjectBucketWithTasks[];
+};
+
+export interface CreateProjectInput {
+  name: string;
+  description?: string;
+  color?: string;
+  status?: ProjectStatus;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  dueAt?: string | null;
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  description?: string;
+  color?: string;
+  status?: ProjectStatus;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  dueAt?: string | null;
+}
+
+export interface CreateBucketInput {
+  name: string;
+}
+
+export interface UpdateBucketInput {
+  name?: string;
+  position?: number;
+}
+
+export interface CreateTaskInput {
+  bucketId: number;
+  title: string;
+  description?: string;
+  labels?: TaskLabel[];
+  checklist?: ChecklistItem[];
+  /** @nullable */
+  assigneeId?: number | null;
+  priority?: TaskPriority;
+  /** @nullable */
+  dueAt?: string | null;
+}
+
+export interface UpdateTaskInput {
+  bucketId?: number;
+  title?: string;
+  description?: string;
+  labels?: TaskLabel[];
+  checklist?: ChecklistItem[];
+  /** @nullable */
+  assigneeId?: number | null;
+  priority?: TaskPriority;
+  /** @nullable */
+  dueAt?: string | null;
+  position?: number;
+  completed?: boolean;
+}
+
 export type ListTicketsParams = {
   departmentId?: number;
   status?: ListTicketsStatus;
@@ -1169,6 +1320,22 @@ export const ListVendorsCategory = {
   telecom: "telecom",
   consulting: "consulting",
   other: "other",
+} as const;
+
+export type ListProjectsParams = {
+  status?: ListProjectsStatus;
+  departmentId?: number;
+  q?: string;
+};
+
+export type ListProjectsStatus =
+  (typeof ListProjectsStatus)[keyof typeof ListProjectsStatus];
+
+export const ListProjectsStatus = {
+  active: "active",
+  on_hold: "on_hold",
+  completed: "completed",
+  archived: "archived",
 } as const;
 
 export type GetDashboardOverviewParams = {

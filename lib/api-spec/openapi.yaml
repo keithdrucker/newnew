@@ -931,6 +931,195 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List projects (boards)
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, on_hold, completed, archived]
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProjectSummary" }
+    post:
+      operationId: createProject
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProjectInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Project with buckets and tasks
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProjectInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /projects/{id}/buckets:
+    post:
+      operationId: createProjectBucket
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBucketInput" }
+      responses:
+        "201":
+          description: Created bucket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectBucket" }
+
+  /project-buckets/{id}:
+    patch:
+      operationId: updateProjectBucket
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBucketInput" }
+      responses:
+        "200":
+          description: Updated bucket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectBucket" }
+    delete:
+      operationId: deleteProjectBucket
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /projects/{id}/tasks:
+    post:
+      operationId: createProjectTask
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTaskInput" }
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTask" }
+
+  /project-tasks/{id}:
+    patch:
+      operationId: updateProjectTask
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTaskInput" }
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTask" }
+    delete:
+      operationId: deleteProjectTask
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
   /dashboard/overview:
     get:
       operationId: getDashboardOverview
@@ -1847,3 +2036,191 @@ components:
           type: array
           items: { $ref: "#/components/schemas/TimeseriesPoint" }
       required: [rangeDays, points]
+
+    TaskLabel:
+      type: object
+      properties:
+        name: { type: string }
+        color: { type: string }
+      required: [name, color]
+
+    ChecklistItem:
+      type: object
+      properties:
+        text: { type: string }
+        done: { type: boolean }
+      required: [text, done]
+
+    ProjectStatus:
+      type: string
+      enum: [active, on_hold, completed, archived]
+
+    TaskPriority:
+      type: string
+      enum: [low, medium, high, urgent]
+
+    ProjectSummary:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        color: { type: string }
+        status: { $ref: "#/components/schemas/ProjectStatus" }
+        departmentId: { type: ["integer", "null"] }
+        departmentName: { type: ["string", "null"] }
+        ownerId: { type: ["integer", "null"] }
+        ownerName: { type: ["string", "null"] }
+        dueAt: { type: ["string", "null"], format: date-time }
+        bucketCount: { type: integer }
+        taskCount: { type: integer }
+        completedTaskCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - name
+        - description
+        - color
+        - status
+        - bucketCount
+        - taskCount
+        - completedTaskCount
+        - createdAt
+        - updatedAt
+
+    ProjectBucket:
+      type: object
+      properties:
+        id: { type: integer }
+        projectId: { type: integer }
+        name: { type: string }
+        position: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required: [id, projectId, name, position, createdAt]
+
+    ProjectTask:
+      type: object
+      properties:
+        id: { type: integer }
+        projectId: { type: integer }
+        bucketId: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        labels:
+          type: array
+          items: { $ref: "#/components/schemas/TaskLabel" }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistItem" }
+        assigneeId: { type: ["integer", "null"] }
+        assigneeName: { type: ["string", "null"] }
+        priority: { $ref: "#/components/schemas/TaskPriority" }
+        dueAt: { type: ["string", "null"], format: date-time }
+        position: { type: integer }
+        completed: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - projectId
+        - bucketId
+        - title
+        - description
+        - labels
+        - checklist
+        - priority
+        - position
+        - completed
+        - createdAt
+        - updatedAt
+
+    ProjectBucketWithTasks:
+      allOf:
+        - $ref: "#/components/schemas/ProjectBucket"
+        - type: object
+          properties:
+            tasks:
+              type: array
+              items: { $ref: "#/components/schemas/ProjectTask" }
+          required: [tasks]
+
+    ProjectDetail:
+      allOf:
+        - $ref: "#/components/schemas/ProjectSummary"
+        - type: object
+          properties:
+            buckets:
+              type: array
+              items: { $ref: "#/components/schemas/ProjectBucketWithTasks" }
+          required: [buckets]
+
+    CreateProjectInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        color: { type: string }
+        status: { $ref: "#/components/schemas/ProjectStatus" }
+        departmentId: { type: ["integer", "null"] }
+        ownerId: { type: ["integer", "null"] }
+        dueAt: { type: ["string", "null"], format: date-time }
+      required: [name]
+
+    UpdateProjectInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        color: { type: string }
+        status: { $ref: "#/components/schemas/ProjectStatus" }
+        departmentId: { type: ["integer", "null"] }
+        ownerId: { type: ["integer", "null"] }
+        dueAt: { type: ["string", "null"], format: date-time }
+
+    CreateBucketInput:
+      type: object
+      properties:
+        name: { type: string }
+      required: [name]
+
+    UpdateBucketInput:
+      type: object
+      properties:
+        name: { type: string }
+        position: { type: integer }
+
+    CreateTaskInput:
+      type: object
+      properties:
+        bucketId: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        labels:
+          type: array
+          items: { $ref: "#/components/schemas/TaskLabel" }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistItem" }
+        assigneeId: { type: ["integer", "null"] }
+        priority: { $ref: "#/components/schemas/TaskPriority" }
+        dueAt: { type: ["string", "null"], format: date-time }
+      required: [bucketId, title]
+
+    UpdateTaskInput:
+      type: object
+      properties:
+        bucketId: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        labels:
+          type: array
+          items: { $ref: "#/components/schemas/TaskLabel" }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistItem" }
+        assigneeId: { type: ["integer", "null"] }
+        priority: { $ref: "#/components/schemas/TaskPriority" }
+        dueAt: { type: ["string", "null"], format: date-time }
+        position: { type: integer }
+        completed: { type: boolean }
