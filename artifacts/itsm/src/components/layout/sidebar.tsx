@@ -100,29 +100,6 @@ export function Sidebar({ session }: { session: Session | null }) {
           Dashboard
         </Link>
 
-        {navItems.slice(1).map((item) => {
-          if (item.adminOnly && session?.role !== "admin") return null;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-accent hover:text-foreground",
-                isActive(item.href, item.matchPrefix)
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground",
-              )}
-              data-testid={`nav-${item.href.replace("/", "") || "home"}`}
-            >
-              <Icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
-
-        <div className="pt-2 mt-1 border-t" />
-
         <Collapsible
           open={boardOpen}
           onOpenChange={setBoardOpen}
@@ -192,6 +169,29 @@ export function Sidebar({ session }: { session: Session | null }) {
             })}
           </CollapsibleContent>
         </Collapsible>
+
+        <div className="pt-2 mt-1 border-t" />
+
+        {navItems.slice(1).map((item) => {
+          if (item.adminOnly && session?.role !== "admin") return null;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-accent hover:text-foreground",
+                isActive(item.href, item.matchPrefix)
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground",
+              )}
+              data-testid={`nav-${item.href.replace("/", "") || "home"}`}
+            >
+              <Icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          );
+        })}
       </div>
 
       {session && (

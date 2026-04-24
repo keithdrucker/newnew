@@ -28,6 +28,8 @@ tags:
     description: Dashboard analytics endpoints
   - name: settings
     description: Department portal settings
+  - name: projects
+    description: Project board / planner operations
 paths:
   /healthz:
     get:
@@ -682,6 +684,193 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Ticket" }
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProjectInput" }
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project with its buckets and tasks
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Project detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProjectInput" }
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /projects/{id}/buckets:
+    post:
+      operationId: createProjectBucket
+      tags: [projects]
+      summary: Add a bucket to a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBucketInput" }
+      responses:
+        "201":
+          description: Created bucket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectBucket" }
+
+  /buckets/{id}:
+    patch:
+      operationId: updateProjectBucket
+      tags: [projects]
+      summary: Update a bucket
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBucketInput" }
+      responses:
+        "200":
+          description: Updated bucket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectBucket" }
+    delete:
+      operationId: deleteProjectBucket
+      tags: [projects]
+      summary: Delete a bucket and its tasks
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /buckets/{id}/tasks:
+    post:
+      operationId: createProjectTask
+      tags: [projects]
+      summary: Create a task in a bucket
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTaskInput" }
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTask" }
+
+  /tasks/{id}:
+    patch:
+      operationId: updateProjectTask
+      tags: [projects]
+      summary: Update a task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTaskInput" }
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTask" }
+    delete:
+      operationId: deleteProjectTask
+      tags: [projects]
+      summary: Delete a task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
 
 components:
   schemas:
