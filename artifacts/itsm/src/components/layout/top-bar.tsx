@@ -4,10 +4,10 @@ import {
   Ticket,
   BookOpen,
   MonitorPlay,
-  Users,
   UserRound,
   Settings,
   ChevronsUpDown,
+  Search,
 } from "lucide-react";
 import {
   Session,
@@ -17,12 +17,6 @@ import {
 } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   Popover,
   PopoverContent,
@@ -37,7 +31,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
-type Item = {
+type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -45,7 +39,7 @@ type Item = {
   adminOnly?: boolean;
 };
 
-const ITEMS: Item[] = [
+const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   {
     href: "/tickets",
@@ -70,58 +64,80 @@ const ITEMS: Item[] = [
   },
 ];
 
-export function IconRail({ session }: { session: Session | null }) {
+export function TopBar({ session }: { session: Session | null }) {
   const [location] = useLocation();
   const isActive = (href: string, prefix?: string) =>
     prefix ? location.startsWith(prefix) : location === href;
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <aside
-        className="w-[68px] shrink-0 bg-sidebar text-sidebar-foreground flex flex-col items-center py-3 gap-1"
-        data-testid="icon-rail"
+    <header
+      className="h-16 shrink-0 bg-sidebar text-sidebar-foreground border-b border-sidebar-border/40 flex items-center px-5 gap-6"
+      data-testid="top-bar"
+    >
+      <Link
+        href="/"
+        className="flex items-center gap-2.5 shrink-0"
+        data-testid="brand-mark"
       >
-        <Link href="/" data-testid="brand-mark">
-          <div className="h-11 w-11 rounded-xl bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center font-display font-bold text-[15px] shadow-md ring-1 ring-white/10 mb-3">
-            EW
-          </div>
-        </Link>
+        <div className="h-9 w-9 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center font-display font-bold text-[13px] shadow-md ring-1 ring-white/10">
+          EW
+        </div>
+        <div className="leading-tight">
+          <p className="font-display font-semibold text-[15px] tracking-tight text-white">
+            Service Hub
+          </p>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-sidebar-foreground/60">
+            EW Howell
+          </p>
+        </div>
+      </Link>
 
-        <nav className="flex-1 flex flex-col items-center gap-1">
-          {ITEMS.map((item) => {
-            if (item.adminOnly && session?.role !== "admin") return null;
-            const Icon = item.icon;
-            const active = isActive(item.href, item.matchPrefix);
-            return (
-              <Tooltip key={item.href}>
-                <TooltipTrigger asChild>
-                  <Link
-                    href={item.href}
-                    data-testid={`rail-${item.href.replace("/", "") || "home"}`}
-                    className={cn(
-                      "relative h-11 w-11 rounded-lg flex items-center justify-center transition-colors group",
-                      active
-                        ? "bg-sidebar-accent text-white"
-                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-white",
-                    )}
-                  >
-                    {active && (
-                      <span className="absolute -left-3 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-sidebar-primary" />
-                    )}
-                    <Icon className="h-[18px] w-[18px]" />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  {item.label}
-                </TooltipContent>
-              </Tooltip>
-            );
-          })}
-        </nav>
+      <nav
+        className="flex items-center gap-0.5 ml-2"
+        data-testid="primary-nav"
+      >
+        {NAV_ITEMS.map((item) => {
+          if (item.adminOnly && session?.role !== "admin") return null;
+          const Icon = item.icon;
+          const active = isActive(item.href, item.matchPrefix);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              data-testid={`nav-${item.href.replace("/", "") || "home"}`}
+              className={cn(
+                "relative flex items-center gap-2 px-3 h-9 rounded-md text-[13px] font-medium transition-colors",
+                active
+                  ? "bg-white/10 text-white"
+                  : "text-sidebar-foreground/75 hover:text-white hover:bg-white/5",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{item.label}</span>
+              {active && (
+                <span className="absolute -bottom-[17px] left-3 right-3 h-0.5 bg-sidebar-primary rounded-full" />
+              )}
+            </Link>
+          );
+        })}
+      </nav>
 
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          type="button"
+          className="hidden sm:inline-flex items-center gap-2 h-9 px-3 rounded-md border border-white/10 bg-white/5 text-[12px] text-sidebar-foreground/70 hover:bg-white/10 hover:text-white transition-colors"
+          data-testid="button-search"
+          aria-label="Search"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span>Search</span>
+          <span className="ml-2 text-[10px] text-sidebar-foreground/50 border border-white/10 rounded px-1 py-0.5 font-mono">
+            ⌘K
+          </span>
+        </button>
         {session && <UserSwitcher session={session} />}
-      </aside>
-    </TooltipProvider>
+      </div>
+    </header>
   );
 }
 
@@ -135,32 +151,40 @@ function UserSwitcher({ session }: { session: Session }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="mt-2 h-11 w-11 rounded-lg flex items-center justify-center hover:bg-sidebar-accent/60 transition-colors"
+          className="inline-flex items-center gap-2 h-9 pl-1 pr-2 rounded-md hover:bg-white/10 transition-colors"
           data-testid="button-role-switcher"
           aria-label="Switch user"
         >
-          <Avatar className="h-8 w-8 ring-1 ring-white/15">
-            <AvatarFallback className="bg-sidebar-accent text-white text-[11px] font-semibold">
+          <Avatar className="h-7 w-7 ring-1 ring-white/15">
+            <AvatarFallback className="bg-sidebar-accent text-white text-[10px] font-semibold">
               {session.name.substring(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
+          <div className="hidden md:block text-left leading-tight">
+            <p className="text-[12px] font-medium text-white">{session.name}</p>
+            <p className="text-[10px] text-sidebar-foreground/60 capitalize">
+              {session.role}
+              {session.departmentName ? ` · ${session.departmentName}` : ""}
+            </p>
+          </div>
+          <ChevronsUpDown className="h-3 w-3 text-sidebar-foreground/60" />
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        className="w-72 p-0 ml-2 mb-2"
-        side="right"
-        align="end"
-      >
+      <PopoverContent className="w-72 p-0 mr-2 mt-1" align="end">
         <div className="px-3 py-2 border-b">
-          <p className="text-[13px] font-medium leading-tight">{session.name}</p>
-          <p className="text-[11px] text-muted-foreground capitalize mt-0.5 inline-flex items-center gap-1">
+          <p className="text-[13px] font-medium leading-tight">
+            {session.name}
+          </p>
+          <p className="text-[11px] text-muted-foreground capitalize mt-0.5">
             {session.role}
             {session.departmentName ? ` · ${session.departmentName}` : ""}
-            <ChevronsUpDown className="h-3 w-3" />
           </p>
         </div>
         <Command>
-          <CommandInput placeholder="Switch demo user..." className="h-9 text-sm" />
+          <CommandInput
+            placeholder="Switch demo user..."
+            className="h-9 text-sm"
+          />
           <CommandList className="max-h-[320px]">
             <CommandEmpty>No user found.</CommandEmpty>
             <CommandGroup heading="Admins & Agents">

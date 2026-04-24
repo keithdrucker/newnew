@@ -1,11 +1,15 @@
 import { ReactNode } from "react";
-import { IconRail } from "./icon-rail";
-import { ContextPanel } from "./context-panel";
+import { useLocation } from "wouter";
+import { TopBar } from "./top-bar";
+import { TicketsStrip } from "./tickets-strip";
 import { useSession } from "@/components/providers/session-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { session, isLoading } = useSession();
+  const [location] = useLocation();
+  const showTicketsStrip =
+    location === "/tickets" || location.startsWith("/tickets/dept/");
 
   if (isLoading) {
     return (
@@ -16,14 +20,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <IconRail session={session} />
-      <ContextPanel />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-auto p-6 bg-muted/40">
-          {children}
-        </main>
-      </div>
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <TopBar session={session} />
+      {showTicketsStrip && <TicketsStrip />}
+      <main className="flex-1 overflow-auto p-6 bg-muted/40">{children}</main>
     </div>
   );
 }
