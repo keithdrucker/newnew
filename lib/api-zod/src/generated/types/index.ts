@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./addBoardMemberInput";
 export * from "./addTicketCommentInput";
 export * from "./agent";
 export * from "./agentLeaderboardItem";
@@ -13,6 +14,8 @@ export * from "./asset";
 export * from "./assetSite";
 export * from "./assetStatus";
 export * from "./assetType";
+export * from "./boardMember";
+export * from "./boardRole";
 export * from "./createAgentInput";
 export * from "./createAssetInput";
 export * from "./createAssetInputSite";
@@ -20,6 +23,7 @@ export * from "./createAssetInputStatus";
 export * from "./createAssetInputType";
 export * from "./createDepartmentInput";
 export * from "./createKbArticleInput";
+export * from "./createKbArticleInputSource";
 export * from "./createPersonInput";
 export * from "./createTicketInput";
 export * from "./createTicketInputPriority";
@@ -38,10 +42,14 @@ export * from "./getDashboardTimeseriesParams";
 export * from "./getDashboardTimeseriesRangeDays";
 export * from "./healthStatus";
 export * from "./kbArticle";
+export * from "./kbArticleSource";
+export * from "./kbArticleSyncStatus";
 export * from "./listAgentsParams";
 export * from "./listAssetsParams";
 export * from "./listAssetsStatus";
 export * from "./listKbArticlesParams";
+export * from "./listKbArticlesSource";
+export * from "./listKbArticlesStatus";
 export * from "./listPeopleParams";
 export * from "./listTicketsParams";
 export * from "./listTicketsPriority";
@@ -64,6 +72,7 @@ export * from "./updateAssetInput";
 export * from "./updateAssetInputSite";
 export * from "./updateAssetInputStatus";
 export * from "./updateAssetInputType";
+export * from "./updateBoardMemberInput";
 export * from "./updateDepartmentInput";
 export * from "./updateDepartmentSettingsInput";
 export * from "./updateDepartmentSettingsInputDefaultPriority";

@@ -30,6 +30,7 @@ import { useSession } from "@/components/providers/session-provider";
 import { DEPT_ICON_MAP } from "@/lib/dept-icons";
 import { EditBoardDialog } from "@/components/settings/edit-board-dialog";
 import { DeleteBoardDialog } from "@/components/settings/delete-board-dialog";
+import { BoardMembersCard } from "@/components/settings/board-members-card";
 
 type Priority = "low" | "medium" | "high" | "urgent";
 
@@ -142,6 +143,9 @@ export default function BoardSettings({
             setLocation(`/settings/boards/${newSlug}`)
           }
         />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BoardMembersCard departmentId={department.id} />
       </div>
       <DepartmentSettingsForm
         key={department.id}

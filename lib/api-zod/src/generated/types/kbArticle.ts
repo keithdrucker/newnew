@@ -5,6 +5,8 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { KbArticleSource } from "./kbArticleSource";
+import type { KbArticleSyncStatus } from "./kbArticleSyncStatus";
 
 export interface KbArticle {
   id: number;
@@ -15,6 +17,10 @@ export interface KbArticle {
   authorName: string;
   tags: string[];
   views: number;
+  source: KbArticleSource;
+  syncStatus: KbArticleSyncStatus;
+  /** @nullable */
+  lastSyncedAt: Date | null;
   updatedAt: Date;
   createdAt: Date;
 }

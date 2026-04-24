@@ -49,6 +49,9 @@ async function hydrate(rows: (typeof kbArticlesTable.$inferSelect)[]) {
     authorName: userMap.get(r.authorId)?.name ?? "Unknown",
     tags: r.tags,
     views: r.views,
+    source: r.source,
+    syncStatus: r.syncStatus,
+    lastSyncedAt: r.lastSyncedAt ? r.lastSyncedAt.toISOString() : null,
     updatedAt: r.updatedAt.toISOString(),
     createdAt: r.createdAt.toISOString(),
   }));
@@ -63,6 +66,10 @@ router.get("/knowledge-base", async (req, res): Promise<void> => {
   const conds: Array<ReturnType<typeof eq>> = [];
   if (params.data.departmentId != null)
     conds.push(eq(kbArticlesTable.departmentId, params.data.departmentId));
+  if (params.data.source)
+    conds.push(eq(kbArticlesTable.source, params.data.source));
+  if (params.data.status)
+    conds.push(eq(kbArticlesTable.syncStatus, params.data.status));
   const where = conds.length ? and(...conds) : undefined;
   const baseQuery = db.select().from(kbArticlesTable);
   const rows = await (where ? baseQuery.where(where) : baseQuery)

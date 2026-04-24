@@ -5,8 +5,12 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListKbArticlesSource } from "./listKbArticlesSource";
+import type { ListKbArticlesStatus } from "./listKbArticlesStatus";
 
 export type ListKbArticlesParams = {
   departmentId?: number;
   q?: string;
+  source?: ListKbArticlesSource;
+  status?: ListKbArticlesStatus;
 };

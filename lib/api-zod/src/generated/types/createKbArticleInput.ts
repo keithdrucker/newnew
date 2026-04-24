@@ -5,10 +5,12 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateKbArticleInputSource } from "./createKbArticleInputSource";
 
 export interface CreateKbArticleInput {
   title: string;
   body: string;
   departmentId: number;
   tags?: string[];
+  source?: CreateKbArticleInputSource;
 }

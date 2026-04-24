@@ -14,6 +14,9 @@ export const kbArticlesTable = pgTable("kb_articles", {
   authorId: integer("author_id").notNull(),
   tags: text("tags").array().notNull().default([]),
   views: integer("views").notNull().default(0),
+  source: text("source").notNull().default("manual"),
+  syncStatus: text("sync_status").notNull().default("completed"),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

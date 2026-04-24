@@ -17,9 +17,11 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AddBoardMemberInput,
   AddTicketCommentInput,
   Agent,
   Asset,
+  BoardMember,
   CreateAgentInput,
   CreateAssetInput,
   CreateDepartmentInput,
@@ -48,6 +50,7 @@ import type {
   TicketDetail,
   UpdateAgentInput,
   UpdateAssetInput,
+  UpdateBoardMemberInput,
   UpdateDepartmentInput,
   UpdateDepartmentSettingsInput,
   UpdateKbArticleInput,
@@ -891,6 +894,353 @@ export const useUpdateDepartmentSettings = <
   TContext
 > => {
   return useMutation(getUpdateDepartmentSettingsMutationOptions(options));
+};
+
+/**
+ * @summary List agents/admins assigned to this board with their per-board role
+ */
+export const getListBoardMembersUrl = (id: number) => {
+  return `/api/departments/${id}/members`;
+};
+
+export const listBoardMembers = async (
+  id: number,
+  options?: RequestInit,
+): Promise<BoardMember[]> => {
+  return customFetch<BoardMember[]>(getListBoardMembersUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBoardMembersQueryKey = (id: number) => {
+  return [`/api/departments/${id}/members`] as const;
+};
+
+export const getListBoardMembersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBoardMembers>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBoardMembers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBoardMembersQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listBoardMembers>>
+  > = ({ signal }) => listBoardMembers(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBoardMembers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBoardMembersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBoardMembers>>
+>;
+export type ListBoardMembersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List agents/admins assigned to this board with their per-board role
+ */
+
+export function useListBoardMembers<
+  TData = Awaited<ReturnType<typeof listBoardMembers>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBoardMembers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBoardMembersQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add an agent to this board with a role (admin only)
+ */
+export const getAddBoardMemberUrl = (id: number) => {
+  return `/api/departments/${id}/members`;
+};
+
+export const addBoardMember = async (
+  id: number,
+  addBoardMemberInput: AddBoardMemberInput,
+  options?: RequestInit,
+): Promise<BoardMember> => {
+  return customFetch<BoardMember>(getAddBoardMemberUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addBoardMemberInput),
+  });
+};
+
+export const getAddBoardMemberMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addBoardMember>>,
+    TError,
+    { id: number; data: BodyType<AddBoardMemberInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addBoardMember>>,
+  TError,
+  { id: number; data: BodyType<AddBoardMemberInput> },
+  TContext
+> => {
+  const mutationKey = ["addBoardMember"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addBoardMember>>,
+    { id: number; data: BodyType<AddBoardMemberInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return addBoardMember(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddBoardMemberMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addBoardMember>>
+>;
+export type AddBoardMemberMutationBody = BodyType<AddBoardMemberInput>;
+export type AddBoardMemberMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add an agent to this board with a role (admin only)
+ */
+export const useAddBoardMember = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addBoardMember>>,
+    TError,
+    { id: number; data: BodyType<AddBoardMemberInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addBoardMember>>,
+  TError,
+  { id: number; data: BodyType<AddBoardMemberInput> },
+  TContext
+> => {
+  return useMutation(getAddBoardMemberMutationOptions(options));
+};
+
+/**
+ * @summary Change an agent's role on this board (admin only)
+ */
+export const getUpdateBoardMemberUrl = (id: number, userId: number) => {
+  return `/api/departments/${id}/members/${userId}`;
+};
+
+export const updateBoardMember = async (
+  id: number,
+  userId: number,
+  updateBoardMemberInput: UpdateBoardMemberInput,
+  options?: RequestInit,
+): Promise<BoardMember> => {
+  return customFetch<BoardMember>(getUpdateBoardMemberUrl(id, userId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateBoardMemberInput),
+  });
+};
+
+export const getUpdateBoardMemberMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBoardMember>>,
+    TError,
+    { id: number; userId: number; data: BodyType<UpdateBoardMemberInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateBoardMember>>,
+  TError,
+  { id: number; userId: number; data: BodyType<UpdateBoardMemberInput> },
+  TContext
+> => {
+  const mutationKey = ["updateBoardMember"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateBoardMember>>,
+    { id: number; userId: number; data: BodyType<UpdateBoardMemberInput> }
+  > = (props) => {
+    const { id, userId, data } = props ?? {};
+
+    return updateBoardMember(id, userId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateBoardMemberMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateBoardMember>>
+>;
+export type UpdateBoardMemberMutationBody = BodyType<UpdateBoardMemberInput>;
+export type UpdateBoardMemberMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Change an agent's role on this board (admin only)
+ */
+export const useUpdateBoardMember = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBoardMember>>,
+    TError,
+    { id: number; userId: number; data: BodyType<UpdateBoardMemberInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateBoardMember>>,
+  TError,
+  { id: number; userId: number; data: BodyType<UpdateBoardMemberInput> },
+  TContext
+> => {
+  return useMutation(getUpdateBoardMemberMutationOptions(options));
+};
+
+/**
+ * @summary Remove an agent from this board (admin only)
+ */
+export const getRemoveBoardMemberUrl = (id: number, userId: number) => {
+  return `/api/departments/${id}/members/${userId}`;
+};
+
+export const removeBoardMember = async (
+  id: number,
+  userId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRemoveBoardMemberUrl(id, userId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveBoardMemberMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeBoardMember>>,
+    TError,
+    { id: number; userId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeBoardMember>>,
+  TError,
+  { id: number; userId: number },
+  TContext
+> => {
+  const mutationKey = ["removeBoardMember"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeBoardMember>>,
+    { id: number; userId: number }
+  > = (props) => {
+    const { id, userId } = props ?? {};
+
+    return removeBoardMember(id, userId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveBoardMemberMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeBoardMember>>
+>;
+
+export type RemoveBoardMemberMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove an agent from this board (admin only)
+ */
+export const useRemoveBoardMember = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeBoardMember>>,
+    TError,
+    { id: number; userId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeBoardMember>>,
+  TError,
+  { id: number; userId: number },
+  TContext
+> => {
+  return useMutation(getRemoveBoardMemberMutationOptions(options));
 };
 
 /**

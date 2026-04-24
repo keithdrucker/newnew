@@ -23,6 +23,12 @@ import {
 } from "@workspace/api-zod";
 import { getCurrentUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
+import {
+  getBoardRole,
+  modifiableDepartmentIds,
+  roleAtLeast,
+  visibleDepartmentIds,
+} from "../lib/board-access";
 
 const router: IRouter = Router();
 
@@ -82,17 +88,6 @@ async function hydrate(rows: TicketRow[]) {
   }));
 }
 
-function applyAccessFilter(
-  user: Awaited<ReturnType<typeof getCurrentUser>>,
-  conditions: Array<ReturnType<typeof eq>>,
-) {
-  if (user.role === "agent" && user.departmentId != null) {
-    conditions.push(eq(ticketsTable.departmentId, user.departmentId));
-  } else if (user.role === "end_user") {
-    conditions.push(eq(ticketsTable.reporterId, user.id));
-  }
-}
-
 router.get("/tickets", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
   const params = ListTicketsQueryParams.safeParse(coerceQuery(req.query as Record<string, unknown>));
@@ -107,7 +102,19 @@ router.get("/tickets", async (req, res): Promise<void> => {
     conds.push(eq(ticketsTable.status, params.data.status));
   if (params.data.priority)
     conds.push(eq(ticketsTable.priority, params.data.priority));
-  applyAccessFilter(user, conds);
+
+  // Per-board access filter (admin sees all; agent sees boards they're members of;
+  // end_user only their own reported tickets).
+  if (user.role === "end_user") {
+    conds.push(eq(ticketsTable.reporterId, user.id));
+  } else if (user.role === "agent") {
+    const visible = await visibleDepartmentIds(user);
+    if (!visible || visible.length === 0) {
+      res.json([]);
+      return;
+    }
+    conds.push(inArray(ticketsTable.departmentId, visible));
+  }
 
   const where = conds.length ? and(...conds) : undefined;
   let query = db.select().from(ticketsTable);
@@ -140,10 +147,18 @@ async function nextTicketKey(type: "incident" | "request"): Promise<string> {
 }
 
 router.post("/tickets", async (req, res): Promise<void> => {
+  const user = await getCurrentUser(req);
   const parsed = CreateTicketBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
+  }
+  if (user.role === "agent") {
+    const role = await getBoardRole(user, parsed.data.departmentId);
+    if (!roleAtLeast(role, "modify")) {
+      res.status(403).json({ error: "Read-only on this board" });
+      return;
+    }
   }
   const settings = await db
     .select()
@@ -196,9 +211,12 @@ router.get("/tickets/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Ticket not found" });
     return;
   }
-  if (user.role === "agent" && user.departmentId != null && row.departmentId !== user.departmentId) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
+  if (user.role === "agent") {
+    const role = await getBoardRole(user, row.departmentId);
+    if (!role) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
   }
   if (user.role === "end_user" && row.reporterId !== user.id) {
     res.status(403).json({ error: "Forbidden" });
@@ -254,17 +272,16 @@ router.patch("/tickets/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Ticket not found" });
     return;
   }
-  if (
-    user.role === "agent" &&
-    user.departmentId != null &&
-    existing.departmentId !== user.departmentId
-  ) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
   if (user.role === "end_user") {
     res.status(403).json({ error: "Forbidden" });
     return;
+  }
+  if (user.role === "agent") {
+    const role = await getBoardRole(user, existing.departmentId);
+    if (!roleAtLeast(role, "modify")) {
+      res.status(403).json({ error: "Read-only on this board" });
+      return;
+    }
   }
 
   const updates: Partial<typeof ticketsTable.$inferInsert> = { ...parsed.data };
@@ -326,13 +343,12 @@ router.post("/tickets/:id/comments", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Ticket not found" });
     return;
   }
-  if (
-    user.role === "agent" &&
-    user.departmentId != null &&
-    ticket.departmentId !== user.departmentId
-  ) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
+  if (user.role === "agent") {
+    const role = await getBoardRole(user, ticket.departmentId);
+    if (!roleAtLeast(role, "modify")) {
+      res.status(403).json({ error: "Read-only on this board" });
+      return;
+    }
   }
   if (user.role === "end_user" && ticket.reporterId !== user.id) {
     res.status(403).json({ error: "Forbidden" });
@@ -367,5 +383,6 @@ router.post("/tickets/:id/comments", async (req, res): Promise<void> => {
 // silence unused-import warnings used elsewhere
 void ilike;
 void or;
+void modifiableDepartmentIds;
 
 export default router;

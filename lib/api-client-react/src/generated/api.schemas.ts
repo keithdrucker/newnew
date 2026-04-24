@@ -89,6 +89,36 @@ export interface DepartmentSettings {
   ticketCategories: string[];
 }
 
+export type BoardRole = (typeof BoardRole)[keyof typeof BoardRole];
+
+export const BoardRole = {
+  owner: "owner",
+  modify: "modify",
+  read_only: "read_only",
+} as const;
+
+export interface BoardMember {
+  id: number;
+  departmentId: number;
+  userId: number;
+  role: BoardRole;
+  userName: string;
+  userEmail: string;
+  /** @nullable */
+  userTitle: string | null;
+  userGlobalRole: Role;
+  createdAt: string;
+}
+
+export interface AddBoardMemberInput {
+  userId: number;
+  role: BoardRole;
+}
+
+export interface UpdateBoardMemberInput {
+  role: BoardRole;
+}
+
 export type UpdateDepartmentSettingsInputDefaultPriority =
   (typeof UpdateDepartmentSettingsInputDefaultPriority)[keyof typeof UpdateDepartmentSettingsInputDefaultPriority];
 
@@ -365,6 +395,26 @@ export interface UpdateAgentInput {
   departmentId?: number | null;
 }
 
+export type KbArticleSource =
+  (typeof KbArticleSource)[keyof typeof KbArticleSource];
+
+export const KbArticleSource = {
+  manual: "manual",
+  confluence: "confluence",
+  notion: "notion",
+  freshservice: "freshservice",
+  sharepoint: "sharepoint",
+} as const;
+
+export type KbArticleSyncStatus =
+  (typeof KbArticleSyncStatus)[keyof typeof KbArticleSyncStatus];
+
+export const KbArticleSyncStatus = {
+  completed: "completed",
+  failed: "failed",
+  pending: "pending",
+} as const;
+
 export interface KbArticle {
   id: number;
   title: string;
@@ -374,15 +424,31 @@ export interface KbArticle {
   authorName: string;
   tags: string[];
   views: number;
+  source: KbArticleSource;
+  syncStatus: KbArticleSyncStatus;
+  /** @nullable */
+  lastSyncedAt: string | null;
   updatedAt: string;
   createdAt: string;
 }
+
+export type CreateKbArticleInputSource =
+  (typeof CreateKbArticleInputSource)[keyof typeof CreateKbArticleInputSource];
+
+export const CreateKbArticleInputSource = {
+  manual: "manual",
+  confluence: "confluence",
+  notion: "notion",
+  freshservice: "freshservice",
+  sharepoint: "sharepoint",
+} as const;
 
 export interface CreateKbArticleInput {
   title: string;
   body: string;
   departmentId: number;
   tags?: string[];
+  source?: CreateKbArticleInputSource;
 }
 
 export interface UpdateKbArticleInput {
@@ -651,7 +717,29 @@ export type ListAgentsParams = {
 export type ListKbArticlesParams = {
   departmentId?: number;
   q?: string;
+  source?: ListKbArticlesSource;
+  status?: ListKbArticlesStatus;
 };
+
+export type ListKbArticlesSource =
+  (typeof ListKbArticlesSource)[keyof typeof ListKbArticlesSource];
+
+export const ListKbArticlesSource = {
+  manual: "manual",
+  confluence: "confluence",
+  notion: "notion",
+  freshservice: "freshservice",
+  sharepoint: "sharepoint",
+} as const;
+
+export type ListKbArticlesStatus =
+  (typeof ListKbArticlesStatus)[keyof typeof ListKbArticlesStatus];
+
+export const ListKbArticlesStatus = {
+  completed: "completed",
+  failed: "failed",
+  pending: "pending",
+} as const;
 
 export type ListAssetsParams = {
   departmentId?: number;

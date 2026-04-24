@@ -182,6 +182,92 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DepartmentSettings" }
 
+  /departments/{id}/members:
+    get:
+      operationId: listBoardMembers
+      tags: [settings]
+      summary: List agents/admins assigned to this board with their per-board role
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BoardMember" }
+    post:
+      operationId: addBoardMember
+      tags: [settings]
+      summary: Add an agent to this board with a role (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddBoardMemberInput" }
+      responses:
+        "200":
+          description: Updated existing membership
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoardMember" }
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoardMember" }
+
+  /departments/{id}/members/{userId}:
+    patch:
+      operationId: updateBoardMember
+      tags: [settings]
+      summary: Change an agent's role on this board (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: userId
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBoardMemberInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoardMember" }
+    delete:
+      operationId: removeBoardMember
+      tags: [settings]
+      summary: Remove an agent from this board (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: userId
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Removed
+
   /tickets:
     get:
       operationId: listTickets
@@ -460,6 +546,16 @@ paths:
         - in: query
           name: q
           schema: { type: string }
+        - in: query
+          name: source
+          schema:
+            type: string
+            enum: [manual, confluence, notion, freshservice, sharepoint]
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [completed, failed, pending]
       responses:
         "200":
           description: Articles
@@ -796,6 +892,40 @@ components:
         - businessHoursEnd
         - ticketCategories
 
+    BoardRole:
+      type: string
+      enum: [owner, modify, read_only]
+
+    BoardMember:
+      type: object
+      properties:
+        id: { type: integer }
+        departmentId: { type: integer }
+        userId: { type: integer }
+        role: { $ref: "#/components/schemas/BoardRole" }
+        userName: { type: string }
+        userEmail: { type: string }
+        userTitle:
+          type: ["string", "null"]
+        userGlobalRole: { $ref: "#/components/schemas/Role" }
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, departmentId, userId, role, userName, userEmail, userTitle, userGlobalRole, createdAt]
+
+    AddBoardMemberInput:
+      type: object
+      properties:
+        userId: { type: integer }
+        role: { $ref: "#/components/schemas/BoardRole" }
+      required: [userId, role]
+
+    UpdateBoardMemberInput:
+      type: object
+      properties:
+        role: { $ref: "#/components/schemas/BoardRole" }
+      required: [role]
+
     UpdateDepartmentSettingsInput:
       type: object
       properties:
@@ -1065,13 +1195,22 @@ components:
           type: array
           items: { type: string }
         views: { type: integer }
+        source:
+          type: string
+          enum: [manual, confluence, notion, freshservice, sharepoint]
+        syncStatus:
+          type: string
+          enum: [completed, failed, pending]
+        lastSyncedAt:
+          type: ["string", "null"]
+          format: date-time
         updatedAt:
           type: string
           format: date-time
         createdAt:
           type: string
           format: date-time
-      required: [id, title, body, departmentId, departmentName, authorName, tags, views, updatedAt, createdAt]
+      required: [id, title, body, departmentId, departmentName, authorName, tags, views, source, syncStatus, lastSyncedAt, updatedAt, createdAt]
 
     CreateKbArticleInput:
       type: object
@@ -1082,6 +1221,9 @@ components:
         tags:
           type: array
           items: { type: string }
+        source:
+          type: string
+          enum: [manual, confluence, notion, freshservice, sharepoint]
       required: [title, body, departmentId]
 
     UpdateKbArticleInput:

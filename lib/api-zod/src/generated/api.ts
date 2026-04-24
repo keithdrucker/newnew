@@ -184,6 +184,82 @@ export const UpdateDepartmentSettingsResponse = zod.object({
 });
 
 /**
+ * @summary List agents/admins assigned to this board with their per-board role
+ */
+export const ListBoardMembersParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListBoardMembersResponseItem = zod.object({
+  id: zod.number(),
+  departmentId: zod.number(),
+  userId: zod.number(),
+  role: zod.enum(["owner", "modify", "read_only"]),
+  userName: zod.string(),
+  userEmail: zod.string(),
+  userTitle: zod.string().nullable(),
+  userGlobalRole: zod.enum(["admin", "agent", "end_user"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListBoardMembersResponse = zod.array(ListBoardMembersResponseItem);
+
+/**
+ * @summary Add an agent to this board with a role (admin only)
+ */
+export const AddBoardMemberParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AddBoardMemberBody = zod.object({
+  userId: zod.number(),
+  role: zod.enum(["owner", "modify", "read_only"]),
+});
+
+export const AddBoardMemberResponse = zod.object({
+  id: zod.number(),
+  departmentId: zod.number(),
+  userId: zod.number(),
+  role: zod.enum(["owner", "modify", "read_only"]),
+  userName: zod.string(),
+  userEmail: zod.string(),
+  userTitle: zod.string().nullable(),
+  userGlobalRole: zod.enum(["admin", "agent", "end_user"]),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Change an agent's role on this board (admin only)
+ */
+export const UpdateBoardMemberParams = zod.object({
+  id: zod.coerce.number(),
+  userId: zod.coerce.number(),
+});
+
+export const UpdateBoardMemberBody = zod.object({
+  role: zod.enum(["owner", "modify", "read_only"]),
+});
+
+export const UpdateBoardMemberResponse = zod.object({
+  id: zod.number(),
+  departmentId: zod.number(),
+  userId: zod.number(),
+  role: zod.enum(["owner", "modify", "read_only"]),
+  userName: zod.string(),
+  userEmail: zod.string(),
+  userTitle: zod.string().nullable(),
+  userGlobalRole: zod.enum(["admin", "agent", "end_user"]),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Remove an agent from this board (admin only)
+ */
+export const RemoveBoardMemberParams = zod.object({
+  id: zod.coerce.number(),
+  userId: zod.coerce.number(),
+});
+
+/**
  * @summary List tickets, scoped by current user's role and department
  */
 export const ListTicketsQueryParams = zod.object({
@@ -509,6 +585,10 @@ export const DeleteAgentParams = zod.object({
 export const ListKbArticlesQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
   q: zod.coerce.string().optional(),
+  source: zod
+    .enum(["manual", "confluence", "notion", "freshservice", "sharepoint"])
+    .optional(),
+  status: zod.enum(["completed", "failed", "pending"]).optional(),
 });
 
 export const ListKbArticlesResponseItem = zod.object({
@@ -520,6 +600,15 @@ export const ListKbArticlesResponseItem = zod.object({
   authorName: zod.string(),
   tags: zod.array(zod.string()),
   views: zod.number(),
+  source: zod.enum([
+    "manual",
+    "confluence",
+    "notion",
+    "freshservice",
+    "sharepoint",
+  ]),
+  syncStatus: zod.enum(["completed", "failed", "pending"]),
+  lastSyncedAt: zod.coerce.date().nullable(),
   updatedAt: zod.coerce.date(),
   createdAt: zod.coerce.date(),
 });
@@ -533,6 +622,9 @@ export const CreateKbArticleBody = zod.object({
   body: zod.string(),
   departmentId: zod.number(),
   tags: zod.array(zod.string()).optional(),
+  source: zod
+    .enum(["manual", "confluence", "notion", "freshservice", "sharepoint"])
+    .optional(),
 });
 
 export const GetKbArticleParams = zod.object({
@@ -548,6 +640,15 @@ export const GetKbArticleResponse = zod.object({
   authorName: zod.string(),
   tags: zod.array(zod.string()),
   views: zod.number(),
+  source: zod.enum([
+    "manual",
+    "confluence",
+    "notion",
+    "freshservice",
+    "sharepoint",
+  ]),
+  syncStatus: zod.enum(["completed", "failed", "pending"]),
+  lastSyncedAt: zod.coerce.date().nullable(),
   updatedAt: zod.coerce.date(),
   createdAt: zod.coerce.date(),
 });
@@ -572,6 +673,15 @@ export const UpdateKbArticleResponse = zod.object({
   authorName: zod.string(),
   tags: zod.array(zod.string()),
   views: zod.number(),
+  source: zod.enum([
+    "manual",
+    "confluence",
+    "notion",
+    "freshservice",
+    "sharepoint",
+  ]),
+  syncStatus: zod.enum(["completed", "failed", "pending"]),
+  lastSyncedAt: zod.coerce.date().nullable(),
   updatedAt: zod.coerce.date(),
   createdAt: zod.coerce.date(),
 });
