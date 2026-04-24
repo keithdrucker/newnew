@@ -26,8 +26,11 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme, type Theme } from "@/components/providers/theme-provider";
-import { Sun, Moon, Monitor } from "lucide-react";
+import { Sun, Moon, Monitor, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSession } from "@/components/providers/session-provider";
+import { AddBoardDialog } from "@/components/settings/add-board-dialog";
+import { DEPT_ICON_MAP } from "@/lib/dept-icons";
 
 type Priority = "low" | "medium" | "high" | "urgent";
 
@@ -68,6 +71,7 @@ export default function Settings() {
         </p>
       </div>
       <AppearanceCard />
+      <TicketBoardsCard />
       {departments && departments.length > 0 && (
         <Tabs
           value={activeId ? String(activeId) : ""}
@@ -309,6 +313,64 @@ function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function TicketBoardsCard() {
+  const { session } = useSession();
+  const { data: departments } = useListDepartments();
+  if (session?.role !== "admin") return null;
+
+  return (
+    <Card data-testid="card-ticket-boards">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <div>
+          <CardTitle className="text-base">Ticket boards</CardTitle>
+          <CardDescription>
+            Each board is a department with its own tickets, settings, and SLA.
+            New boards appear in the sidebar immediately.
+          </CardDescription>
+        </div>
+        <AddBoardDialog />
+      </CardHeader>
+      <CardContent>
+        {!departments || departments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No boards yet.</p>
+        ) : (
+          <ul
+            className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+            data-testid="list-boards"
+          >
+            {departments.map((d) => {
+              const Icon = DEPT_ICON_MAP[d.icon] ?? Layers;
+              return (
+                <li
+                  key={d.id}
+                  className="flex items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm"
+                  data-testid={`board-row-${d.slug}`}
+                >
+                  <span
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted/60"
+                    style={{ color: d.color }}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{d.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      /{d.slug}
+                    </p>
+                  </div>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {d.ticketCount}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

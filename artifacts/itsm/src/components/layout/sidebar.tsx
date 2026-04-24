@@ -9,18 +9,6 @@ import {
   ChevronsUpDown,
   ChevronRight,
   Check,
-  Laptop,
-  ShieldCheck,
-  HardHat,
-  Banknote,
-  Umbrella,
-  Scale,
-  Building2,
-  Megaphone,
-  ClipboardCheck,
-  HardDrive,
-  Lock,
-  Briefcase,
   Layers,
 } from "lucide-react";
 import {
@@ -31,6 +19,7 @@ import {
   useListPeople,
 } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
+import { DEPT_ICON_MAP } from "@/lib/dept-icons";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Popover,
@@ -51,23 +40,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useState } from "react";
-
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  Laptop,
-  ShieldCheck,
-  HardHat,
-  Banknote,
-  Users,
-  Umbrella,
-  Scale,
-  Building2,
-  Megaphone,
-  ClipboardCheck,
-  HardDrive,
-  Lock,
-  Briefcase,
-  Layers,
-};
 
 export function Sidebar({ session }: { session: Session | null }) {
   const [location] = useLocation();
@@ -189,7 +161,7 @@ export function Sidebar({ session }: { session: Session | null }) {
               All Tickets
             </Link>
             {departments?.map((dept) => {
-              const Icon = ICON_MAP[dept.icon] ?? Layers;
+              const Icon = DEPT_ICON_MAP[dept.icon] ?? Layers;
               const active = activeDeptSlug === dept.slug;
               return (
                 <Link
