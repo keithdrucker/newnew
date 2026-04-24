@@ -49,13 +49,6 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
   matchPrefix?: string;
   adminOnly?: boolean;
-};
-
-type ProjectsSubItem = {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  matchPrefix: string;
   endUserHidden?: boolean;
 };
 
@@ -68,20 +61,17 @@ const WORKSPACE: NavItem[] = [
     matchPrefix: "/tickets",
   },
   {
-    href: "/knowledge-base",
-    label: "Knowledge",
-    icon: BookOpen,
-    matchPrefix: "/knowledge-base",
-  },
-];
-
-const TICKETS_SUB: ProjectsSubItem[] = [
-  {
     href: "/projects",
     label: "Projects",
     icon: KanbanSquare,
     matchPrefix: "/projects",
     endUserHidden: true,
+  },
+  {
+    href: "/knowledge-base",
+    label: "Knowledge",
+    icon: BookOpen,
+    matchPrefix: "/knowledge-base",
   },
 ];
 
@@ -113,9 +103,9 @@ export function SideNav({ session }: { session: Session | null }) {
   const [location] = useLocation();
 
   const showTicketsTree =
-    location === "/tickets" ||
-    location.startsWith("/tickets/") ||
-    location.startsWith("/projects");
+    location === "/tickets" || location.startsWith("/tickets/");
+  const showProjectsTree =
+    location === "/projects" || location.startsWith("/projects");
 
   return (
     <aside
@@ -144,24 +134,37 @@ export function SideNav({ session }: { session: Session | null }) {
 
       <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-5">
         <NavSection title="Workspace">
-          {WORKSPACE.map((item) =>
-            item.href === "/tickets" ? (
-              <TicketsNavItem
-                key={item.href}
-                item={item}
-                location={location}
-                expanded={showTicketsTree}
-                session={session}
-              />
-            ) : (
+          {WORKSPACE.map((item) => {
+            if (item.endUserHidden && session?.role === "end_user") return null;
+            if (item.href === "/tickets") {
+              return (
+                <TicketsNavItem
+                  key={item.href}
+                  item={item}
+                  location={location}
+                  expanded={showTicketsTree}
+                />
+              );
+            }
+            if (item.href === "/projects") {
+              return (
+                <ProjectsNavItem
+                  key={item.href}
+                  item={item}
+                  location={location}
+                  expanded={showProjectsTree}
+                />
+              );
+            }
+            return (
               <NavRow
                 key={item.href}
                 item={item}
                 location={location}
                 session={session}
               />
-            ),
-          )}
+            );
+          })}
         </NavSection>
 
         {session?.role === "admin" && (
@@ -239,24 +242,19 @@ function TicketsNavItem({
   item,
   location,
   expanded: defaultExpanded,
-  session,
 }: {
   item: NavItem;
   location: string;
   expanded: boolean;
-  session: Session | null;
 }) {
   const [open, setOpen] = useState(defaultExpanded);
   const Icon = item.icon;
   const sectionActive =
-    location === "/tickets" ||
-    location.startsWith("/tickets/") ||
-    location.startsWith("/projects");
+    location === "/tickets" || location.startsWith("/tickets/");
   const allActive = location === "/tickets";
   const [, deptMatch] = useRoute("/tickets/dept/:slug");
   const activeDeptSlug = deptMatch?.slug;
   const { data: departments } = useListDepartments();
-  const isEndUser = session?.role === "end_user";
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -293,6 +291,19 @@ function TicketsNavItem({
 
       <CollapsibleContent className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
         <Link
+          href="/tickets/dashboard"
+          data-testid="nav-tickets-dashboard"
+          className={cn(
+            "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+            location === "/tickets/dashboard"
+              ? "bg-white/10 text-white font-medium"
+              : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+          )}
+        >
+          <LayoutDashboard className="h-3.5 w-3.5 text-sidebar-foreground/70" />
+          <span>Dashboard</span>
+        </Link>
+        <Link
           href="/tickets"
           data-testid="nav-tickets-all"
           className={cn(
@@ -305,27 +316,6 @@ function TicketsNavItem({
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           <span>All Tickets</span>
         </Link>
-        {TICKETS_SUB.map((sub) => {
-          if (sub.endUserHidden && isEndUser) return null;
-          const SubIcon = sub.icon;
-          const active = location.startsWith(sub.matchPrefix);
-          return (
-            <Link
-              key={sub.href}
-              href={sub.href}
-              data-testid={`nav-${sub.href.replace("/", "")}`}
-              className={cn(
-                "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
-                active
-                  ? "bg-white/10 text-white font-medium"
-                  : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
-              )}
-            >
-              <SubIcon className="h-3.5 w-3.5 text-sidebar-foreground/70" />
-              <span className="flex-1 truncate">{sub.label}</span>
-            </Link>
-          );
-        })}
         {departments?.map((dept) => {
           const DeptIcon = DEPT_ICON_MAP[dept.icon] ?? Layers;
           const active = activeDeptSlug === dept.slug;
@@ -350,6 +340,111 @@ function TicketsNavItem({
                   {dept.ticketCount}
                 </span>
               )}
+            </Link>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function ProjectsNavItem({
+  item,
+  location,
+  expanded: defaultExpanded,
+}: {
+  item: NavItem;
+  location: string;
+  expanded: boolean;
+}) {
+  const [open, setOpen] = useState(defaultExpanded);
+  const Icon = item.icon;
+  const sectionActive =
+    location === "/projects" || location.startsWith("/projects");
+  const allActive = location === "/projects";
+  const [, deptMatch] = useRoute("/projects/dept/:slug");
+  const activeDeptSlug = deptMatch?.slug;
+  const { data: departments } = useListDepartments();
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="relative">
+        <Link
+          href={item.href}
+          data-testid="nav-projects"
+          className={cn(
+            "relative flex items-center gap-2.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors pr-8",
+            sectionActive
+              ? "bg-white/10 text-white"
+              : "text-sidebar-foreground/75 hover:text-white hover:bg-white/5",
+          )}
+        >
+          {sectionActive && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sidebar-primary" />
+          )}
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className="truncate">{item.label}</span>
+        </Link>
+        <CollapsibleTrigger
+          className={cn(
+            "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md flex items-center justify-center transition-colors",
+            "text-sidebar-foreground/55 hover:bg-white/5 hover:text-white",
+          )}
+          aria-label={open ? "Collapse departments" : "Expand departments"}
+          data-testid="trigger-projects-tree"
+        >
+          <ChevronRight
+            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
+          />
+        </CollapsibleTrigger>
+      </div>
+
+      <CollapsibleContent className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
+        <Link
+          href="/projects/dashboard"
+          data-testid="nav-projects-dashboard"
+          className={cn(
+            "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+            location === "/projects/dashboard"
+              ? "bg-white/10 text-white font-medium"
+              : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+          )}
+        >
+          <LayoutDashboard className="h-3.5 w-3.5 text-sidebar-foreground/70" />
+          <span>Dashboard</span>
+        </Link>
+        <Link
+          href="/projects"
+          data-testid="nav-projects-all"
+          className={cn(
+            "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+            allActive
+              ? "bg-white/10 text-white font-medium"
+              : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+          )}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          <span>All Projects</span>
+        </Link>
+        {departments?.map((dept) => {
+          const DeptIcon = DEPT_ICON_MAP[dept.icon] ?? Layers;
+          const active = activeDeptSlug === dept.slug;
+          return (
+            <Link
+              key={dept.id}
+              href={`/projects/dept/${dept.slug}`}
+              className={cn(
+                "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+                active
+                  ? "bg-white/10 text-white font-medium"
+                  : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+              )}
+              data-testid={`nav-projects-dept-${dept.slug}`}
+            >
+              <span style={{ color: dept.color }} className="inline-flex">
+                <DeptIcon className="h-3.5 w-3.5" />
+              </span>
+              <span className="truncate flex-1">{dept.name}</span>
             </Link>
           );
         })}

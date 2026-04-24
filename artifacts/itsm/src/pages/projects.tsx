@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "wouter";
+import { useState, useMemo } from "react";
+import { Link, useRoute } from "wouter";
 import {
   useListProjects,
   useCreateProject,
@@ -85,12 +85,21 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
 
+  const [, deptRouteMatch] = useRoute("/projects/dept/:slug");
+  const deptSlug = deptRouteMatch?.slug;
+  const { data: departments } = useListDepartments();
+  const activeDept = useMemo(
+    () => departments?.find((d) => d.slug === deptSlug),
+    [departments, deptSlug],
+  );
+
   const { data: projects, isLoading } = useListProjects({
     status:
       statusFilter === "all"
         ? undefined
         : (statusFilter as ProjectSummary["status"]),
     q: search || undefined,
+    departmentId: activeDept?.id,
   });
 
   return (
@@ -98,11 +107,12 @@ export default function ProjectsPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-[26px] font-display font-semibold tracking-tight">
-            Projects
+            {activeDept ? `${activeDept.name} projects` : "Projects"}
           </h1>
           <p className="text-[13px] text-muted-foreground mt-1">
-            Plan and track work across teams. Each project is a board of
-            buckets and tasks.
+            {activeDept
+              ? `Projects scoped to the ${activeDept.name} department.`
+              : "Plan and track work across teams. Each project is a board of buckets and tasks."}
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>

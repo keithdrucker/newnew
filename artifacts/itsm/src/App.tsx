@@ -8,6 +8,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
+import ProjectsDashboard from "@/pages/projects-dashboard";
 import Tickets from "@/pages/tickets";
 import TicketDetail from "@/pages/ticket-detail";
 import People from "@/pages/people";
@@ -31,6 +32,7 @@ function Router() {
     <AppLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/tickets/dashboard" component={Dashboard} />
         <Route path="/tickets" component={Tickets} />
         <Route path="/tickets/dept/:slug" component={Tickets} />
         <Route path="/tickets/:id" component={TicketDetail} />
@@ -44,6 +46,8 @@ function Router() {
         <Route path="/applications" component={Applications} />
         <Route path="/vendors" component={Vendors} />
         <Route path="/projects" component={Projects} />
+        <Route path="/projects/dashboard" component={ProjectsDashboard} />
+        <Route path="/projects/dept/:slug" component={Projects} />
         <Route path="/projects/:id" component={ProjectBoard} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />
