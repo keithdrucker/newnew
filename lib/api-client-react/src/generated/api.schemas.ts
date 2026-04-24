@@ -182,6 +182,15 @@ export const TicketSource = {
   walk_in: "walk_in",
 } as const;
 
+export type TicketSupportLevel =
+  (typeof TicketSupportLevel)[keyof typeof TicketSupportLevel];
+
+export const TicketSupportLevel = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
 export interface Ticket {
   id: number;
   ticketKey: string;
@@ -191,6 +200,7 @@ export interface Ticket {
   priority: TicketPriority;
   status: TicketStatus;
   source: TicketSource;
+  supportLevel?: TicketSupportLevel;
   departmentId: number;
   departmentName: string;
   reporterId: number;
@@ -260,12 +270,22 @@ export const CreateTicketInputSource = {
   walk_in: "walk_in",
 } as const;
 
+export type CreateTicketInputSupportLevel =
+  (typeof CreateTicketInputSupportLevel)[keyof typeof CreateTicketInputSupportLevel];
+
+export const CreateTicketInputSupportLevel = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
 export interface CreateTicketInput {
   title: string;
   description: string;
   type: CreateTicketInputType;
   priority: CreateTicketInputPriority;
   source: CreateTicketInputSource;
+  supportLevel?: CreateTicketInputSupportLevel;
   departmentId: number;
   reporterId: number;
   /** @nullable */
@@ -298,11 +318,21 @@ export const UpdateTicketInputStatus = {
   closed: "closed",
 } as const;
 
+export type UpdateTicketInputSupportLevel =
+  (typeof UpdateTicketInputSupportLevel)[keyof typeof UpdateTicketInputSupportLevel];
+
+export const UpdateTicketInputSupportLevel = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
 export interface UpdateTicketInput {
   title?: string;
   description?: string;
   priority?: UpdateTicketInputPriority;
   status?: UpdateTicketInputStatus;
+  supportLevel?: UpdateTicketInputSupportLevel;
   /** @nullable */
   assigneeId?: number | null;
   /** @nullable */
@@ -311,6 +341,323 @@ export interface UpdateTicketInput {
   team?: string | null;
   /** @nullable */
   category?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type TicketViewConfigStatus =
+  | (typeof TicketViewConfigStatus)[keyof typeof TicketViewConfigStatus]
+  | null;
+
+export const TicketViewConfigStatus = {
+  open: "open",
+  pending: "pending",
+  resolved: "resolved",
+  closed: "closed",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TicketViewConfigPriority =
+  | (typeof TicketViewConfigPriority)[keyof typeof TicketViewConfigPriority]
+  | null;
+
+export const TicketViewConfigPriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TicketViewConfigSupportLevel =
+  | (typeof TicketViewConfigSupportLevel)[keyof typeof TicketViewConfigSupportLevel]
+  | null;
+
+export const TicketViewConfigSupportLevel = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
+export interface TicketViewConfig {
+  /** @nullable */
+  search?: string | null;
+  /** @nullable */
+  status?: TicketViewConfigStatus;
+  /** @nullable */
+  priority?: TicketViewConfigPriority;
+  /** @nullable */
+  supportLevel?: TicketViewConfigSupportLevel;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  departmentId?: number | null;
+}
+
+export interface TicketView {
+  id: number;
+  userId: number;
+  name: string;
+  isDefault: boolean;
+  config: TicketViewConfig;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTicketViewInput {
+  name: string;
+  config: TicketViewConfig;
+  isDefault?: boolean;
+}
+
+export interface UpdateTicketViewInput {
+  name?: string;
+  config?: TicketViewConfig;
+  isDefault?: boolean;
+}
+
+export type ApplicationCategory =
+  (typeof ApplicationCategory)[keyof typeof ApplicationCategory];
+
+export const ApplicationCategory = {
+  productivity: "productivity",
+  design: "design",
+  ops: "ops",
+  finance: "finance",
+  dev: "dev",
+  security: "security",
+  other: "other",
+} as const;
+
+export type ApplicationStatus =
+  (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
+
+export const ApplicationStatus = {
+  active: "active",
+  piloting: "piloting",
+  deprecated: "deprecated",
+} as const;
+
+export interface Application {
+  id: number;
+  name: string;
+  vendor: string;
+  category: ApplicationCategory;
+  status: ApplicationStatus;
+  description: string;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  departmentName?: string | null;
+  /** @nullable */
+  licenseSeats?: number | null;
+  /** @nullable */
+  licenseUsed?: number | null;
+  /** @nullable */
+  monthlyCost?: number | null;
+  createdAt: string;
+}
+
+export type CreateApplicationInputCategory =
+  (typeof CreateApplicationInputCategory)[keyof typeof CreateApplicationInputCategory];
+
+export const CreateApplicationInputCategory = {
+  productivity: "productivity",
+  design: "design",
+  ops: "ops",
+  finance: "finance",
+  dev: "dev",
+  security: "security",
+  other: "other",
+} as const;
+
+export type CreateApplicationInputStatus =
+  (typeof CreateApplicationInputStatus)[keyof typeof CreateApplicationInputStatus];
+
+export const CreateApplicationInputStatus = {
+  active: "active",
+  piloting: "piloting",
+  deprecated: "deprecated",
+} as const;
+
+export interface CreateApplicationInput {
+  name: string;
+  vendor?: string;
+  category: CreateApplicationInputCategory;
+  status?: CreateApplicationInputStatus;
+  description?: string;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  licenseSeats?: number | null;
+  /** @nullable */
+  licenseUsed?: number | null;
+  /** @nullable */
+  monthlyCost?: number | null;
+}
+
+export type UpdateApplicationInputCategory =
+  (typeof UpdateApplicationInputCategory)[keyof typeof UpdateApplicationInputCategory];
+
+export const UpdateApplicationInputCategory = {
+  productivity: "productivity",
+  design: "design",
+  ops: "ops",
+  finance: "finance",
+  dev: "dev",
+  security: "security",
+  other: "other",
+} as const;
+
+export type UpdateApplicationInputStatus =
+  (typeof UpdateApplicationInputStatus)[keyof typeof UpdateApplicationInputStatus];
+
+export const UpdateApplicationInputStatus = {
+  active: "active",
+  piloting: "piloting",
+  deprecated: "deprecated",
+} as const;
+
+export interface UpdateApplicationInput {
+  name?: string;
+  vendor?: string;
+  category?: UpdateApplicationInputCategory;
+  status?: UpdateApplicationInputStatus;
+  description?: string;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  licenseSeats?: number | null;
+  /** @nullable */
+  licenseUsed?: number | null;
+  /** @nullable */
+  monthlyCost?: number | null;
+}
+
+export type VendorCategory =
+  (typeof VendorCategory)[keyof typeof VendorCategory];
+
+export const VendorCategory = {
+  software: "software",
+  hardware: "hardware",
+  services: "services",
+  telecom: "telecom",
+  consulting: "consulting",
+  other: "other",
+} as const;
+
+export type VendorStatus = (typeof VendorStatus)[keyof typeof VendorStatus];
+
+export const VendorStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface Vendor {
+  id: number;
+  name: string;
+  category: VendorCategory;
+  status: VendorStatus;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  website?: string | null;
+  notes: string;
+  appCount: number;
+  createdAt: string;
+}
+
+export type CreateVendorInputCategory =
+  (typeof CreateVendorInputCategory)[keyof typeof CreateVendorInputCategory];
+
+export const CreateVendorInputCategory = {
+  software: "software",
+  hardware: "hardware",
+  services: "services",
+  telecom: "telecom",
+  consulting: "consulting",
+  other: "other",
+} as const;
+
+export type CreateVendorInputStatus =
+  (typeof CreateVendorInputStatus)[keyof typeof CreateVendorInputStatus];
+
+export const CreateVendorInputStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface CreateVendorInput {
+  name: string;
+  category: CreateVendorInputCategory;
+  status?: CreateVendorInputStatus;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  website?: string | null;
+  notes?: string;
+}
+
+export type UpdateVendorInputCategory =
+  (typeof UpdateVendorInputCategory)[keyof typeof UpdateVendorInputCategory];
+
+export const UpdateVendorInputCategory = {
+  software: "software",
+  hardware: "hardware",
+  services: "services",
+  telecom: "telecom",
+  consulting: "consulting",
+  other: "other",
+} as const;
+
+export type UpdateVendorInputStatus =
+  (typeof UpdateVendorInputStatus)[keyof typeof UpdateVendorInputStatus];
+
+export const UpdateVendorInputStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface UpdateVendorInput {
+  name?: string;
+  category?: UpdateVendorInputCategory;
+  status?: UpdateVendorInputStatus;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  website?: string | null;
+  notes?: string;
 }
 
 export interface AddTicketCommentInput {
@@ -682,6 +1029,9 @@ export type ListTicketsParams = {
   departmentId?: number;
   status?: ListTicketsStatus;
   priority?: ListTicketsPriority;
+  supportLevel?: ListTicketsSupportLevel;
+  assigneeId?: number;
+  unassigned?: boolean;
   q?: string;
 };
 
@@ -703,6 +1053,15 @@ export const ListTicketsPriority = {
   medium: "medium",
   high: "high",
   urgent: "urgent",
+} as const;
+
+export type ListTicketsSupportLevel =
+  (typeof ListTicketsSupportLevel)[keyof typeof ListTicketsSupportLevel];
+
+export const ListTicketsSupportLevel = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
 } as const;
 
 export type ListPeopleParams = {
@@ -755,6 +1114,61 @@ export const ListAssetsStatus = {
   in_storage: "in_storage",
   retired: "retired",
   repair: "repair",
+} as const;
+
+export type ListApplicationsParams = {
+  status?: ListApplicationsStatus;
+  category?: ListApplicationsCategory;
+  departmentId?: number;
+  q?: string;
+};
+
+export type ListApplicationsStatus =
+  (typeof ListApplicationsStatus)[keyof typeof ListApplicationsStatus];
+
+export const ListApplicationsStatus = {
+  active: "active",
+  piloting: "piloting",
+  deprecated: "deprecated",
+} as const;
+
+export type ListApplicationsCategory =
+  (typeof ListApplicationsCategory)[keyof typeof ListApplicationsCategory];
+
+export const ListApplicationsCategory = {
+  productivity: "productivity",
+  design: "design",
+  ops: "ops",
+  finance: "finance",
+  dev: "dev",
+  security: "security",
+  other: "other",
+} as const;
+
+export type ListVendorsParams = {
+  status?: ListVendorsStatus;
+  category?: ListVendorsCategory;
+  q?: string;
+};
+
+export type ListVendorsStatus =
+  (typeof ListVendorsStatus)[keyof typeof ListVendorsStatus];
+
+export const ListVendorsStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export type ListVendorsCategory =
+  (typeof ListVendorsCategory)[keyof typeof ListVendorsCategory];
+
+export const ListVendorsCategory = {
+  software: "software",
+  hardware: "hardware",
+  services: "services",
+  telecom: "telecom",
+  consulting: "consulting",
+  other: "other",
 } as const;
 
 export type GetDashboardOverviewParams = {

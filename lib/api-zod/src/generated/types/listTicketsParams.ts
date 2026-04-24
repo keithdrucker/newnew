@@ -7,10 +7,14 @@
  */
 import type { ListTicketsPriority } from "./listTicketsPriority";
 import type { ListTicketsStatus } from "./listTicketsStatus";
+import type { ListTicketsSupportLevel } from "./listTicketsSupportLevel";
 
 export type ListTicketsParams = {
   departmentId?: number;
   status?: ListTicketsStatus;
   priority?: ListTicketsPriority;
+  supportLevel?: ListTicketsSupportLevel;
+  assigneeId?: number;
+  unassigned?: boolean;
   q?: string;
 };

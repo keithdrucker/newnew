@@ -5,10 +5,13 @@ import departmentsRouter from "./departments";
 import departmentSettingsRouter from "./departmentSettings";
 import boardMembersRouter from "./boardMembers";
 import ticketsRouter from "./tickets";
+import ticketViewsRouter from "./ticketViews";
 import peopleRouter from "./people";
 import agentsRouter from "./agents";
 import knowledgeBaseRouter from "./knowledgeBase";
 import assetsRouter from "./assets";
+import applicationsRouter from "./applications";
+import vendorsRouter from "./vendors";
 import dashboardRouter from "./dashboard";
 
 const router: IRouter = Router();
@@ -19,10 +22,13 @@ router.use(departmentsRouter);
 router.use(departmentSettingsRouter);
 router.use(boardMembersRouter);
 router.use(ticketsRouter);
+router.use(ticketViewsRouter);
 router.use(peopleRouter);
 router.use(agentsRouter);
 router.use(knowledgeBaseRouter);
 router.use(assetsRouter);
+router.use(applicationsRouter);
+router.use(vendorsRouter);
 router.use(dashboardRouter);
 
 export default router;

@@ -7,12 +7,14 @@
  */
 import type { UpdateTicketInputPriority } from "./updateTicketInputPriority";
 import type { UpdateTicketInputStatus } from "./updateTicketInputStatus";
+import type { UpdateTicketInputSupportLevel } from "./updateTicketInputSupportLevel";
 
 export interface UpdateTicketInput {
   title?: string;
   description?: string;
   priority?: UpdateTicketInputPriority;
   status?: UpdateTicketInputStatus;
+  supportLevel?: UpdateTicketInputSupportLevel;
   /** @nullable */
   assigneeId?: number | null;
   /** @nullable */

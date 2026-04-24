@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import {
+  AppWindow,
+  Building2,
   LayoutDashboard,
   Ticket,
   BookOpen,
@@ -66,6 +68,18 @@ const WORKSPACE: NavItem[] = [
 
 const ADMIN: NavItem[] = [
   { href: "/assets", label: "Assets", icon: MonitorPlay, adminOnly: true },
+  {
+    href: "/applications",
+    label: "Applications",
+    icon: AppWindow,
+    adminOnly: true,
+  },
+  {
+    href: "/vendors",
+    label: "Vendors",
+    icon: Building2,
+    adminOnly: true,
+  },
   { href: "/people", label: "People", icon: UserRound, adminOnly: true },
   {
     href: "/settings",

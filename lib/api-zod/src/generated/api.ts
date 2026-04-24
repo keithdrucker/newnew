@@ -266,6 +266,11 @@ export const ListTicketsQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
   status: zod.enum(["open", "pending", "resolved", "closed"]).optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
+  supportLevel: zod
+    .union([zod.literal(1), zod.literal(2), zod.literal(3)])
+    .optional(),
+  assigneeId: zod.coerce.number().optional(),
+  unassigned: zod.coerce.boolean().optional(),
   q: zod.coerce.string().optional(),
 });
 
@@ -278,6 +283,9 @@ export const ListTicketsResponseItem = zod.object({
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   status: zod.enum(["open", "pending", "resolved", "closed"]),
   source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
+  supportLevel: zod
+    .union([zod.literal(1), zod.literal(2), zod.literal(3)])
+    .optional(),
   departmentId: zod.number(),
   departmentName: zod.string(),
   reporterId: zod.number(),
@@ -306,6 +314,9 @@ export const CreateTicketBody = zod.object({
   type: zod.enum(["incident", "request"]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
+  supportLevel: zod
+    .union([zod.literal(1), zod.literal(2), zod.literal(3)])
+    .optional(),
   departmentId: zod.number(),
   reporterId: zod.number(),
   assigneeId: zod.number().nullish(),
@@ -331,6 +342,9 @@ export const GetTicketResponse = zod
     priority: zod.enum(["low", "medium", "high", "urgent"]),
     status: zod.enum(["open", "pending", "resolved", "closed"]),
     source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
+    supportLevel: zod
+      .union([zod.literal(1), zod.literal(2), zod.literal(3)])
+      .optional(),
     departmentId: zod.number(),
     departmentName: zod.string(),
     reporterId: zod.number(),
@@ -375,6 +389,9 @@ export const UpdateTicketBody = zod.object({
   description: zod.string().optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   status: zod.enum(["open", "pending", "resolved", "closed"]).optional(),
+  supportLevel: zod
+    .union([zod.literal(1), zod.literal(2), zod.literal(3)])
+    .optional(),
   assigneeId: zod.number().nullish(),
   location: zod.string().nullish(),
   team: zod.string().nullish(),
@@ -390,6 +407,9 @@ export const UpdateTicketResponse = zod.object({
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   status: zod.enum(["open", "pending", "resolved", "closed"]),
   source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
+  supportLevel: zod
+    .union([zod.literal(1), zod.literal(2), zod.literal(3)])
+    .optional(),
   departmentId: zod.number(),
   departmentName: zod.string(),
   reporterId: zod.number(),
@@ -424,6 +444,181 @@ export const AddTicketCommentParams = zod.object({
 
 export const AddTicketCommentBody = zod.object({
   body: zod.string(),
+});
+
+/**
+ * @summary List the current user's saved ticket views
+ */
+export const ListTicketViewsResponseItem = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  name: zod.string(),
+  isDefault: zod.boolean(),
+  config: zod.object({
+    search: zod.string().nullish(),
+    status: zod
+      .union([
+        zod.literal("open"),
+        zod.literal("pending"),
+        zod.literal("resolved"),
+        zod.literal("closed"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    priority: zod
+      .union([
+        zod.literal("low"),
+        zod.literal("medium"),
+        zod.literal("high"),
+        zod.literal("urgent"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    supportLevel: zod
+      .union([
+        zod.literal(1),
+        zod.literal(2),
+        zod.literal(3),
+        zod.literal(null),
+      ])
+      .nullish(),
+    assigneeId: zod.number().nullish(),
+    departmentId: zod.number().nullish(),
+  }),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListTicketViewsResponse = zod.array(ListTicketViewsResponseItem);
+
+/**
+ * @summary Create a saved ticket view for the current user
+ */
+export const CreateTicketViewBody = zod.object({
+  name: zod.string(),
+  config: zod.object({
+    search: zod.string().nullish(),
+    status: zod
+      .union([
+        zod.literal("open"),
+        zod.literal("pending"),
+        zod.literal("resolved"),
+        zod.literal("closed"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    priority: zod
+      .union([
+        zod.literal("low"),
+        zod.literal("medium"),
+        zod.literal("high"),
+        zod.literal("urgent"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    supportLevel: zod
+      .union([
+        zod.literal(1),
+        zod.literal(2),
+        zod.literal(3),
+        zod.literal(null),
+      ])
+      .nullish(),
+    assigneeId: zod.number().nullish(),
+    departmentId: zod.number().nullish(),
+  }),
+  isDefault: zod.boolean().optional(),
+});
+
+/**
+ * @summary Rename, update filters, or set/unset default on a saved view
+ */
+export const UpdateTicketViewParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTicketViewBody = zod.object({
+  name: zod.string().optional(),
+  config: zod
+    .object({
+      search: zod.string().nullish(),
+      status: zod
+        .union([
+          zod.literal("open"),
+          zod.literal("pending"),
+          zod.literal("resolved"),
+          zod.literal("closed"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      priority: zod
+        .union([
+          zod.literal("low"),
+          zod.literal("medium"),
+          zod.literal("high"),
+          zod.literal("urgent"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      supportLevel: zod
+        .union([
+          zod.literal(1),
+          zod.literal(2),
+          zod.literal(3),
+          zod.literal(null),
+        ])
+        .nullish(),
+      assigneeId: zod.number().nullish(),
+      departmentId: zod.number().nullish(),
+    })
+    .optional(),
+  isDefault: zod.boolean().optional(),
+});
+
+export const UpdateTicketViewResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  name: zod.string(),
+  isDefault: zod.boolean(),
+  config: zod.object({
+    search: zod.string().nullish(),
+    status: zod
+      .union([
+        zod.literal("open"),
+        zod.literal("pending"),
+        zod.literal("resolved"),
+        zod.literal("closed"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    priority: zod
+      .union([
+        zod.literal("low"),
+        zod.literal("medium"),
+        zod.literal("high"),
+        zod.literal("urgent"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    supportLevel: zod
+      .union([
+        zod.literal(1),
+        zod.literal(2),
+        zod.literal(3),
+        zod.literal(null),
+      ])
+      .nullish(),
+    assigneeId: zod.number().nullish(),
+    departmentId: zod.number().nullish(),
+  }),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a saved view
+ */
+export const DeleteTicketViewParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -870,6 +1065,240 @@ export const DeleteAssetParams = zod.object({
 });
 
 /**
+ * @summary List software applications
+ */
+export const ListApplicationsQueryParams = zod.object({
+  status: zod.enum(["active", "piloting", "deprecated"]).optional(),
+  category: zod
+    .enum([
+      "productivity",
+      "design",
+      "ops",
+      "finance",
+      "dev",
+      "security",
+      "other",
+    ])
+    .optional(),
+  departmentId: zod.coerce.number().optional(),
+  q: zod.coerce.string().optional(),
+});
+
+export const ListApplicationsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  vendor: zod.string(),
+  category: zod.enum([
+    "productivity",
+    "design",
+    "ops",
+    "finance",
+    "dev",
+    "security",
+    "other",
+  ]),
+  status: zod.enum(["active", "piloting", "deprecated"]),
+  description: zod.string(),
+  website: zod.string().nullish(),
+  ownerId: zod.number().nullish(),
+  ownerName: zod.string().nullish(),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  licenseSeats: zod.number().nullish(),
+  licenseUsed: zod.number().nullish(),
+  monthlyCost: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListApplicationsResponse = zod.array(ListApplicationsResponseItem);
+
+export const CreateApplicationBody = zod.object({
+  name: zod.string(),
+  vendor: zod.string().optional(),
+  category: zod.enum([
+    "productivity",
+    "design",
+    "ops",
+    "finance",
+    "dev",
+    "security",
+    "other",
+  ]),
+  status: zod.enum(["active", "piloting", "deprecated"]).optional(),
+  description: zod.string().optional(),
+  website: zod.string().nullish(),
+  ownerId: zod.number().nullish(),
+  departmentId: zod.number().nullish(),
+  licenseSeats: zod.number().nullish(),
+  licenseUsed: zod.number().nullish(),
+  monthlyCost: zod.number().nullish(),
+});
+
+export const UpdateApplicationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateApplicationBody = zod.object({
+  name: zod.string().optional(),
+  vendor: zod.string().optional(),
+  category: zod
+    .enum([
+      "productivity",
+      "design",
+      "ops",
+      "finance",
+      "dev",
+      "security",
+      "other",
+    ])
+    .optional(),
+  status: zod.enum(["active", "piloting", "deprecated"]).optional(),
+  description: zod.string().optional(),
+  website: zod.string().nullish(),
+  ownerId: zod.number().nullish(),
+  departmentId: zod.number().nullish(),
+  licenseSeats: zod.number().nullish(),
+  licenseUsed: zod.number().nullish(),
+  monthlyCost: zod.number().nullish(),
+});
+
+export const UpdateApplicationResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  vendor: zod.string(),
+  category: zod.enum([
+    "productivity",
+    "design",
+    "ops",
+    "finance",
+    "dev",
+    "security",
+    "other",
+  ]),
+  status: zod.enum(["active", "piloting", "deprecated"]),
+  description: zod.string(),
+  website: zod.string().nullish(),
+  ownerId: zod.number().nullish(),
+  ownerName: zod.string().nullish(),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  licenseSeats: zod.number().nullish(),
+  licenseUsed: zod.number().nullish(),
+  monthlyCost: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+export const DeleteApplicationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List external vendors / suppliers
+ */
+export const ListVendorsQueryParams = zod.object({
+  status: zod.enum(["active", "inactive"]).optional(),
+  category: zod
+    .enum([
+      "software",
+      "hardware",
+      "services",
+      "telecom",
+      "consulting",
+      "other",
+    ])
+    .optional(),
+  q: zod.coerce.string().optional(),
+});
+
+export const ListVendorsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  category: zod.enum([
+    "software",
+    "hardware",
+    "services",
+    "telecom",
+    "consulting",
+    "other",
+  ]),
+  status: zod.enum(["active", "inactive"]),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  website: zod.string().nullish(),
+  notes: zod.string(),
+  appCount: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+export const ListVendorsResponse = zod.array(ListVendorsResponseItem);
+
+export const CreateVendorBody = zod.object({
+  name: zod.string(),
+  category: zod.enum([
+    "software",
+    "hardware",
+    "services",
+    "telecom",
+    "consulting",
+    "other",
+  ]),
+  status: zod.enum(["active", "inactive"]).optional(),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  website: zod.string().nullish(),
+  notes: zod.string().optional(),
+});
+
+export const UpdateVendorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateVendorBody = zod.object({
+  name: zod.string().optional(),
+  category: zod
+    .enum([
+      "software",
+      "hardware",
+      "services",
+      "telecom",
+      "consulting",
+      "other",
+    ])
+    .optional(),
+  status: zod.enum(["active", "inactive"]).optional(),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  website: zod.string().nullish(),
+  notes: zod.string().optional(),
+});
+
+export const UpdateVendorResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  category: zod.enum([
+    "software",
+    "hardware",
+    "services",
+    "telecom",
+    "consulting",
+    "other",
+  ]),
+  status: zod.enum(["active", "inactive"]),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  website: zod.string().nullish(),
+  notes: zod.string(),
+  appCount: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+
+export const DeleteVendorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary KPI cards + breakdown for a date range and (optionally) a department
  */
 export const getDashboardOverviewQueryRangeDaysDefault = 30;
@@ -959,6 +1388,9 @@ export const GetBreachedTicketsResponseItem = zod.object({
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   status: zod.enum(["open", "pending", "resolved", "closed"]),
   source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
+  supportLevel: zod
+    .union([zod.literal(1), zod.literal(2), zod.literal(3)])
+    .optional(),
   departmentId: zod.number(),
   departmentName: zod.string(),
   reporterId: zod.number(),

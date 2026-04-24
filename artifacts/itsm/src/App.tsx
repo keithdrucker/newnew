@@ -13,6 +13,8 @@ import TicketDetail from "@/pages/ticket-detail";
 import People from "@/pages/people";
 import SettingsAgents from "@/pages/settings-agents";
 import Assets from "@/pages/assets";
+import Applications from "@/pages/applications";
+import Vendors from "@/pages/vendors";
 import Settings from "@/pages/settings";
 import BoardSettings from "@/pages/board-settings";
 import {
@@ -37,6 +39,8 @@ function Router() {
         <Route path="/knowledge-base" component={KnowledgeBaseList} />
         <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
         <Route path="/assets" component={Assets} />
+        <Route path="/applications" component={Applications} />
+        <Route path="/vendors" component={Vendors} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />
         <Route path="/settings/boards/:slug" component={BoardSettings} />

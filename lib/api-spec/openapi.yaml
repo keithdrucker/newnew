@@ -288,6 +288,15 @@ paths:
             type: string
             enum: [low, medium, high, urgent]
         - in: query
+          name: supportLevel
+          schema: { type: integer, enum: [1, 2, 3] }
+        - in: query
+          name: assigneeId
+          schema: { type: integer }
+        - in: query
+          name: unassigned
+          schema: { type: boolean }
+        - in: query
           name: q
           schema: { type: string }
       responses:
@@ -383,6 +392,68 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TicketComment" }
+
+  /ticket-views:
+    get:
+      operationId: listTicketViews
+      tags: [tickets]
+      summary: List the current user's saved ticket views
+      responses:
+        "200":
+          description: Saved views
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TicketView" }
+    post:
+      operationId: createTicketView
+      tags: [tickets]
+      summary: Create a saved ticket view for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTicketViewInput" }
+      responses:
+        "201":
+          description: Created view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketView" }
+
+  /ticket-views/{id}:
+    patch:
+      operationId: updateTicketView
+      tags: [tickets]
+      summary: Rename, update filters, or set/unset default on a saved view
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTicketViewInput" }
+      responses:
+        "200":
+          description: Updated view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketView" }
+    delete:
+      operationId: deleteTicketView
+      tags: [tickets]
+      summary: Delete a saved view
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
 
   /people:
     get:
@@ -711,6 +782,155 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /applications:
+    get:
+      operationId: listApplications
+      tags: [applications]
+      summary: List software applications
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, piloting, deprecated]
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [productivity, design, ops, finance, dev, security, other]
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: Applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Application" }
+    post:
+      operationId: createApplication
+      tags: [applications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateApplicationInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Application" }
+
+  /applications/{id}:
+    patch:
+      operationId: updateApplication
+      tags: [applications]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateApplicationInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Application" }
+    delete:
+      operationId: deleteApplication
+      tags: [applications]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /vendors:
+    get:
+      operationId: listVendors
+      tags: [vendors]
+      summary: List external vendors / suppliers
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, inactive]
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [software, hardware, services, telecom, consulting, other]
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: Vendors
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Vendor" }
+    post:
+      operationId: createVendor
+      tags: [vendors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateVendorInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Vendor" }
+
+  /vendors/{id}:
+    patch:
+      operationId: updateVendor
+      tags: [vendors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateVendorInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Vendor" }
+    delete:
+      operationId: deleteVendor
+      tags: [vendors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
   /dashboard/overview:
     get:
       operationId: getDashboardOverview
@@ -967,6 +1187,9 @@ components:
         source:
           type: string
           enum: [portal, email, phone, chat, walk_in]
+        supportLevel:
+          type: integer
+          enum: [1, 2, 3]
         departmentId: { type: integer }
         departmentName: { type: string }
         reporterId: { type: integer }
@@ -1054,6 +1277,9 @@ components:
         source:
           type: string
           enum: [portal, email, phone, chat, walk_in]
+        supportLevel:
+          type: integer
+          enum: [1, 2, 3]
         departmentId: { type: integer }
         reporterId: { type: integer }
         assigneeId:
@@ -1077,6 +1303,9 @@ components:
         status:
           type: string
           enum: [open, pending, resolved, closed]
+        supportLevel:
+          type: integer
+          enum: [1, 2, 3]
         assigneeId:
           type: ["integer", "null"]
         location:
@@ -1085,6 +1314,208 @@ components:
           type: ["string", "null"]
         category:
           type: ["string", "null"]
+
+    TicketViewConfig:
+      type: object
+      properties:
+        search:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
+          enum: [open, pending, resolved, closed, null]
+        priority:
+          type: ["string", "null"]
+          enum: [low, medium, high, urgent, null]
+        supportLevel:
+          type: ["integer", "null"]
+          enum: [1, 2, 3, null]
+        assigneeId:
+          type: ["integer", "null"]
+        departmentId:
+          type: ["integer", "null"]
+
+    TicketView:
+      type: object
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        name: { type: string }
+        isDefault: { type: boolean }
+        config: { $ref: "#/components/schemas/TicketViewConfig" }
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, userId, name, isDefault, config, createdAt, updatedAt]
+
+    CreateTicketViewInput:
+      type: object
+      properties:
+        name: { type: string }
+        config: { $ref: "#/components/schemas/TicketViewConfig" }
+        isDefault: { type: boolean }
+      required: [name, config]
+
+    UpdateTicketViewInput:
+      type: object
+      properties:
+        name: { type: string }
+        config: { $ref: "#/components/schemas/TicketViewConfig" }
+        isDefault: { type: boolean }
+
+    Application:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        vendor: { type: string }
+        category:
+          type: string
+          enum: [productivity, design, ops, finance, dev, security, other]
+        status:
+          type: string
+          enum: [active, piloting, deprecated]
+        description: { type: string }
+        website:
+          type: ["string", "null"]
+        ownerId:
+          type: ["integer", "null"]
+        ownerName:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+        licenseSeats:
+          type: ["integer", "null"]
+        licenseUsed:
+          type: ["integer", "null"]
+        monthlyCost:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, vendor, category, status, description, createdAt]
+
+    CreateApplicationInput:
+      type: object
+      properties:
+        name: { type: string }
+        vendor: { type: string }
+        category:
+          type: string
+          enum: [productivity, design, ops, finance, dev, security, other]
+        status:
+          type: string
+          enum: [active, piloting, deprecated]
+        description: { type: string }
+        website:
+          type: ["string", "null"]
+        ownerId:
+          type: ["integer", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        licenseSeats:
+          type: ["integer", "null"]
+        licenseUsed:
+          type: ["integer", "null"]
+        monthlyCost:
+          type: ["number", "null"]
+      required: [name, category]
+
+    UpdateApplicationInput:
+      type: object
+      properties:
+        name: { type: string }
+        vendor: { type: string }
+        category:
+          type: string
+          enum: [productivity, design, ops, finance, dev, security, other]
+        status:
+          type: string
+          enum: [active, piloting, deprecated]
+        description: { type: string }
+        website:
+          type: ["string", "null"]
+        ownerId:
+          type: ["integer", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        licenseSeats:
+          type: ["integer", "null"]
+        licenseUsed:
+          type: ["integer", "null"]
+        monthlyCost:
+          type: ["number", "null"]
+
+    Vendor:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        category:
+          type: string
+          enum: [software, hardware, services, telecom, consulting, other]
+        status:
+          type: string
+          enum: [active, inactive]
+        contactName:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        notes: { type: string }
+        appCount: { type: integer }
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, category, status, notes, appCount, createdAt]
+
+    CreateVendorInput:
+      type: object
+      properties:
+        name: { type: string }
+        category:
+          type: string
+          enum: [software, hardware, services, telecom, consulting, other]
+        status:
+          type: string
+          enum: [active, inactive]
+        contactName:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        notes: { type: string }
+      required: [name, category]
+
+    UpdateVendorInput:
+      type: object
+      properties:
+        name: { type: string }
+        category:
+          type: string
+          enum: [software, hardware, services, telecom, consulting, other]
+        status:
+          type: string
+          enum: [active, inactive]
+        contactName:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        notes: { type: string }
 
     AddTicketCommentInput:
       type: object

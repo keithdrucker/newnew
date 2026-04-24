@@ -8,6 +8,7 @@
 import type { TicketPriority } from "./ticketPriority";
 import type { TicketSource } from "./ticketSource";
 import type { TicketStatus } from "./ticketStatus";
+import type { TicketSupportLevel } from "./ticketSupportLevel";
 import type { TicketType } from "./ticketType";
 
 export interface Ticket {
@@ -19,6 +20,7 @@ export interface Ticket {
   priority: TicketPriority;
   status: TicketStatus;
   source: TicketSource;
+  supportLevel?: TicketSupportLevel;
   departmentId: number;
   departmentName: string;
   reporterId: number;

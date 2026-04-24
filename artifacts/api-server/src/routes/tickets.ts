@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   ticketsTable,
@@ -68,6 +68,7 @@ async function hydrate(rows: TicketRow[]) {
     priority: r.priority as "low" | "medium" | "high" | "urgent",
     status: r.status as "open" | "pending" | "resolved" | "closed",
     source: r.source as "portal" | "email" | "phone" | "chat" | "walk_in",
+    supportLevel: (r.supportLevel ?? 1) as 1 | 2 | 3,
     departmentId: r.departmentId,
     departmentName: deptMap.get(r.departmentId)?.name ?? "—",
     reporterId: r.reporterId,
@@ -95,13 +96,20 @@ router.get("/tickets", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const conds: Array<ReturnType<typeof eq>> = [];
+  const conds: Array<any> = [];
   if (params.data.departmentId != null)
     conds.push(eq(ticketsTable.departmentId, params.data.departmentId));
   if (params.data.status)
     conds.push(eq(ticketsTable.status, params.data.status));
   if (params.data.priority)
     conds.push(eq(ticketsTable.priority, params.data.priority));
+  if (params.data.supportLevel != null)
+    conds.push(eq(ticketsTable.supportLevel, params.data.supportLevel));
+  if (params.data.unassigned) {
+    conds.push(isNull(ticketsTable.assigneeId));
+  } else if (params.data.assigneeId != null) {
+    conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
+  }
 
   // Per-board access filter (admin sees all; agent sees boards they're members of;
   // end_user only their own reported tickets).
@@ -185,6 +193,7 @@ router.post("/tickets", async (req, res): Promise<void> => {
       departmentId: parsed.data.departmentId,
       reporterId: parsed.data.reporterId,
       assigneeId: parsed.data.assigneeId ?? null,
+      supportLevel: parsed.data.supportLevel ?? 1,
       location: parsed.data.location ?? null,
       team: parsed.data.team ?? null,
       category: parsed.data.category ?? null,

@@ -1,6 +1,7 @@
 import {
   pgTable,
   serial,
+  smallint,
   text,
   integer,
   boolean,
@@ -16,6 +17,8 @@ export const ticketsTable = pgTable("tickets", {
   priority: text("priority").notNull().default("medium"), // low|medium|high|urgent
   status: text("status").notNull().default("open"), // open|pending|resolved|closed
   source: text("source").notNull().default("portal"),
+  // Tiered support escalation: 1 = front-line, 2 = specialist, 3 = engineering
+  supportLevel: smallint("support_level").notNull().default(1),
   departmentId: integer("department_id").notNull(),
   reporterId: integer("reporter_id").notNull(),
   assigneeId: integer("assignee_id"),

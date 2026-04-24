@@ -7,6 +7,7 @@
  */
 import type { CreateTicketInputPriority } from "./createTicketInputPriority";
 import type { CreateTicketInputSource } from "./createTicketInputSource";
+import type { CreateTicketInputSupportLevel } from "./createTicketInputSupportLevel";
 import type { CreateTicketInputType } from "./createTicketInputType";
 
 export interface CreateTicketInput {
@@ -15,6 +16,7 @@ export interface CreateTicketInput {
   type: CreateTicketInputType;
   priority: CreateTicketInputPriority;
   source: CreateTicketInputSource;
+  supportLevel?: CreateTicketInputSupportLevel;
   departmentId: number;
   reporterId: number;
   /** @nullable */

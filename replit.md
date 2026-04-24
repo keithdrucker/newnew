@@ -36,6 +36,7 @@ modeled on Freshservice / Atomicwork. React + Vite + Wouter + TanStack Query.
 - Dashboard — KPIs (avg response, avg resolution, SLA score, breached SLA), status counts, opened-vs-resolved area chart, top agents, recent breaches. Filterable by department + date range (30 / 180 / 365 days).
 - Ticket Board — collapsible group with **All Tickets** plus 13 departments (IT, QAQC, Safety, Finance & Accounting, HR, Insurance, Legal, MWBE, Marketing & Sales, Prequalification, Procore, Security, Workplace Resources). Each shows a colored department icon + open-ticket count badge.
 - People, Agents, Knowledge Base, Assets, Settings (settings restricted to admin role in nav).
+- Administration also includes **Applications** (software catalog with owner, department, license seats/usage, monthly cost, lifecycle status active|piloting|deprecated, category productivity|design|ops|finance|dev|security|other) and **Vendors** (external suppliers with category software|hardware|services|telecom|consulting|other, contact details, status active|inactive, notes; list response includes `appCount` derived from a case-insensitive match of `applications.vendor` to `vendors.name`).
 
 **Demo session:** initial active user is admin Lena Park (id 33). The sidebar footer popover lets you switch into any agent or end_user; backend RBAC scopes responses accordingly:
 - `admin` → sees every department.
@@ -66,7 +67,7 @@ Schema: `board_members(id, departmentId, userId, role, createdAt, updatedAt)` wi
 **Shell layout (custom — distinct from the default sidebar template):** `components/layout/app-layout.tsx` renders three columns: a **68px navy icon rail** (`components/layout/icon-rail.tsx`) with the "EW" Carolina-blue monogram tile, vertical icon nav with a Carolina-blue active indicator and tooltips, plus the user/role switcher avatar at the bottom; a **248px white contextual panel** (`components/layout/context-panel.tsx`) that shows the EW Howell · Service Hub eyebrow, the section eyebrow + display-font title + tagline (driven by route via `SECTION_META`), and section-specific content (tickets routes show All Tickets + the department list inside a "Departments" collapsible; other routes show Quick links + a "Signed in" card); and the main content area. Admin-only rail items respect `session.role`. Replaces the previous single-pane `sidebar.tsx`.
 
 ### API Server (`artifacts/api-server`)
-Express 5 + Drizzle. Routes: `/api/session`, `/api/departments(/:id/settings)`, `/api/tickets(/:id/comments)`, `/api/people`, `/api/agents`, `/api/knowledge-base`, `/api/assets`, `/api/dashboard(/timeseries|/breached)`.
+Express 5 + Drizzle. Routes: `/api/session`, `/api/departments(/:id/settings)`, `/api/tickets(/:id/comments)`, `/api/people`, `/api/agents`, `/api/knowledge-base`, `/api/assets`, `/api/applications(/:id)`, `/api/vendors(/:id)`, `/api/dashboard(/timeseries|/breached)`.
 
 **Conventions worth remembering:**
 - All list/dashboard endpoints run query strings through `src/lib/queryCoerce.ts` so numeric query params (`departmentId`, `rangeDays`, etc.) survive Express's string-only parser before Zod parsing.
