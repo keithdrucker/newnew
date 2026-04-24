@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Harmony ITSM"
+version = "1.0.0"
+id = "artifacts/itsm"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20118
+
+[services.development]
+run = "pnpm --filter @workspace/itsm run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/itsm", "run", "build" ]
+publicDir = "artifacts/itsm/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20118"
+BASE_PATH = "/"

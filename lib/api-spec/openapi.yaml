@@ -3,34 +3,1265 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Harmony ITSM API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: session
+    description: Current user / role-based session
+  - name: departments
+    description: Department (board) operations
+  - name: tickets
+    description: Ticket operations across all department boards
+  - name: people
+    description: End users who file tickets
+  - name: agents
+    description: Agents who work tickets
+  - name: knowledge-base
+    description: Knowledge base articles per department
+  - name: assets
+    description: Hardware assets across sites and jobsites
+  - name: dashboard
+    description: Dashboard analytics endpoints
+  - name: settings
+    description: Department portal settings
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
           content:
             application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /session:
+    get:
+      operationId: getSession
+      tags: [session]
+      summary: Get the current user session
+      responses:
+        "200":
+          description: Current session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+    post:
+      operationId: switchSession
+      tags: [session]
+      summary: Switch the active user (demo role switcher)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SwitchSessionInput" }
+      responses:
+        "200":
+          description: New session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+
+  /departments:
+    get:
+      operationId: listDepartments
+      tags: [departments]
+      summary: List all departments (boards)
+      responses:
+        "200":
+          description: Departments
+          content:
+            application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                type: array
+                items: { $ref: "#/components/schemas/Department" }
+    post:
+      operationId: createDepartment
+      tags: [departments]
+      summary: Create a department (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDepartmentInput" }
+      responses:
+        "201":
+          description: Created department
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Department" }
+
+  /departments/{id}:
+    get:
+      operationId: getDepartment
+      tags: [departments]
+      summary: Get a department
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Department
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Department" }
+    patch:
+      operationId: updateDepartment
+      tags: [departments]
+      summary: Update a department (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDepartmentInput" }
+      responses:
+        "200":
+          description: Updated department
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Department" }
+    delete:
+      operationId: deleteDepartment
+      tags: [departments]
+      summary: Delete a department (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /departments/{id}/settings:
+    get:
+      operationId: getDepartmentSettings
+      tags: [settings]
+      summary: Get granular portal settings for a department
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DepartmentSettings" }
+    patch:
+      operationId: updateDepartmentSettings
+      tags: [settings]
+      summary: Update granular portal settings for a department (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDepartmentSettingsInput" }
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DepartmentSettings" }
+
+  /tickets:
+    get:
+      operationId: listTickets
+      tags: [tickets]
+      summary: List tickets, scoped by current user's role and department
+      parameters:
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [open, pending, resolved, closed]
+        - in: query
+          name: priority
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: Tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Ticket" }
+    post:
+      operationId: createTicket
+      tags: [tickets]
+      summary: Create a ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTicketInput" }
+      responses:
+        "201":
+          description: Created ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+
+  /tickets/{id}:
+    get:
+      operationId: getTicket
+      tags: [tickets]
+      summary: Get a ticket with comments
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Ticket detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketDetail" }
+    patch:
+      operationId: updateTicket
+      tags: [tickets]
+      summary: Update a ticket (status, priority, assignment, etc.)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTicketInput" }
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+    delete:
+      operationId: deleteTicket
+      tags: [tickets]
+      summary: Delete a ticket (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /tickets/{id}/comments:
+    post:
+      operationId: addTicketComment
+      tags: [tickets]
+      summary: Add a comment to a ticket
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddTicketCommentInput" }
+      responses:
+        "201":
+          description: Created comment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketComment" }
+
+  /people:
+    get:
+      operationId: listPeople
+      tags: [people]
+      summary: List end users (people who file tickets)
+      parameters:
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: People
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Person" }
+    post:
+      operationId: createPerson
+      tags: [people]
+      summary: Add a person
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePersonInput" }
+      responses:
+        "201":
+          description: Created person
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Person" }
+
+  /people/{id}:
+    get:
+      operationId: getPerson
+      tags: [people]
+      summary: Get a person
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Person" }
+    patch:
+      operationId: updatePerson
+      tags: [people]
+      summary: Update a person
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePersonInput" }
+      responses:
+        "200":
+          description: Updated person
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Person" }
+    delete:
+      operationId: deletePerson
+      tags: [people]
+      summary: Delete a person (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /agents:
+    get:
+      operationId: listAgents
+      tags: [agents]
+      summary: List agents (staff who work tickets)
+      parameters:
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Agent" }
+    post:
+      operationId: createAgent
+      tags: [agents]
+      summary: Add an agent (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAgentInput" }
+      responses:
+        "201":
+          description: Created agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+
+  /agents/{id}:
+    patch:
+      operationId: updateAgent
+      tags: [agents]
+      summary: Update an agent (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAgentInput" }
+      responses:
+        "200":
+          description: Updated agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+    delete:
+      operationId: deleteAgent
+      tags: [agents]
+      summary: Delete an agent (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /knowledge-base:
+    get:
+      operationId: listKbArticles
+      tags: [knowledge-base]
+      summary: List knowledge base articles
+      parameters:
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: Articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KbArticle" }
+    post:
+      operationId: createKbArticle
+      tags: [knowledge-base]
+      summary: Create a knowledge base article
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateKbArticleInput" }
+      responses:
+        "201":
+          description: Created article
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbArticle" }
+
+  /knowledge-base/{id}:
+    get:
+      operationId: getKbArticle
+      tags: [knowledge-base]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Article
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbArticle" }
+    patch:
+      operationId: updateKbArticle
+      tags: [knowledge-base]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateKbArticleInput" }
+      responses:
+        "200":
+          description: Updated article
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbArticle" }
+    delete:
+      operationId: deleteKbArticle
+      tags: [knowledge-base]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      summary: List hardware assets
+      parameters:
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [in_use, in_storage, retired, repair]
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Asset" }
+    post:
+      operationId: createAsset
+      tags: [assets]
+      summary: Add an asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAssetInput" }
+      responses:
+        "201":
+          description: Created asset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+
+  /assets/{id}:
+    get:
+      operationId: getAsset
+      tags: [assets]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Asset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+    patch:
+      operationId: updateAsset
+      tags: [assets]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAssetInput" }
+      responses:
+        "200":
+          description: Updated asset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+    delete:
+      operationId: deleteAsset
+      tags: [assets]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /dashboard/overview:
+    get:
+      operationId: getDashboardOverview
+      tags: [dashboard]
+      summary: KPI cards + breakdown for a date range and (optionally) a department
+      parameters:
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: rangeDays
+          schema:
+            type: integer
+            enum: [30, 180, 365]
+            default: 30
+      responses:
+        "200":
+          description: Dashboard overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardOverview" }
+
+  /dashboard/timeseries:
+    get:
+      operationId: getDashboardTimeseries
+      tags: [dashboard]
+      summary: Open vs resolved tickets over time for the selected window
+      parameters:
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: rangeDays
+          schema:
+            type: integer
+            enum: [30, 180, 365]
+            default: 30
+      responses:
+        "200":
+          description: Timeseries data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardTimeseries" }
+
+  /dashboard/breached:
+    get:
+      operationId: getBreachedTickets
+      tags: [dashboard]
+      summary: Tickets that breached SLA in the selected window
+      parameters:
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+        - in: query
+          name: rangeDays
+          schema:
+            type: integer
+            enum: [30, 180, 365]
+            default: 30
+      responses:
+        "200":
+          description: Breached tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Ticket" }
+
 components:
   schemas:
     HealthStatus:
       type: object
       properties:
+        status: { type: string }
+      required: [status]
+
+    Role:
+      type: string
+      enum: [admin, agent, end_user]
+
+    Session:
+      type: object
+      properties:
+        userId: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+      required: [userId, name, email, role]
+
+    SwitchSessionInput:
+      type: object
+      properties:
+        userId: { type: integer }
+      required: [userId]
+
+    Department:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        description:
+          type: ["string", "null"]
+        ticketCount: { type: integer }
+      required: [id, name, slug, color, icon, ticketCount]
+
+    CreateDepartmentInput:
+      type: object
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        description:
+          type: ["string", "null"]
+      required: [name, slug, color, icon]
+
+    UpdateDepartmentInput:
+      type: object
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        description:
+          type: ["string", "null"]
+
+    DepartmentSettings:
+      type: object
+      properties:
+        departmentId: { type: integer }
+        portalEnabled: { type: boolean }
+        portalTitle: { type: string }
+        portalWelcome: { type: string }
+        defaultPriority:
+          type: string
+          enum: [low, medium, high, urgent]
+        slaResponseMinutes: { type: integer }
+        slaResolutionMinutes: { type: integer }
+        autoAssign: { type: boolean }
+        notifyOnNewTicket: { type: boolean }
+        notifyOnSlaBreach: { type: boolean }
+        allowEndUserAttachments: { type: boolean }
+        requireCategory: { type: boolean }
+        businessHoursStart: { type: string }
+        businessHoursEnd: { type: string }
+        ticketCategories:
+          type: array
+          items: { type: string }
+      required:
+        - departmentId
+        - portalEnabled
+        - portalTitle
+        - portalWelcome
+        - defaultPriority
+        - slaResponseMinutes
+        - slaResolutionMinutes
+        - autoAssign
+        - notifyOnNewTicket
+        - notifyOnSlaBreach
+        - allowEndUserAttachments
+        - requireCategory
+        - businessHoursStart
+        - businessHoursEnd
+        - ticketCategories
+
+    UpdateDepartmentSettingsInput:
+      type: object
+      properties:
+        portalEnabled: { type: boolean }
+        portalTitle: { type: string }
+        portalWelcome: { type: string }
+        defaultPriority:
+          type: string
+          enum: [low, medium, high, urgent]
+        slaResponseMinutes: { type: integer }
+        slaResolutionMinutes: { type: integer }
+        autoAssign: { type: boolean }
+        notifyOnNewTicket: { type: boolean }
+        notifyOnSlaBreach: { type: boolean }
+        allowEndUserAttachments: { type: boolean }
+        requireCategory: { type: boolean }
+        businessHoursStart: { type: string }
+        businessHoursEnd: { type: string }
+        ticketCategories:
+          type: array
+          items: { type: string }
+
+    Ticket:
+      type: object
+      properties:
+        id: { type: integer }
+        ticketKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        type:
+          type: string
+          enum: [incident, request]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
         status:
           type: string
+          enum: [open, pending, resolved, closed]
+        source:
+          type: string
+          enum: [portal, email, phone, chat, walk_in]
+        departmentId: { type: integer }
+        departmentName: { type: string }
+        reporterId: { type: integer }
+        reporterName: { type: string }
+        assigneeId:
+          type: ["integer", "null"]
+        assigneeName:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        team:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        slaBreached: { type: boolean }
+        responseDueAt:
+          type: ["string", "null"]
+          format: date-time
+        resolutionDueAt:
+          type: ["string", "null"]
+          format: date-time
+        firstResponseAt:
+          type: ["string", "null"]
+          format: date-time
+        resolvedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
       required:
+        - id
+        - ticketKey
+        - title
+        - description
+        - type
+        - priority
         - status
+        - source
+        - departmentId
+        - departmentName
+        - reporterId
+        - reporterName
+        - slaBreached
+        - createdAt
+        - updatedAt
 
+    TicketComment:
+      type: object
+      properties:
+        id: { type: integer }
+        ticketId: { type: integer }
+        authorName: { type: string }
+        authorRole: { $ref: "#/components/schemas/Role" }
+        body: { type: string }
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, ticketId, authorName, authorRole, body, createdAt]
+
+    TicketDetail:
+      allOf:
+        - $ref: "#/components/schemas/Ticket"
+        - type: object
+          properties:
+            comments:
+              type: array
+              items: { $ref: "#/components/schemas/TicketComment" }
+          required: [comments]
+
+    CreateTicketInput:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        type:
+          type: string
+          enum: [incident, request]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        source:
+          type: string
+          enum: [portal, email, phone, chat, walk_in]
+        departmentId: { type: integer }
+        reporterId: { type: integer }
+        assigneeId:
+          type: ["integer", "null"]
+        location:
+          type: ["string", "null"]
+        team:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+      required: [title, description, type, priority, source, departmentId, reporterId]
+
+    UpdateTicketInput:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        status:
+          type: string
+          enum: [open, pending, resolved, closed]
+        assigneeId:
+          type: ["integer", "null"]
+        location:
+          type: ["string", "null"]
+        team:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+
+    AddTicketCommentInput:
+      type: object
+      properties:
+        body: { type: string }
+      required: [body]
+
+    Person:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        title:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+        ticketsOpen: { type: integer }
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, ticketsOpen, createdAt]
+
+    CreatePersonInput:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        title:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+      required: [name, email]
+
+    UpdatePersonInput:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        title:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+
+    Agent:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        title:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+        ticketsAssigned: { type: integer }
+      required: [id, name, email, role, ticketsAssigned]
+
+    CreateAgentInput:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        title:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+      required: [name, email, role]
+
+    UpdateAgentInput:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        title:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+
+    KbArticle:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        body: { type: string }
+        departmentId: { type: integer }
+        departmentName: { type: string }
+        authorName: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        views: { type: integer }
+        updatedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, title, body, departmentId, departmentName, authorName, tags, views, updatedAt, createdAt]
+
+    CreateKbArticleInput:
+      type: object
+      properties:
+        title: { type: string }
+        body: { type: string }
+        departmentId: { type: integer }
+        tags:
+          type: array
+          items: { type: string }
+      required: [title, body, departmentId]
+
+    UpdateKbArticleInput:
+      type: object
+      properties:
+        title: { type: string }
+        body: { type: string }
+        departmentId: { type: integer }
+        tags:
+          type: array
+          items: { type: string }
+
+    Asset:
+      type: object
+      properties:
+        id: { type: integer }
+        assetTag: { type: string }
+        name: { type: string }
+        type:
+          type: string
+          enum: [laptop, desktop, monitor, phone, printer, server, tablet, network, tool, vehicle, other]
+        manufacturer:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        serialNumber:
+          type: ["string", "null"]
+        location: { type: string }
+        site:
+          type: string
+          enum: [office, jobsite]
+        status:
+          type: string
+          enum: [in_use, in_storage, retired, repair]
+        assignedToId:
+          type: ["integer", "null"]
+        assignedToName:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+        purchasedAt:
+          type: ["string", "null"]
+          format: date-time
+        warrantyEndsAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, assetTag, name, type, location, site, status, createdAt]
+
+    CreateAssetInput:
+      type: object
+      properties:
+        assetTag: { type: string }
+        name: { type: string }
+        type:
+          type: string
+          enum: [laptop, desktop, monitor, phone, printer, server, tablet, network, tool, vehicle, other]
+        manufacturer:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        serialNumber:
+          type: ["string", "null"]
+        location: { type: string }
+        site:
+          type: string
+          enum: [office, jobsite]
+        status:
+          type: string
+          enum: [in_use, in_storage, retired, repair]
+        assignedToId:
+          type: ["integer", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        purchasedAt:
+          type: ["string", "null"]
+          format: date-time
+        warrantyEndsAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [assetTag, name, type, location, site, status]
+
+    UpdateAssetInput:
+      type: object
+      properties:
+        assetTag: { type: string }
+        name: { type: string }
+        type:
+          type: string
+          enum: [laptop, desktop, monitor, phone, printer, server, tablet, network, tool, vehicle, other]
+        manufacturer:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        serialNumber:
+          type: ["string", "null"]
+        location: { type: string }
+        site:
+          type: string
+          enum: [office, jobsite]
+        status:
+          type: string
+          enum: [in_use, in_storage, retired, repair]
+        assignedToId:
+          type: ["integer", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        purchasedAt:
+          type: ["string", "null"]
+          format: date-time
+        warrantyEndsAt:
+          type: ["string", "null"]
+          format: date-time
+
+    StatusBreakdownItem:
+      type: object
+      properties:
+        status: { type: string }
+        count: { type: integer }
+      required: [status, count]
+
+    AgentLeaderboardItem:
+      type: object
+      properties:
+        agentId: { type: integer }
+        agentName: { type: string }
+        ticketCount: { type: integer }
+      required: [agentId, agentName, ticketCount]
+
+    DashboardOverview:
+      type: object
+      properties:
+        rangeDays: { type: integer }
+        departmentId:
+          type: ["integer", "null"]
+        averageResponseSeconds: { type: integer }
+        averageResolutionSeconds: { type: integer }
+        slaResponseCompliance: { type: number }
+        slaResolutionCompliance: { type: number }
+        ticketsBreachedSla: { type: integer }
+        openTickets: { type: integer }
+        closedTickets: { type: integer }
+        pendingTickets: { type: integer }
+        resolvedTickets: { type: integer }
+        totalTickets: { type: integer }
+        averageSatisfactionScore: { type: number }
+        estimatedTimeSavedHours: { type: number }
+        estimatedCostSavedDollars: { type: integer }
+        statusBreakdown:
+          type: array
+          items: { $ref: "#/components/schemas/StatusBreakdownItem" }
+        topAgents:
+          type: array
+          items: { $ref: "#/components/schemas/AgentLeaderboardItem" }
+      required:
+        - rangeDays
+        - averageResponseSeconds
+        - averageResolutionSeconds
+        - slaResponseCompliance
+        - slaResolutionCompliance
+        - ticketsBreachedSla
+        - openTickets
+        - closedTickets
+        - pendingTickets
+        - resolvedTickets
+        - totalTickets
+        - averageSatisfactionScore
+        - estimatedTimeSavedHours
+        - estimatedCostSavedDollars
+        - statusBreakdown
+        - topAgents
+
+    TimeseriesPoint:
+      type: object
+      properties:
+        date: { type: string }
+        opened: { type: integer }
+        resolved: { type: integer }
+      required: [date, opened, resolved]
+
+    DashboardTimeseries:
+      type: object
+      properties:
+        rangeDays: { type: integer }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/TimeseriesPoint" }
+      required: [rangeDays, points]

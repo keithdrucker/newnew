@@ -25,3 +25,36 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Artifacts
+
+### Harmony ITSM (`artifacts/itsm`)
+Multi-department IT Service Management web app for EW Howell construction firm,
+modeled on Freshservice / Atomicwork. React + Vite + Wouter + TanStack Query.
+
+**Sections (left sidebar):**
+- Dashboard — KPIs (avg response, avg resolution, SLA score, breached SLA), status counts, opened-vs-resolved area chart, top agents, recent breaches. Filterable by department + date range (30 / 180 / 365 days).
+- Ticket Board — collapsible group with **All Tickets** plus 13 departments (IT, QAQC, Safety, Finance & Accounting, HR, Insurance, Legal, MWBE, Marketing & Sales, Prequalification, Procore, Security, Workplace Resources). Each shows a colored department icon + open-ticket count badge.
+- People, Agents, Knowledge Base, Assets, Settings (settings restricted to admin role in nav).
+
+**Demo session:** initial active user is admin Lena Park (id 33). The sidebar footer popover lets you switch into any agent or end_user; backend RBAC scopes responses accordingly:
+- `admin` → sees every department.
+- `agent` → scoped to `departmentId`.
+- `end_user` → scoped to `reporterId = self`.
+
+**Ticket key format:** `INC-###` (incident) / `REQ-###` (request).
+
+**Settings (per-department):** portal toggle/title/welcome/categories, default priority, response & resolution SLA minutes, business hours, auto-assign + notification toggles. PATCH `/api/departments/:id/settings`.
+
+### API Server (`artifacts/api-server`)
+Express 5 + Drizzle. Routes: `/api/session`, `/api/departments(/:id/settings)`, `/api/tickets(/:id/comments)`, `/api/people`, `/api/agents`, `/api/knowledge-base`, `/api/assets`, `/api/dashboard(/timeseries|/breached)`.
+
+**Conventions worth remembering:**
+- All list/dashboard endpoints run query strings through `src/lib/queryCoerce.ts` so numeric query params (`departmentId`, `rangeDays`, etc.) survive Express's string-only parser before Zod parsing.
+- Use Drizzle `inArray()` (not `` sql`= ANY(${arr})` ``) for list filters — the latter does not bind correctly with Postgres array params.
+- Asset status enum is `in_use | in_storage | repair | retired`. There is no `in_stock`, `in_repair`, or `lost`.
+- KB articles have `views` (no `published` flag). View count is incremented atomically via `sql\`views + 1\`` on each GET.
+- List query param for full-text is `q` (not `search`) on tickets / people / KB / assets.
+
+### Seed (`@workspace/db`)
+13 departments, ~32 users (mix of admin/agent/end_user), 33 tickets, KB articles, assets. Re-runnable; safe to call after `pnpm --filter @workspace/db run push`.
