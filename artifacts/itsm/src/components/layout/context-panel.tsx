@@ -29,11 +29,6 @@ const SECTION_META: Record<
     title: "Knowledge",
     tagline: "Articles, runbooks, and connected sources.",
   },
-  "/agents": {
-    eyebrow: "Roster",
-    title: "Agents",
-    tagline: "People assigned to handle service requests.",
-  },
   "/people": {
     eyebrow: "Roster",
     title: "People",

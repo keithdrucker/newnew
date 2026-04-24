@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,7 +11,7 @@ import Dashboard from "@/pages/dashboard";
 import Tickets from "@/pages/tickets";
 import TicketDetail from "@/pages/ticket-detail";
 import People from "@/pages/people";
-import Agents from "@/pages/agents";
+import SettingsAgents from "@/pages/settings-agents";
 import Assets from "@/pages/assets";
 import Settings from "@/pages/settings";
 import BoardSettings from "@/pages/board-settings";
@@ -31,11 +31,14 @@ function Router() {
         <Route path="/tickets/dept/:slug" component={Tickets} />
         <Route path="/tickets/:id" component={TicketDetail} />
         <Route path="/people" component={People} />
-        <Route path="/agents" component={Agents} />
+        <Route path="/agents">
+          <Redirect to="/settings/agents" />
+        </Route>
         <Route path="/knowledge-base" component={KnowledgeBaseList} />
         <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
         <Route path="/assets" component={Assets} />
         <Route path="/settings" component={Settings} />
+        <Route path="/settings/agents" component={SettingsAgents} />
         <Route path="/settings/boards/:slug" component={BoardSettings} />
         <Route component={NotFound} />
       </Switch>

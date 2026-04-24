@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Pencil,
   Trash2,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/components/providers/session-provider";
@@ -47,8 +48,45 @@ export default function Settings() {
         </p>
       </div>
       <AppearanceCard />
+      <TeamCard />
       <TicketBoardsCard />
     </div>
+  );
+}
+
+function TeamCard() {
+  const { session } = useSession();
+  if (session?.role !== "admin") return null;
+
+  return (
+    <Card data-testid="card-team">
+      <CardHeader>
+        <CardTitle className="text-base">Team</CardTitle>
+        <CardDescription>
+          Browse all admins and agents, and add new teammates. To grant access
+          to specific boards (Full Control, Modify, or Read only), open a
+          board's settings.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Link
+          href="/settings/agents"
+          className="group flex items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm hover-elevate active-elevate-2"
+          data-testid="link-settings-agents"
+        >
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted/60 shrink-0 text-indigo-600">
+            <Users className="h-4 w-4" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">Agents</p>
+            <p className="text-xs text-muted-foreground">
+              Manage admins and service desk agents
+            </p>
+          </div>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 

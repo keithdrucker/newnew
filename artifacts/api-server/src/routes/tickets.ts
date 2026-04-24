@@ -300,26 +300,29 @@ router.patch("/tickets/:id", async (req, res): Promise<void> => {
 
 router.delete("/tickets/:id", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
-  if (user.role !== "admin") {
-    res.status(403).json({ error: "Admin only" });
-    return;
-  }
   const params = DeleteTicketParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  await db
-    .delete(ticketCommentsTable)
-    .where(eq(ticketCommentsTable.ticketId, params.data.id));
-  const [row] = await db
-    .delete(ticketsTable)
+  const [existing] = await db
+    .select({ id: ticketsTable.id, departmentId: ticketsTable.departmentId })
+    .from(ticketsTable)
     .where(eq(ticketsTable.id, params.data.id))
-    .returning();
-  if (!row) {
+    .limit(1);
+  if (!existing) {
     res.status(404).json({ error: "Ticket not found" });
     return;
   }
+  const role = await getBoardRole(user, existing.departmentId);
+  if (role !== "owner") {
+    res.status(403).json({ error: "Full Control required" });
+    return;
+  }
+  await db
+    .delete(ticketCommentsTable)
+    .where(eq(ticketCommentsTable.ticketId, params.data.id));
+  await db.delete(ticketsTable).where(eq(ticketsTable.id, params.data.id));
   res.sendStatus(204);
 });
 

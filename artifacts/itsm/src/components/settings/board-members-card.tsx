@@ -51,18 +51,18 @@ const ROLE_OPTIONS: { value: BoardRole; label: string; description: string }[] =
   [
     {
       value: "owner",
-      label: "Owner",
-      description: "Full control of board tickets",
+      label: "Full Control",
+      description: "Edit, comment, and delete tickets",
     },
     {
       value: "modify",
       label: "Modify",
-      description: "Can work and edit tickets",
+      description: "Edit and comment, cannot delete",
     },
     {
       value: "read_only",
       label: "Read only",
-      description: "Can view but not change tickets",
+      description: "View tickets and dashboard only",
     },
   ];
 
@@ -71,7 +71,7 @@ function RoleBadge({ role }: { role: BoardRole }) {
     return (
       <Badge className="bg-primary/10 text-primary hover:bg-primary/15 gap-1 border-primary/20">
         <ShieldCheck className="h-3 w-3" />
-        Owner
+        Full Control
       </Badge>
     );
   }

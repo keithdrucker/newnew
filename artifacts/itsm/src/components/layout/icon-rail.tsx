@@ -60,7 +60,6 @@ const ITEMS: Item[] = [
     matchPrefix: "/knowledge-base",
   },
   { href: "/assets", label: "Assets", icon: MonitorPlay, adminOnly: true },
-  { href: "/agents", label: "Agents", icon: Users, adminOnly: true },
   { href: "/people", label: "People", icon: UserRound, adminOnly: true },
   {
     href: "/settings",
