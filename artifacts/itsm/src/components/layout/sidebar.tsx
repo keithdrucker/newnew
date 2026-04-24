@@ -111,7 +111,7 @@ export function Sidebar({ session }: { session: Session | null }) {
           EW Howell
         </h1>
         <p className="text-[13px] text-muted-foreground leading-none mt-1">
-          Harmony
+          Service Hub
         </p>
       </div>
 
