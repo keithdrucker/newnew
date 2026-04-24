@@ -46,6 +46,8 @@ modeled on Freshservice / Atomicwork. React + Vite + Wouter + TanStack Query.
 
 **Settings (per-department):** portal toggle/title/welcome/categories, default priority, response & resolution SLA minutes, business hours, auto-assign + notification toggles. PATCH `/api/departments/:id/settings`.
 
+**Theme / dark mode:** Tailwind v4 with `@custom-variant dark (&:is(.dark *))`; CSS vars defined in `:root` (light) and `.dark` blocks of `src/index.css`. `ThemeProvider` (`src/components/providers/theme-provider.tsx`) supports `light | dark | system`, persists to localStorage key `harmony-itsm-theme`, listens to `prefers-color-scheme`. Inline init script in `index.html` applies the saved theme before React mounts to prevent FOUC. UI toggle is the **Appearance** card at the top of the Settings page. Pages use semantic Tailwind tokens (`bg-card`, `bg-muted`, `text-muted-foreground`, `text-foreground`, `bg-accent`) instead of hardcoded slate-* utilities.
+
 ### API Server (`artifacts/api-server`)
 Express 5 + Drizzle. Routes: `/api/session`, `/api/departments(/:id/settings)`, `/api/tickets(/:id/comments)`, `/api/people`, `/api/agents`, `/api/knowledge-base`, `/api/assets`, `/api/dashboard(/timeseries|/breached)`.
 

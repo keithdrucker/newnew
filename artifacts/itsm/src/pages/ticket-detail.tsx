@@ -30,7 +30,7 @@ export default function TicketDetail() {
   return (
     <div className="h-full flex gap-6">
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-900 rounded-lg border shadow-sm">
+      <div className="flex-1 flex flex-col min-w-0 bg-card rounded-lg border shadow-sm">
         <div className="p-6 border-b">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
             <span>{ticket.departmentName}</span>
@@ -38,7 +38,7 @@ export default function TicketDetail() {
             <span>{ticket.ticketKey}</span>
           </div>
           <h1 className="text-2xl font-semibold mb-4">{ticket.title}</h1>
-          <div className="prose dark:prose-invert max-w-none text-sm text-slate-600">
+          <div className="prose dark:prose-invert max-w-none text-sm text-muted-foreground">
             {ticket.description}
           </div>
         </div>
@@ -55,13 +55,13 @@ export default function TicketDetail() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{comment.authorName}</span>
-                      <span className="text-xs text-slate-500">{comment.authorRole}</span>
+                      <span className="text-xs text-muted-foreground">{comment.authorRole}</span>
                     </div>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted-foreground/70">
                       {format(new Date(comment.createdAt), "MMM d, h:mm a")}
                     </span>
                   </div>
-                  <div className="text-sm bg-slate-50 dark:bg-slate-800 p-3 rounded-md border text-slate-700 dark:text-slate-300">
+                  <div className="text-sm bg-muted/60 p-3 rounded-md border text-foreground">
                     {comment.body}
                   </div>
                 </div>
@@ -70,13 +70,13 @@ export default function TicketDetail() {
           </div>
         </div>
 
-        <div className="p-4 border-t bg-slate-50 dark:bg-slate-800/50">
+        <div className="p-4 border-t bg-muted/40">
           <div className="space-y-3">
             <Textarea
               placeholder="Type your reply here..."
               value={commentBody}
               onChange={(e) => setCommentBody(e.target.value)}
-              className="min-h-[100px] bg-white dark:bg-slate-900"
+              className="min-h-[100px] bg-card"
             />
             <div className="flex justify-end">
               <Button 
@@ -100,12 +100,12 @@ export default function TicketDetail() {
 
       {/* Sidebar */}
       <div className="w-[320px] shrink-0 space-y-6">
-        <div className="bg-white dark:bg-slate-900 rounded-lg border shadow-sm p-5 space-y-5">
+        <div className="bg-card rounded-lg border shadow-sm p-5 space-y-5">
           <h3 className="font-medium text-sm pb-2 border-b">Details</h3>
           
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Status</label>
+              <label className="text-xs font-medium text-muted-foreground">Status</label>
               <Select 
                 value={ticket.status} 
                 onValueChange={(val: any) => updateTicket.mutate({ id: ticketId, data: { status: val } })}
@@ -123,7 +123,7 @@ export default function TicketDetail() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Priority</label>
+              <label className="text-xs font-medium text-muted-foreground">Priority</label>
               <Select 
                 value={ticket.priority}
                 onValueChange={(val: any) => updateTicket.mutate({ id: ticketId, data: { priority: val } })}
@@ -141,8 +141,8 @@ export default function TicketDetail() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Assignee</label>
-              <div className="flex items-center gap-2 p-2 bg-slate-50 rounded border text-sm">
+              <label className="text-xs font-medium text-muted-foreground">Assignee</label>
+              <div className="flex items-center gap-2 p-2 bg-muted/40 rounded border text-sm">
                 {ticket.assigneeName ? (
                   <>
                     <Avatar className="h-5 w-5">
@@ -151,14 +151,14 @@ export default function TicketDetail() {
                     <span>{ticket.assigneeName}</span>
                   </>
                 ) : (
-                  <span className="text-slate-500">Unassigned</span>
+                  <span className="text-muted-foreground">Unassigned</span>
                 )}
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Reporter</label>
-              <div className="flex items-center gap-2 p-2 bg-slate-50 rounded border text-sm">
+              <label className="text-xs font-medium text-muted-foreground">Reporter</label>
+              <div className="flex items-center gap-2 p-2 bg-muted/40 rounded border text-sm">
                 <Avatar className="h-5 w-5">
                   <AvatarFallback className="text-[10px]">{ticket.reporterName.substring(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
@@ -168,15 +168,15 @@ export default function TicketDetail() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-lg border shadow-sm p-5 space-y-4">
+        <div className="bg-card rounded-lg border shadow-sm p-5 space-y-4">
           <h3 className="font-medium text-sm pb-2 border-b">Dates</h3>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-500">Created</span>
+              <span className="text-muted-foreground">Created</span>
               <span className="font-medium">{format(new Date(ticket.createdAt), "MMM d, h:mm a")}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Updated</span>
+              <span className="text-muted-foreground">Updated</span>
               <span className="font-medium">{format(new Date(ticket.updatedAt), "MMM d, h:mm a")}</span>
             </div>
           </div>

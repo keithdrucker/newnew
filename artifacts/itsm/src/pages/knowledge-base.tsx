@@ -45,7 +45,7 @@ export function KnowledgeBaseList() {
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative w-[320px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/70" />
           <Input
             placeholder="Search articles…"
             value={search}
@@ -86,17 +86,17 @@ export function KnowledgeBaseList() {
             >
               <Card className="hover:border-indigo-300 hover:shadow-md transition cursor-pointer h-full">
                 <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                     <BookOpen className="h-3.5 w-3.5" />
                     {a.departmentName}
                   </div>
                   <CardTitle className="text-base">{a.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-slate-600 line-clamp-3">
+                  <p className="text-sm text-muted-foreground line-clamp-3">
                     {a.body}
                   </p>
-                  <div className="flex items-center justify-between mt-3 text-xs text-slate-500">
+                  <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
                     <span>{a.authorName}</span>
                     <span>{a.views} views</span>
                   </div>
@@ -129,13 +129,13 @@ export function KnowledgeBaseDetail() {
     <div className="max-w-3xl mx-auto space-y-5">
       <Link
         href="/knowledge-base"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to knowledge base
       </Link>
       <div>
-        <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
           <BookOpen className="h-3.5 w-3.5" />
           {article.departmentName}
           <span>·</span>

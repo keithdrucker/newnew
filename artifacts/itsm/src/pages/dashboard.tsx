@@ -194,7 +194,7 @@ export default function Dashboard() {
               value={overview.resolvedTickets}
             />
             <StatusCard
-              icon={<CheckCircle2 className="h-4 w-4 text-slate-500" />}
+              icon={<CheckCircle2 className="h-4 w-4 text-muted-foreground" />}
               label="Closed"
               value={overview.closedTickets}
             />
@@ -320,7 +320,7 @@ export default function Dashboard() {
                     <Link
                       key={t.id}
                       href={`/tickets/${t.id}`}
-                      className="flex items-center justify-between py-2.5 text-sm hover:bg-slate-50 -mx-2 px-2 rounded"
+                      className="flex items-center justify-between py-2.5 text-sm hover:bg-muted/40 -mx-2 px-2 rounded"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="font-medium text-indigo-600 tabular-nums">
@@ -328,7 +328,7 @@ export default function Dashboard() {
                         </span>
                         <span className="truncate">{t.title}</span>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 shrink-0">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
                         <span>{t.departmentName}</span>
                         <Badge
                           variant="secondary"
@@ -369,7 +369,7 @@ function KpiCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-slate-600">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
           {label}
         </CardTitle>
         {icon}
@@ -404,11 +404,11 @@ function StatusCard({
   return (
     <Card>
       <CardContent className="py-4 flex items-center gap-3">
-        <div className="h-9 w-9 rounded-md bg-slate-100 flex items-center justify-center">
+        <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center">
           {icon}
         </div>
         <div>
-          <p className="text-xs text-slate-500 font-medium">{label}</p>
+          <p className="text-xs text-muted-foreground font-medium">{label}</p>
           <p className="text-xl font-semibold">{value}</p>
         </div>
       </CardContent>

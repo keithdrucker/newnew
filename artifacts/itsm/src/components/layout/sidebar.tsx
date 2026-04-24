@@ -119,8 +119,8 @@ export function Sidebar({ session }: { session: Session | null }) {
         <Link
           href="/"
           className={cn(
-            "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-slate-100 hover:text-foreground",
-            location === "/" ? "bg-slate-100 text-foreground" : "text-slate-600",
+            "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-accent hover:text-foreground",
+            location === "/" ? "bg-accent text-accent-foreground" : "text-muted-foreground",
           )}
           data-testid="nav-dashboard"
         >
@@ -136,10 +136,10 @@ export function Sidebar({ session }: { session: Session | null }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-slate-100 hover:text-foreground",
+                "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-accent hover:text-foreground",
                 isActive(item.href, item.matchPrefix)
-                  ? "bg-slate-100 text-foreground"
-                  : "text-slate-600",
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground",
               )}
               data-testid={`nav-${item.href.replace("/", "") || "home"}`}
             >
@@ -158,10 +158,10 @@ export function Sidebar({ session }: { session: Session | null }) {
         >
           <CollapsibleTrigger
             className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-slate-100 hover:text-foreground",
+              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-colors hover:bg-accent hover:text-foreground",
               location === "/tickets" || location.startsWith("/tickets/dept/")
-                ? "bg-slate-100 text-foreground"
-                : "text-slate-600",
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground",
             )}
             data-testid="trigger-ticket-board"
           >
@@ -178,10 +178,10 @@ export function Sidebar({ session }: { session: Session | null }) {
             <Link
               href="/tickets"
               className={cn(
-                "flex items-center gap-2 pl-9 pr-3 py-1.5 rounded-md text-[13px] transition-colors hover:bg-slate-100",
+                "flex items-center gap-2 pl-9 pr-3 py-1.5 rounded-md text-[13px] transition-colors hover:bg-accent",
                 location === "/tickets"
-                  ? "bg-slate-100 text-foreground font-medium"
-                  : "text-slate-600",
+                  ? "bg-accent text-accent-foreground font-medium"
+                  : "text-muted-foreground",
               )}
               data-testid="link-tickets-all"
             >
@@ -196,10 +196,10 @@ export function Sidebar({ session }: { session: Session | null }) {
                   key={dept.id}
                   href={`/tickets/dept/${dept.slug}`}
                   className={cn(
-                    "flex items-center gap-2 pl-9 pr-3 py-1.5 rounded-md text-[13px] transition-colors hover:bg-slate-100",
+                    "flex items-center gap-2 pl-9 pr-3 py-1.5 rounded-md text-[13px] transition-colors hover:bg-accent",
                     active
-                      ? "bg-slate-100 text-foreground font-medium"
-                      : "text-slate-600",
+                      ? "bg-accent text-accent-foreground font-medium"
+                      : "text-muted-foreground",
                   )}
                   data-testid={`link-dept-${dept.slug}`}
                 >
@@ -211,7 +211,7 @@ export function Sidebar({ session }: { session: Session | null }) {
                   </span>
                   <span className="truncate">{dept.name}</span>
                   {dept.ticketCount > 0 && (
-                    <span className="ml-auto text-[11px] text-slate-500 tabular-nums">
+                    <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
                       {dept.ticketCount}
                     </span>
                   )}
@@ -228,7 +228,7 @@ export function Sidebar({ session }: { session: Session | null }) {
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="w-full flex items-center gap-3 cursor-pointer hover:bg-slate-100 p-2 rounded-md transition-colors text-left"
+                className="w-full flex items-center gap-3 cursor-pointer hover:bg-accent p-2 rounded-md transition-colors text-left"
                 data-testid="button-role-switcher"
               >
                 <Avatar className="h-8 w-8">
@@ -240,12 +240,12 @@ export function Sidebar({ session }: { session: Session | null }) {
                   <p className="font-medium truncate text-foreground">
                     {session.name}
                   </p>
-                  <p className="text-slate-500 truncate text-[11px] capitalize">
+                  <p className="text-muted-foreground truncate text-[11px] capitalize">
                     {session.role}
                     {session.departmentName ? ` · ${session.departmentName}` : ""}
                   </p>
                 </div>
-                <ChevronsUpDown className="h-4 w-4 text-slate-400" />
+                <ChevronsUpDown className="h-4 w-4 text-muted-foreground/70" />
               </button>
             </PopoverTrigger>
             <PopoverContent
@@ -283,12 +283,12 @@ export function Sidebar({ session }: { session: Session | null }) {
                         <div className="flex flex-col">
                           <span>
                             {agent.name}{" "}
-                            <span className="text-xs text-slate-500">
+                            <span className="text-xs text-muted-foreground">
                               · {agent.role}
                             </span>
                           </span>
                           {agent.departmentName && (
-                            <span className="text-[11px] text-slate-500">
+                            <span className="text-[11px] text-muted-foreground">
                               {agent.departmentName}
                             </span>
                           )}
@@ -319,7 +319,7 @@ export function Sidebar({ session }: { session: Session | null }) {
                         <div className="flex flex-col">
                           <span>{person.name}</span>
                           {person.departmentName && (
-                            <span className="text-[11px] text-slate-500">
+                            <span className="text-[11px] text-muted-foreground">
                               {person.departmentName}
                             </span>
                           )}

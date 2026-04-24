@@ -45,7 +45,7 @@ export default function Assets() {
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative w-[280px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/70" />
           <Input
             placeholder="Search assets…"
             value={search}
@@ -81,9 +81,9 @@ export default function Assets() {
         </Select>
       </div>
 
-      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-50/80">
+          <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead className="w-[140px]">Tag</TableHead>
               <TableHead>Name</TableHead>
@@ -115,7 +115,7 @@ export default function Assets() {
                   </TableCell>
                   <TableCell>
                     <div className="font-medium text-sm">{a.name}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted-foreground">
                       {a.manufacturer} {a.model ?? ""}
                     </div>
                   </TableCell>
@@ -154,8 +154,8 @@ function statusColor(status: string): string {
     case "repair":
       return "bg-amber-100 text-amber-800 capitalize";
     case "retired":
-      return "bg-slate-200 text-slate-700 capitalize";
+      return "bg-muted text-muted-foreground capitalize";
     default:
-      return "bg-slate-100 text-slate-700 capitalize";
+      return "bg-muted text-muted-foreground capitalize";
   }
 }

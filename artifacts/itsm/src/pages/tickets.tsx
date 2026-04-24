@@ -90,7 +90,7 @@ export default function Tickets() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-500">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="px-2 py-1 rounded bg-blue-50 text-blue-700">
             {summary.open} open
           </span>
@@ -107,7 +107,7 @@ export default function Tickets() {
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative w-[280px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/70" />
           <Input
             placeholder="Search tickets…"
             value={search}
@@ -145,10 +145,10 @@ export default function Tickets() {
         </Select>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-lg border shadow-sm flex-1 overflow-hidden flex flex-col">
+      <div className="bg-card rounded-lg border shadow-sm flex-1 overflow-hidden flex flex-col">
         <div className="overflow-auto flex-1">
           <Table>
-            <TableHeader className="bg-slate-50/80 sticky top-0 z-10">
+            <TableHeader className="bg-muted/40 sticky top-0 z-10">
               <TableRow>
                 <TableHead className="w-[110px]">ID</TableHead>
                 <TableHead>Title</TableHead>
@@ -196,16 +196,16 @@ export default function Tickets() {
                     </TableCell>
                     <TableCell>
                       <Link href={`/tickets/${ticket.id}`} className="block">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-[420px]">
+                        <div className="font-medium text-foreground truncate max-w-[420px]">
                           {ticket.title}
                         </div>
-                        <div className="text-xs text-slate-500 capitalize">
+                        <div className="text-xs text-muted-foreground capitalize">
                           {ticket.type}
                           {ticket.location ? ` · ${ticket.location}` : ""}
                         </div>
                       </Link>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-600">
+                    <TableCell className="text-sm text-muted-foreground">
                       {ticket.departmentName}
                     </TableCell>
                     <TableCell>
@@ -237,7 +237,7 @@ export default function Tickets() {
                           </span>
                         </div>
                       ) : (
-                        <span className="text-sm text-slate-400">
+                        <span className="text-sm text-muted-foreground/70">
                           Unassigned
                         </span>
                       )}
@@ -252,10 +252,10 @@ export default function Tickets() {
                           Breached
                         </Badge>
                       ) : (
-                        <span className="text-xs text-slate-400">On track</span>
+                        <span className="text-xs text-muted-foreground/70">On track</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-slate-500">
+                    <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(ticket.createdAt), "MMM d")}
                     </TableCell>
                   </TableRow>
@@ -278,9 +278,9 @@ function priorityColor(priority: string): string {
     case "medium":
       return "bg-blue-100 text-blue-700";
     case "low":
-      return "bg-slate-100 text-slate-700";
+      return "bg-muted text-muted-foreground";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -293,7 +293,7 @@ function statusIcon(status: string) {
     case "resolved":
       return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
     case "closed":
-      return <CheckCircle2 className="h-4 w-4 text-slate-500" />;
+      return <CheckCircle2 className="h-4 w-4 text-muted-foreground" />;
     default:
       return <Inbox className="h-4 w-4" />;
   }

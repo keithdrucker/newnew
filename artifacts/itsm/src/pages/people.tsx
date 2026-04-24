@@ -45,7 +45,7 @@ export default function People() {
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative w-[280px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/70" />
           <Input
             placeholder="Search people…"
             value={search}
@@ -72,9 +72,9 @@ export default function People() {
         </Select>
       </div>
 
-      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-50/80">
+          <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Title</TableHead>
@@ -113,7 +113,7 @@ export default function People() {
                       </Avatar>
                       <div>
                         <div className="font-medium text-sm">{p.name}</div>
-                        <div className="text-xs text-slate-500">{p.email}</div>
+                        <div className="text-xs text-muted-foreground">{p.email}</div>
                       </div>
                     </div>
                   </TableCell>
@@ -128,7 +128,7 @@ export default function People() {
                     {p.ticketsOpen > 0 ? (
                       <Badge variant="secondary">{p.ticketsOpen}</Badge>
                     ) : (
-                      <span className="text-slate-400 text-sm">0</span>
+                      <span className="text-muted-foreground/70 text-sm">0</span>
                     )}
                   </TableCell>
                 </TableRow>

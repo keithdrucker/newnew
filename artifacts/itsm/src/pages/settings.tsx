@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme, type Theme } from "@/components/providers/theme-provider";
+import { Sun, Moon, Monitor } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Priority = "low" | "medium" | "high" | "urgent";
 
@@ -60,15 +63,17 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Per-department portal, SLA, and notification configuration.
+          Appearance preferences and per-department portal, SLA, and
+          notification configuration.
         </p>
       </div>
+      <AppearanceCard />
       {departments && departments.length > 0 && (
         <Tabs
           value={activeId ? String(activeId) : ""}
           onValueChange={(v) => setActiveId(Number(v))}
         >
-          <TabsList className="flex flex-wrap h-auto gap-1 bg-slate-100/80 p-1">
+          <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/60 p-1">
             {departments.map((d) => (
               <TabsTrigger
                 key={d.id}
@@ -307,6 +312,64 @@ function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
   );
 }
 
+function AppearanceCard() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+
+  const options: { value: Theme; label: string; icon: typeof Sun }[] = [
+    { value: "light", label: "Light", icon: Sun },
+    { value: "dark", label: "Dark", icon: Moon },
+    { value: "system", label: "System", icon: Monitor },
+  ];
+
+  return (
+    <Card data-testid="card-appearance">
+      <CardHeader>
+        <CardTitle className="text-base">Appearance</CardTitle>
+        <CardDescription>
+          Choose how Service Hub looks to you. System matches your device
+          preference.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div
+          role="radiogroup"
+          aria-label="Theme"
+          className="grid grid-cols-3 gap-3 max-w-xl"
+        >
+          {options.map((opt) => {
+            const active = theme === opt.value;
+            const Icon = opt.icon;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setTheme(opt.value)}
+                data-testid={`button-theme-${opt.value}`}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-2 rounded-md border p-4 text-sm transition-colors",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  active
+                    ? "border-primary ring-2 ring-primary/40 bg-accent text-accent-foreground"
+                    : "border-border",
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="font-medium">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Currently using <span className="font-medium">{resolvedTheme}</span>{" "}
+          mode.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function Field({
   label,
   children,
@@ -316,7 +379,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-slate-600">{label}</Label>
+      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
       {children}
     </div>
   );

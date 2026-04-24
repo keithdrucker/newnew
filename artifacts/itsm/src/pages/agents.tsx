@@ -57,9 +57,9 @@ export default function Agents() {
         </Select>
       </div>
 
-      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-50/80">
+          <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Title</TableHead>
@@ -98,7 +98,7 @@ export default function Agents() {
                       </Avatar>
                       <div>
                         <div className="font-medium text-sm">{a.name}</div>
-                        <div className="text-xs text-slate-500">{a.email}</div>
+                        <div className="text-xs text-muted-foreground">{a.email}</div>
                       </div>
                     </div>
                   </TableCell>
@@ -122,7 +122,7 @@ export default function Agents() {
                     {a.ticketsAssigned > 0 ? (
                       <Badge variant="secondary">{a.ticketsAssigned}</Badge>
                     ) : (
-                      <span className="text-slate-400 text-sm">0</span>
+                      <span className="text-muted-foreground/70 text-sm">0</span>
                     )}
                   </TableCell>
                 </TableRow>
