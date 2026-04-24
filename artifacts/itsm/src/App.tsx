@@ -14,6 +14,7 @@ import People from "@/pages/people";
 import Agents from "@/pages/agents";
 import Assets from "@/pages/assets";
 import Settings from "@/pages/settings";
+import BoardSettings from "@/pages/board-settings";
 import {
   KnowledgeBaseList,
   KnowledgeBaseDetail,
@@ -35,6 +36,7 @@ function Router() {
         <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
         <Route path="/assets" component={Assets} />
         <Route path="/settings" component={Settings} />
+        <Route path="/settings/boards/:slug" component={BoardSettings} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
