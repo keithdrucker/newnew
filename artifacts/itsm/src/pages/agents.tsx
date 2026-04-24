@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { AddAgentDialog } from "@/components/agents/add-agent-dialog";
 
 export default function Agents() {
   const [departmentId, setDepartmentId] = useState<string>("all");
@@ -27,11 +28,14 @@ export default function Agents() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Service desk agents and admins.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Service desk agents and admins.
+          </p>
+        </div>
+        <AddAgentDialog />
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">

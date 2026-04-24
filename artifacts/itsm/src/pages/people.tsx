@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Search } from "lucide-react";
+import { AddPersonDialog } from "@/components/people/add-person-dialog";
 
 export default function People() {
   const [departmentId, setDepartmentId] = useState<string>("all");
@@ -32,11 +33,14 @@ export default function People() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          End users across EW Howell who can submit tickets.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            End users across EW Howell who can submit tickets.
+          </p>
+        </div>
+        <AddPersonDialog />
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
