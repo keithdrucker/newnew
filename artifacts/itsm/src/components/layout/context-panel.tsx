@@ -1,6 +1,6 @@
 import { Link, useLocation, useRoute } from "wouter";
 import { ChevronRight, Layers } from "lucide-react";
-import { Session, useListDepartments } from "@workspace/api-client-react";
+import { useListDepartments } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { DEPT_ICON_MAP } from "@/lib/dept-icons";
 import {
@@ -54,7 +54,7 @@ function resolveMeta(location: string) {
   return SECTION_META["/"];
 }
 
-export function ContextPanel({ session }: { session: Session | null }) {
+export function ContextPanel() {
   const [location] = useLocation();
   const meta = resolveMeta(location);
   const showTickets = location === "/tickets" || location.startsWith("/tickets/");
@@ -79,13 +79,11 @@ export function ContextPanel({ session }: { session: Session | null }) {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-4">
-        {showTickets ? (
+      {showTickets && (
+        <div className="flex-1 overflow-y-auto px-3 py-4">
           <TicketsSubnav />
-        ) : (
-          <SectionLinks location={location} session={session} />
-        )}
-      </div>
+        </div>
+      )}
     </aside>
   );
 }
