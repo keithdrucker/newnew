@@ -9,5 +9,6 @@ import type { GetDashboardTimeseriesRangeDays } from "./getDashboardTimeseriesRa
 
 export type GetDashboardTimeseriesParams = {
   departmentId?: number;
+  assigneeId?: number;
   rangeDays?: GetDashboardTimeseriesRangeDays;
 };

@@ -52,6 +52,8 @@ router.get("/dashboard/overview", async (req, res): Promise<void> => {
     gte(ticketsTable.createdAt, since),
   ];
   if (deptFilter != null) conds.push(eq(ticketsTable.departmentId, deptFilter));
+  if (params.data.assigneeId != null)
+    conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
   if (user.role === "end_user") conds.push(eq(ticketsTable.reporterId, user.id));
 
   const where = and(...conds);
@@ -182,6 +184,8 @@ router.get("/dashboard/timeseries", async (req, res): Promise<void> => {
     gte(ticketsTable.createdAt, since),
   ];
   if (deptFilter != null) conds.push(eq(ticketsTable.departmentId, deptFilter));
+  if (params.data.assigneeId != null)
+    conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
   if (user.role === "end_user") conds.push(eq(ticketsTable.reporterId, user.id));
 
   const tickets = await db.select().from(ticketsTable).where(and(...conds));
@@ -265,6 +269,8 @@ router.get("/dashboard/breached", async (req, res): Promise<void> => {
     eq(ticketsTable.slaBreached, true),
   ];
   if (deptFilter != null) conds.push(eq(ticketsTable.departmentId, deptFilter));
+  if (params.data.assigneeId != null)
+    conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
   if (user.role === "end_user") conds.push(eq(ticketsTable.reporterId, user.id));
 
   const rows = await db.select().from(ticketsTable).where(and(...conds));

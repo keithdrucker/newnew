@@ -4,6 +4,7 @@ import {
   useGetBreachedTickets,
   useGetSession,
   useListDepartments,
+  useListAgents,
 } from "@workspace/api-client-react";
 import {
   Card,
@@ -18,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -55,23 +56,41 @@ export default function Dashboard() {
   const { data: session } = useGetSession();
   const [rangeDays, setRangeDays] = useState<"30" | "180" | "365">("30");
   const [departmentId, setDepartmentId] = useState<string>("all");
+  const [assigneeId, setAssigneeId] = useState<string>("all");
 
   const { data: departments } = useListDepartments();
 
   const queryDeptId = departmentId === "all" ? undefined : Number(departmentId);
   const queryRangeDays = Number(rangeDays) as 30 | 180 | 365;
+  const queryAssigneeId = assigneeId === "all" ? undefined : Number(assigneeId);
+
+  // Agents shown in the picker are scoped to the selected department.
+  // When "All Departments" is selected, the picker is hidden.
+  const { data: agents } = useListAgents(
+    queryDeptId != null ? { departmentId: queryDeptId } : {},
+    { query: { enabled: queryDeptId != null } },
+  );
+
+  // Reset the agent filter whenever the department changes so we don't keep
+  // a stale assignee that isn't in the new department's agent list.
+  useEffect(() => {
+    setAssigneeId("all");
+  }, [departmentId]);
 
   const { data: overview, isLoading: isOverviewLoading } =
     useGetDashboardOverview({
       departmentId: queryDeptId,
+      assigneeId: queryAssigneeId,
       rangeDays: queryRangeDays,
     });
   const { data: timeseries } = useGetDashboardTimeseries({
     departmentId: queryDeptId,
+    assigneeId: queryAssigneeId,
     rangeDays: queryRangeDays,
   });
   const { data: breached } = useGetBreachedTickets({
     departmentId: queryDeptId,
+    assigneeId: queryAssigneeId,
     rangeDays: queryRangeDays,
   });
 
@@ -118,6 +137,30 @@ export default function Dashboard() {
                     {d.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          )}
+          {queryDeptId != null && (
+            <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <SelectTrigger
+                className="w-[200px]"
+                data-testid="select-assignee"
+              >
+                <SelectValue placeholder="All Agents" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Agents</SelectItem>
+                {agents && agents.length > 0 ? (
+                  agents.map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    No agents in this department
+                  </div>
+                )}
               </SelectContent>
             </Select>
           )}

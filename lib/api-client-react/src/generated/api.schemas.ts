@@ -671,6 +671,7 @@ export const ListAssetsStatus = {
 
 export type GetDashboardOverviewParams = {
   departmentId?: number;
+  assigneeId?: number;
   rangeDays?: GetDashboardOverviewRangeDays;
 };
 
@@ -685,6 +686,7 @@ export const GetDashboardOverviewRangeDays = {
 
 export type GetDashboardTimeseriesParams = {
   departmentId?: number;
+  assigneeId?: number;
   rangeDays?: GetDashboardTimeseriesRangeDays;
 };
 
@@ -699,6 +701,7 @@ export const GetDashboardTimeseriesRangeDays = {
 
 export type GetBreachedTicketsParams = {
   departmentId?: number;
+  assigneeId?: number;
   rangeDays?: GetBreachedTicketsRangeDays;
 };
 

@@ -9,5 +9,6 @@ import type { GetDashboardOverviewRangeDays } from "./getDashboardOverviewRangeD
 
 export type GetDashboardOverviewParams = {
   departmentId?: number;
+  assigneeId?: number;
   rangeDays?: GetDashboardOverviewRangeDays;
 };

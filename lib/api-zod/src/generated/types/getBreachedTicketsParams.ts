@@ -9,5 +9,6 @@ import type { GetBreachedTicketsRangeDays } from "./getBreachedTicketsRangeDays"
 
 export type GetBreachedTicketsParams = {
   departmentId?: number;
+  assigneeId?: number;
   rangeDays?: GetBreachedTicketsRangeDays;
 };

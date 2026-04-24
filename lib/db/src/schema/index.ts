@@ -5,4 +5,3 @@ export * from "./tickets";
 export * from "./kbArticles";
 export * from "./assets";
 export * from "./sessionState";
-export * from "./projects";

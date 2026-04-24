@@ -766,6 +766,7 @@ export const getDashboardOverviewQueryRangeDaysDefault = 30;
 
 export const GetDashboardOverviewQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
+  assigneeId: zod.coerce.number().optional(),
   rangeDays: zod
     .union([zod.literal(30), zod.literal(180), zod.literal(365)])
     .default(getDashboardOverviewQueryRangeDaysDefault),
@@ -809,6 +810,7 @@ export const getDashboardTimeseriesQueryRangeDaysDefault = 30;
 
 export const GetDashboardTimeseriesQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
+  assigneeId: zod.coerce.number().optional(),
   rangeDays: zod
     .union([zod.literal(30), zod.literal(180), zod.literal(365)])
     .default(getDashboardTimeseriesQueryRangeDaysDefault),
@@ -832,6 +834,7 @@ export const getBreachedTicketsQueryRangeDaysDefault = 30;
 
 export const GetBreachedTicketsQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
+  assigneeId: zod.coerce.number().optional(),
   rangeDays: zod
     .union([zod.literal(30), zod.literal(180), zod.literal(365)])
     .default(getBreachedTicketsQueryRangeDaysDefault),
