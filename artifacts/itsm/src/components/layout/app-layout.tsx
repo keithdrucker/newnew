@@ -1,15 +1,10 @@
 import { ReactNode } from "react";
-import { useLocation } from "wouter";
-import { TopBar } from "./top-bar";
-import { TicketsStrip } from "./tickets-strip";
+import { SideNav } from "./side-nav";
 import { useSession } from "@/components/providers/session-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { session, isLoading } = useSession();
-  const [location] = useLocation();
-  const showTicketsStrip =
-    location === "/tickets" || location.startsWith("/tickets/dept/");
 
   if (isLoading) {
     return (
@@ -20,9 +15,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <TopBar session={session} />
-      {showTicketsStrip && <TicketsStrip />}
+    <div className="flex h-screen overflow-hidden bg-background">
+      <SideNav session={session} />
       <main className="flex-1 overflow-auto p-6 bg-muted/40">{children}</main>
     </div>
   );
