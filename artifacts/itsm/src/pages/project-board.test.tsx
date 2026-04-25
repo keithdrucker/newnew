@@ -4,21 +4,23 @@ import { Router as WouterRouter } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
+  Session,
   ProjectDetail,
   ProjectBucketWithTasks,
   ProjectTask,
 } from "@workspace/api-client-react";
 
-// `project-board.tsx` does not call `useGetSession` directly today — the
-// backend role-scopes the response (returning the project for permitted
-// users, 403/404 otherwise) and the page just renders what it gets, or
-// the not-found state. The "admin / agent / end-user" framing of these
-// test cases is therefore expressed via the mocked backend payload (and
-// the absence of payload for forbidden access), not via a session hook.
+// `project-board.tsx` calls `useGetSession` so it can hide privileged
+// authoring chrome (Add bucket, bucket menu, Add task, rename) from
+// end-users. The "admin / agent / end-user" framing of these test cases
+// is expressed both by the mocked backend payload (the project data) and
+// by the mocked session (which controls whether management controls
+// render).
 const useGetProjectMock = vi.fn();
 const useListAgentsMock = vi.fn();
 const useListDepartmentsMock = vi.fn();
 const useListProjectTaskCommentsMock = vi.fn();
+const useGetSessionMock = vi.fn();
 
 vi.mock("@workspace/api-client-react", () => ({
   useGetProject: (...args: unknown[]) => useGetProjectMock(...args),
@@ -26,6 +28,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useListDepartments: () => useListDepartmentsMock(),
   useListProjectTaskComments: (...args: unknown[]) =>
     useListProjectTaskCommentsMock(...args),
+  useGetSession: () => useGetSessionMock(),
   useCreateProjectBucket: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateProjectBucket: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteProjectBucket: () => ({ mutate: vi.fn(), isPending: false }),
@@ -43,6 +46,33 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 import ProjectBoard from "./project-board";
+
+const adminSession: Session = {
+  userId: 1,
+  name: "Ada Admin",
+  email: "ada@example.com",
+  role: "admin",
+  departmentId: null,
+  departmentName: null,
+} as unknown as Session;
+
+const agentSession: Session = {
+  userId: 2,
+  name: "Aaron Agent",
+  email: "aaron@example.com",
+  role: "agent",
+  departmentId: 1,
+  departmentName: "IT",
+} as unknown as Session;
+
+const endUserSession: Session = {
+  userId: 3,
+  name: "Eve End-User",
+  email: "eve@example.com",
+  role: "end_user",
+  departmentId: 1,
+  departmentName: "IT",
+} as unknown as Session;
 
 function makeTask(overrides: Partial<ProjectTask> = {}): ProjectTask {
   return {
@@ -134,9 +164,12 @@ describe("ProjectBoard page — role-scoped rendering", () => {
       data: [],
       isLoading: false,
     });
+    // Sensible default — individual tests override per role
+    useGetSessionMock.mockReturnValue({ data: adminSession });
   });
 
   it("renders the full board — including bucket controls — for an admin session", () => {
+    useGetSessionMock.mockReturnValue({ data: adminSession });
     useGetProjectMock.mockReturnValue({
       data: makeProject({
         name: "Cross-team initiative",
@@ -172,9 +205,12 @@ describe("ProjectBoard page — role-scoped rendering", () => {
     expect(screen.getByTestId("button-add-bucket")).toBeInTheDocument();
     expect(screen.getByTestId("bucket-menu-1")).toBeInTheDocument();
     expect(screen.getByTestId("add-task-1")).toBeInTheDocument();
+    // Bucket name is rendered as a (rename) button for managers
+    expect(screen.getByTestId("bucket-name-1").tagName).toBe("BUTTON");
   });
 
   it("renders an in-department project board for an agent session", () => {
+    useGetSessionMock.mockReturnValue({ data: agentSession });
     useGetProjectMock.mockReturnValue({
       data: makeProject({
         name: "IT Roadmap",
@@ -204,9 +240,11 @@ describe("ProjectBoard page — role-scoped rendering", () => {
     // Agents within the project's department can manage the board
     expect(screen.getByTestId("add-task-10")).toBeInTheDocument();
     expect(screen.getByTestId("button-add-bucket")).toBeInTheDocument();
+    expect(screen.getByTestId("bucket-menu-10")).toBeInTheDocument();
   });
 
   it("renders the read-only view of a project the end_user has access to", () => {
+    useGetSessionMock.mockReturnValue({ data: endUserSession });
     useGetProjectMock.mockReturnValue({
       data: makeProject({
         name: "End-user accessible project",
@@ -232,6 +270,8 @@ describe("ProjectBoard page — role-scoped rendering", () => {
 
     renderBoard();
 
+    // The board itself, the bucket, and the task all remain visible — the
+    // end-user is allowed to *see* what's planned for them.
     expect(
       screen.getByRole("heading", {
         level: 1,
@@ -241,12 +281,23 @@ describe("ProjectBoard page — role-scoped rendering", () => {
     expect(screen.getByTestId("bucket-5")).toBeInTheDocument();
     expect(screen.getByTestId("task-card-301")).toBeInTheDocument();
     expect(screen.getByText("Office supply suggestion")).toBeInTheDocument();
+
+    // …but every authoring affordance must be hidden.
+    expect(screen.queryByTestId("button-add-bucket")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("bucket-menu-5")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-task-5")).not.toBeInTheDocument();
+
+    // Bucket name still renders, but as plain text — no rename affordance.
+    const bucketName = screen.getByTestId("bucket-name-5");
+    expect(bucketName).toBeInTheDocument();
+    expect(bucketName.tagName).not.toBe("BUTTON");
   });
 
   it("shows the access-denied state for an agent opening a project outside their department", () => {
     // Agent in IT trying to open an HR project → backend returns 403/404,
     // useGetProject exposes `data: undefined`. The board chrome must NOT
     // render — no buckets, tasks, or "Add bucket" button can leak through.
+    useGetSessionMock.mockReturnValue({ data: agentSession });
     useGetProjectMock.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -265,6 +316,7 @@ describe("ProjectBoard page — role-scoped rendering", () => {
   });
 
   it("shows the access-denied state for an end_user opening a forbidden project", () => {
+    useGetSessionMock.mockReturnValue({ data: endUserSession });
     useGetProjectMock.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -279,6 +331,7 @@ describe("ProjectBoard page — role-scoped rendering", () => {
   });
 
   it("does not flash any board chrome while the request is still loading", () => {
+    useGetSessionMock.mockReturnValue({ data: adminSession });
     useGetProjectMock.mockReturnValue({
       data: undefined,
       isLoading: true,
@@ -291,5 +344,29 @@ describe("ProjectBoard page — role-scoped rendering", () => {
     expect(screen.queryByTestId("project-board")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-add-bucket")).not.toBeInTheDocument();
     expect(screen.queryByText("Project not found.")).not.toBeInTheDocument();
+  });
+
+  it("does not flash management chrome while the session is still loading", () => {
+    // Session hook returns no data yet — canManage must resolve to false so
+    // we never momentarily render Add bucket / bucket menu / Add task even
+    // for what will eventually be an admin session.
+    useGetSessionMock.mockReturnValue({ data: undefined });
+    useGetProjectMock.mockReturnValue({
+      data: makeProject({
+        name: "Pending session",
+        buckets: [makeBucket({ id: 9, name: "Triage", tasks: [] })],
+      }),
+      isLoading: false,
+      isError: false,
+    });
+
+    renderBoard();
+
+    expect(screen.queryByTestId("button-add-bucket")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("bucket-menu-9")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-task-9")).not.toBeInTheDocument();
+    // Bucket name renders, but as plain text rather than a rename button.
+    const bucketName = screen.getByTestId("bucket-name-9");
+    expect(bucketName.tagName).not.toBe("BUTTON");
   });
 });

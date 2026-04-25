@@ -13,6 +13,7 @@ import {
   useListProjectTaskComments,
   useCreateProjectTaskComment,
   useDeleteProjectTaskComment,
+  useGetSession,
   getGetProjectQueryKey,
   getListProjectsQueryKey,
   getListProjectTaskCommentsQueryKey,
@@ -146,6 +147,8 @@ export default function ProjectBoard() {
   const [, params] = useRoute("/projects/:id");
   const projectId = params?.id ? Number(params.id) : NaN;
   const { data: project, isLoading } = useGetProject(projectId);
+  const { data: session } = useGetSession();
+  const canManage = session?.role === "admin" || session?.role === "agent";
   const [search, setSearch] = useState("");
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
 
@@ -200,9 +203,10 @@ export default function ProjectBoard() {
               projectId={project.id}
               bucket={bucket}
               onEditTask={setEditingTask}
+              canManage={canManage}
             />
           ))}
-          <AddBucketColumn projectId={project.id} />
+          {canManage && <AddBucketColumn projectId={project.id} />}
         </div>
       </div>
 
@@ -321,10 +325,12 @@ function BucketColumn({
   projectId,
   bucket,
   onEditTask,
+  canManage,
 }: {
   projectId: number;
   bucket: ProjectBucketWithTasks;
   onEditTask: (task: ProjectTask) => void;
+  canManage: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -384,7 +390,7 @@ function BucketColumn({
       data-testid={`bucket-${bucket.id}`}
     >
       <div className="flex items-center gap-1.5 px-1 mb-2">
-        {renaming ? (
+        {canManage && renaming ? (
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -399,7 +405,7 @@ function BucketColumn({
             autoFocus
             className="h-7 text-[13px] bg-white/10 border-white/15 text-white"
           />
-        ) : (
+        ) : canManage ? (
           <button
             type="button"
             onClick={() => setRenaming(true)}
@@ -408,54 +414,64 @@ function BucketColumn({
           >
             {bucket.name}
           </button>
+        ) : (
+          <span
+            className="text-[13px] font-semibold text-white px-1.5 py-0.5"
+            data-testid={`bucket-name-${bucket.id}`}
+          >
+            {bucket.name}
+          </span>
         )}
         <span className="text-[11.5px] text-white/45 tabular-nums">
           {bucket.tasks.length}
         </span>
         <div className="flex-1" />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="h-6 w-6 rounded flex items-center justify-center text-white/45 hover:text-white hover:bg-white/5 transition-colors"
-              aria-label="Bucket menu"
-              data-testid={`bucket-menu-${bucket.id}`}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setRenaming(true)}>
-              Rename bucket
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={remove}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete bucket
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {canManage && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="h-6 w-6 rounded flex items-center justify-center text-white/45 hover:text-white hover:bg-white/5 transition-colors"
+                aria-label="Bucket menu"
+                data-testid={`bucket-menu-${bucket.id}`}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setRenaming(true)}>
+                Rename bucket
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={remove}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete bucket
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <div className="flex flex-col gap-2 overflow-y-auto pr-1 pb-2">
-        {adding ? (
-          <NewTaskInline
-            projectId={projectId}
-            bucketId={bucket.id}
-            onClose={() => setAdding(false)}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-1.5 text-[12.5px] text-white/55 hover:text-white py-1.5 px-2 rounded hover:bg-white/5 transition-colors"
-            data-testid={`add-task-${bucket.id}`}
-          >
-            <Plus className="h-3.5 w-3.5" /> Add task
-          </button>
-        )}
+        {canManage &&
+          (adding ? (
+            <NewTaskInline
+              projectId={projectId}
+              bucketId={bucket.id}
+              onClose={() => setAdding(false)}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="flex items-center gap-1.5 text-[12.5px] text-white/55 hover:text-white py-1.5 px-2 rounded hover:bg-white/5 transition-colors"
+              data-testid={`add-task-${bucket.id}`}
+            >
+              <Plus className="h-3.5 w-3.5" /> Add task
+            </button>
+          ))}
         {bucket.tasks.map((task) => (
           <TaskCard key={task.id} task={task} onClick={() => onEditTask(task)} />
         ))}

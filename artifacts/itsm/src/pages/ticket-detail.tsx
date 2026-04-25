@@ -1,4 +1,9 @@
-import { useGetTicket, useUpdateTicket, useAddTicketComment } from "@workspace/api-client-react";
+import {
+  useGetTicket,
+  useUpdateTicket,
+  useAddTicketComment,
+  useGetSession,
+} from "@workspace/api-client-react";
 import { useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
@@ -8,13 +13,29 @@ import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
+const STATUS_LABEL = {
+  open: "Open",
+  pending: "Pending",
+  resolved: "Resolved",
+  closed: "Closed",
+} as const;
+
+const PRIORITY_LABEL = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  urgent: "Urgent",
+} as const;
+
 export default function TicketDetail() {
   const [, params] = useRoute("/tickets/:id");
   const ticketId = Number(params?.id);
   const [commentBody, setCommentBody] = useState("");
 
   const { data: ticket, isLoading } = useGetTicket(ticketId);
-  
+  const { data: session } = useGetSession();
+  const canTriage = session?.role === "admin" || session?.role === "agent";
+
   const updateTicket = useUpdateTicket();
   const addComment = useAddTicketComment();
 
@@ -77,6 +98,7 @@ export default function TicketDetail() {
               value={commentBody}
               onChange={(e) => setCommentBody(e.target.value)}
               className="min-h-[100px] bg-card"
+              data-testid="input-ticket-reply"
             />
             <div className="flex justify-end">
               <Button 
@@ -106,38 +128,56 @@ export default function TicketDetail() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Status</label>
-              <Select 
-                value={ticket.status} 
-                onValueChange={(val: any) => updateTicket.mutate({ id: ticketId, data: { status: val } })}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                </SelectContent>
-              </Select>
+              {canTriage ? (
+                <Select
+                  value={ticket.status}
+                  onValueChange={(val: any) => updateTicket.mutate({ id: ticketId, data: { status: val } })}
+                >
+                  <SelectTrigger className="h-8" data-testid="select-ticket-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div
+                  className="h-8 px-3 flex items-center bg-muted/40 rounded border text-sm"
+                  data-testid="text-ticket-status"
+                >
+                  {STATUS_LABEL[ticket.status as keyof typeof STATUS_LABEL] ?? ticket.status}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Priority</label>
-              <Select 
-                value={ticket.priority}
-                onValueChange={(val: any) => updateTicket.mutate({ id: ticketId, data: { priority: val } })}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
+              {canTriage ? (
+                <Select
+                  value={ticket.priority}
+                  onValueChange={(val: any) => updateTicket.mutate({ id: ticketId, data: { priority: val } })}
+                >
+                  <SelectTrigger className="h-8" data-testid="select-ticket-priority">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div
+                  className="h-8 px-3 flex items-center bg-muted/40 rounded border text-sm"
+                  data-testid="text-ticket-priority"
+                >
+                  {PRIORITY_LABEL[ticket.priority as keyof typeof PRIORITY_LABEL] ?? ticket.priority}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
