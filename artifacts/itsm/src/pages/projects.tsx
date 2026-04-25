@@ -5,6 +5,7 @@ import {
   useCreateProject,
   useListDepartments,
   useListAgents,
+  useGetSession,
   getListProjectsQueryKey,
   type ProjectSummary,
 } from "@workspace/api-client-react";
@@ -81,6 +82,8 @@ function formatDue(iso: string | null | undefined) {
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: session } = useGetSession();
+  const canCreate = session?.role === "admin" || session?.role === "agent";
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -115,22 +118,24 @@ export default function ProjectsPage() {
               : "Plan and track work across teams. Each project is a board of buckets and tasks."}
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-new-project">
-              <Plus className="h-4 w-4 mr-1.5" /> New project
-            </Button>
-          </DialogTrigger>
-          <NewProjectDialog
-            onCreated={() => {
-              setOpen(false);
-              queryClient.invalidateQueries({
-                queryKey: getListProjectsQueryKey(),
-              });
-              toast({ title: "Project created" });
-            }}
-          />
-        </Dialog>
+        {canCreate && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-new-project">
+                <Plus className="h-4 w-4 mr-1.5" /> New project
+              </Button>
+            </DialogTrigger>
+            <NewProjectDialog
+              onCreated={() => {
+                setOpen(false);
+                queryClient.invalidateQueries({
+                  queryKey: getListProjectsQueryKey(),
+                });
+                toast({ title: "Project created" });
+              }}
+            />
+          </Dialog>
+        )}
       </div>
 
       <div className="flex gap-2 mb-5">
@@ -172,11 +177,18 @@ export default function ProjectsPage() {
           </div>
           <p className="font-medium">No projects yet</p>
           <p className="text-[13px] text-muted-foreground mt-1 mb-4">
-            Create a project to start planning work in buckets.
+            {canCreate
+              ? "Create a project to start planning work in buckets."
+              : "Projects you have access to will appear here."}
           </p>
-          <Button onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> New project
-          </Button>
+          {canCreate && (
+            <Button
+              onClick={() => setOpen(true)}
+              data-testid="button-new-project-empty"
+            >
+              <Plus className="h-4 w-4 mr-1.5" /> New project
+            </Button>
+          )}
         </div>
       )}
 
