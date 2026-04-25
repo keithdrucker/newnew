@@ -1329,6 +1329,22 @@ export const ListProjectsResponseItem = zod.object({
   ownerId: zod.number().nullish(),
   ownerName: zod.string().nullish(),
   dueAt: zod.coerce.date().nullish(),
+  suggestedById: zod.number().nullish(),
+  suggestedByName: zod.string().nullish(),
+  goal: zod.string(),
+  implementation: zod.string(),
+  rationale: zod.string(),
+  impactedDepartmentIds: zod.array(zod.number()),
+  impactedDepartmentNames: zod.array(zod.string()),
+  additionalComments: zod.string(),
+  completedYear: zod.number().nullish(),
+  labels: zod.array(
+    zod.object({
+      name: zod.string(),
+      color: zod.string(),
+    }),
+  ),
+  priority: zod.enum(["low", "medium", "high", "urgent"]),
   bucketCount: zod.number(),
   taskCount: zod.number(),
   completedTaskCount: zod.number(),
@@ -1345,6 +1361,21 @@ export const CreateProjectBody = zod.object({
   departmentId: zod.number().nullish(),
   ownerId: zod.number().nullish(),
   dueAt: zod.coerce.date().nullish(),
+  suggestedById: zod.number().nullish(),
+  goal: zod.string().optional(),
+  implementation: zod.string().optional(),
+  rationale: zod.string().optional(),
+  impactedDepartmentIds: zod.array(zod.number()).optional(),
+  additionalComments: zod.string().optional(),
+  labels: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        color: zod.string(),
+      }),
+    )
+    .optional(),
+  priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
 });
 
 export const GetProjectParams = zod.object({
@@ -1363,6 +1394,22 @@ export const GetProjectResponse = zod
     ownerId: zod.number().nullish(),
     ownerName: zod.string().nullish(),
     dueAt: zod.coerce.date().nullish(),
+    suggestedById: zod.number().nullish(),
+    suggestedByName: zod.string().nullish(),
+    goal: zod.string(),
+    implementation: zod.string(),
+    rationale: zod.string(),
+    impactedDepartmentIds: zod.array(zod.number()),
+    impactedDepartmentNames: zod.array(zod.string()),
+    additionalComments: zod.string(),
+    completedYear: zod.number().nullish(),
+    labels: zod.array(
+      zod.object({
+        name: zod.string(),
+        color: zod.string(),
+      }),
+    ),
+    priority: zod.enum(["low", "medium", "high", "urgent"]),
     bucketCount: zod.number(),
     taskCount: zod.number(),
     completedTaskCount: zod.number(),
@@ -1441,6 +1488,22 @@ export const UpdateProjectBody = zod.object({
   departmentId: zod.number().nullish(),
   ownerId: zod.number().nullish(),
   dueAt: zod.coerce.date().nullish(),
+  suggestedById: zod.number().nullish(),
+  goal: zod.string().optional(),
+  implementation: zod.string().optional(),
+  rationale: zod.string().optional(),
+  impactedDepartmentIds: zod.array(zod.number()).optional(),
+  additionalComments: zod.string().optional(),
+  completedYear: zod.number().nullish(),
+  labels: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        color: zod.string(),
+      }),
+    )
+    .optional(),
+  priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
 });
 
 export const UpdateProjectResponse = zod
@@ -1455,6 +1518,22 @@ export const UpdateProjectResponse = zod
     ownerId: zod.number().nullish(),
     ownerName: zod.string().nullish(),
     dueAt: zod.coerce.date().nullish(),
+    suggestedById: zod.number().nullish(),
+    suggestedByName: zod.string().nullish(),
+    goal: zod.string(),
+    implementation: zod.string(),
+    rationale: zod.string(),
+    impactedDepartmentIds: zod.array(zod.number()),
+    impactedDepartmentNames: zod.array(zod.string()),
+    additionalComments: zod.string(),
+    completedYear: zod.number().nullish(),
+    labels: zod.array(
+      zod.object({
+        name: zod.string(),
+        color: zod.string(),
+      }),
+    ),
+    priority: zod.enum(["low", "medium", "high", "urgent"]),
     bucketCount: zod.number(),
     taskCount: zod.number(),
     completedTaskCount: zod.number(),

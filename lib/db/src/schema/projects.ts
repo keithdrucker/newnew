@@ -11,9 +11,22 @@ import {
 import { departmentsTable } from "./departments";
 import { usersTable } from "./users";
 
+export type TaskLabel = { name: string; color: string };
+export type ChecklistItem = {
+  text: string;
+  done: boolean;
+  assigneeId?: number | null;
+};
+
 // A "project" / initiative — a board of work. Loosely modeled on
 // Microsoft Planner: every project owns its own list of buckets
 // (columns), and each bucket has a list of tasks (cards).
+//
+// A project IS the initiative. The 7-bucket pipeline (New Suggestions,
+// Future Roadmap, Backlog, Phase 1..3, Completed) lives inside it and
+// the cards inside the buckets are the work-steps to deliver the
+// initiative. The rich initiative metadata (goal, rationale, suggested
+// by, impacted departments, etc.) therefore lives on the project row.
 export const projectsTable = pgTable(
   "projects",
   {
@@ -31,6 +44,22 @@ export const projectsTable = pgTable(
       onDelete: "set null",
     }),
     dueAt: timestamp("due_at", { withTimezone: true }),
+    // --- Initiative metadata ---
+    suggestedById: integer("suggested_by_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    goal: text("goal").notNull().default(""),
+    implementation: text("implementation").notNull().default(""),
+    rationale: text("rationale").notNull().default(""),
+    impactedDepartmentIds: jsonb("impacted_department_ids")
+      .$type<number[]>()
+      .notNull()
+      .default([]),
+    additionalComments: text("additional_comments").notNull().default(""),
+    completedYear: integer("completed_year"),
+    labels: jsonb("labels").$type<TaskLabel[]>().notNull().default([]),
+    // low | medium | high | urgent
+    priority: text("priority").notNull().default("medium"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -62,13 +91,6 @@ export const projectBucketsTable = pgTable(
     projectIdx: index("project_buckets_project_idx").on(t.projectId),
   }),
 );
-
-export type TaskLabel = { name: string; color: string };
-export type ChecklistItem = {
-  text: string;
-  done: boolean;
-  assigneeId?: number | null;
-};
 
 export const projectTasksTable = pgTable(
   "project_tasks",

@@ -207,14 +207,20 @@ async function summarizeProjects(
 ) {
   if (rows.length === 0) return [];
   const projectIds = rows.map((r) => r.id);
-  const deptIds = Array.from(
-    new Set(
-      rows.map((r) => r.departmentId).filter((d): d is number => d != null),
-    ),
-  );
-  const userIds = Array.from(
-    new Set(rows.map((r) => r.ownerId).filter((d): d is number => d != null)),
-  );
+  // Departments come from both the project's own departmentId and the
+  // initiative's impactedDepartmentIds list.
+  const deptIdSet = new Set<number>();
+  const userIdSet = new Set<number>();
+  for (const r of rows) {
+    if (r.departmentId != null) deptIdSet.add(r.departmentId);
+    if (r.ownerId != null) userIdSet.add(r.ownerId);
+    if (r.suggestedById != null) userIdSet.add(r.suggestedById);
+    for (const d of (r.impactedDepartmentIds ?? []) as number[]) {
+      deptIdSet.add(d);
+    }
+  }
+  const deptIds = Array.from(deptIdSet);
+  const userIds = Array.from(userIdSet);
 
   const [buckets, tasks, depts, users] = await Promise.all([
     db
@@ -254,25 +260,44 @@ async function summarizeProjects(
   const deptMap = new Map(depts.map((d) => [d.id, d]));
   const userMap = new Map(users.map((u) => [u.id, u]));
 
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    description: r.description,
-    color: r.color,
-    status: r.status as ProjectStatus,
-    departmentId: r.departmentId ?? null,
-    departmentName: r.departmentId
-      ? (deptMap.get(r.departmentId)?.name ?? null)
-      : null,
-    ownerId: r.ownerId ?? null,
-    ownerName: r.ownerId ? (userMap.get(r.ownerId)?.name ?? null) : null,
-    dueAt: r.dueAt ? r.dueAt.toISOString() : null,
-    bucketCount: bucketCount.get(r.id) ?? 0,
-    taskCount: taskCount.get(r.id) ?? 0,
-    completedTaskCount: completedCount.get(r.id) ?? 0,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  return rows.map((r) => {
+    const impactedIds = (r.impactedDepartmentIds ?? []) as number[];
+    const impactedNames = impactedIds
+      .map((id) => deptMap.get(id)?.name)
+      .filter((n): n is string => typeof n === "string");
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      color: r.color,
+      status: r.status as ProjectStatus,
+      departmentId: r.departmentId ?? null,
+      departmentName: r.departmentId
+        ? (deptMap.get(r.departmentId)?.name ?? null)
+        : null,
+      ownerId: r.ownerId ?? null,
+      ownerName: r.ownerId ? (userMap.get(r.ownerId)?.name ?? null) : null,
+      dueAt: r.dueAt ? r.dueAt.toISOString() : null,
+      suggestedById: r.suggestedById ?? null,
+      suggestedByName: r.suggestedById
+        ? (userMap.get(r.suggestedById)?.name ?? null)
+        : null,
+      goal: r.goal,
+      implementation: r.implementation,
+      rationale: r.rationale,
+      impactedDepartmentIds: impactedIds,
+      impactedDepartmentNames: impactedNames,
+      additionalComments: r.additionalComments,
+      completedYear: r.completedYear ?? null,
+      labels: (r.labels ?? []) as TaskLabel[],
+      priority: r.priority as TaskPriority,
+      bucketCount: bucketCount.get(r.id) ?? 0,
+      taskCount: taskCount.get(r.id) ?? 0,
+      completedTaskCount: completedCount.get(r.id) ?? 0,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    };
+  });
 }
 
 async function detailProject(id: number) {
@@ -439,6 +464,14 @@ router.post("/projects", async (req, res): Promise<void> => {
       departmentId: parsed.data.departmentId ?? null,
       ownerId: parsed.data.ownerId ?? user.id,
       dueAt,
+      suggestedById: parsed.data.suggestedById ?? user.id,
+      goal: parsed.data.goal ?? "",
+      implementation: parsed.data.implementation ?? "",
+      rationale: parsed.data.rationale ?? "",
+      impactedDepartmentIds: parsed.data.impactedDepartmentIds ?? [],
+      additionalComments: parsed.data.additionalComments ?? "",
+      labels: parsed.data.labels ?? [],
+      priority: parsed.data.priority ?? "medium",
     })
     .returning();
 
@@ -545,6 +578,21 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   if (parsed.data.ownerId !== undefined) updates.ownerId = parsed.data.ownerId;
   if (parsed.data.dueAt !== undefined)
     updates.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
+  if (parsed.data.suggestedById !== undefined)
+    updates.suggestedById = parsed.data.suggestedById;
+  if (parsed.data.goal !== undefined) updates.goal = parsed.data.goal;
+  if (parsed.data.implementation !== undefined)
+    updates.implementation = parsed.data.implementation;
+  if (parsed.data.rationale !== undefined)
+    updates.rationale = parsed.data.rationale;
+  if (parsed.data.impactedDepartmentIds !== undefined)
+    updates.impactedDepartmentIds = parsed.data.impactedDepartmentIds;
+  if (parsed.data.additionalComments !== undefined)
+    updates.additionalComments = parsed.data.additionalComments;
+  if (parsed.data.completedYear !== undefined)
+    updates.completedYear = parsed.data.completedYear;
+  if (parsed.data.labels !== undefined) updates.labels = parsed.data.labels;
+  if (parsed.data.priority !== undefined) updates.priority = parsed.data.priority;
 
   const [row] = await db
     .update(projectsTable)

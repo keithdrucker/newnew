@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProjectStatus } from "./projectStatus";
+import type { TaskLabel } from "./taskLabel";
+import type { TaskPriority } from "./taskPriority";
 
 export interface ProjectSummary {
   id: number;
@@ -23,6 +25,20 @@ export interface ProjectSummary {
   ownerName?: string | null;
   /** @nullable */
   dueAt?: Date | null;
+  /** @nullable */
+  suggestedById?: number | null;
+  /** @nullable */
+  suggestedByName?: string | null;
+  goal: string;
+  implementation: string;
+  rationale: string;
+  impactedDepartmentIds: number[];
+  impactedDepartmentNames: string[];
+  additionalComments: string;
+  /** @nullable */
+  completedYear?: number | null;
+  labels: TaskLabel[];
+  priority: TaskPriority;
   bucketCount: number;
   taskCount: number;
   completedTaskCount: number;

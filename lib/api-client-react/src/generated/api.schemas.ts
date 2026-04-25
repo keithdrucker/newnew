@@ -1073,6 +1073,20 @@ export interface ProjectSummary {
   ownerName?: string | null;
   /** @nullable */
   dueAt?: string | null;
+  /** @nullable */
+  suggestedById?: number | null;
+  /** @nullable */
+  suggestedByName?: string | null;
+  goal: string;
+  implementation: string;
+  rationale: string;
+  impactedDepartmentIds: number[];
+  impactedDepartmentNames: string[];
+  additionalComments: string;
+  /** @nullable */
+  completedYear?: number | null;
+  labels: TaskLabel[];
+  priority: TaskPriority;
   bucketCount: number;
   taskCount: number;
   completedTaskCount: number;
@@ -1156,6 +1170,15 @@ export interface CreateProjectInput {
   ownerId?: number | null;
   /** @nullable */
   dueAt?: string | null;
+  /** @nullable */
+  suggestedById?: number | null;
+  goal?: string;
+  implementation?: string;
+  rationale?: string;
+  impactedDepartmentIds?: number[];
+  additionalComments?: string;
+  labels?: TaskLabel[];
+  priority?: TaskPriority;
 }
 
 export interface UpdateProjectInput {
@@ -1169,6 +1192,17 @@ export interface UpdateProjectInput {
   ownerId?: number | null;
   /** @nullable */
   dueAt?: string | null;
+  /** @nullable */
+  suggestedById?: number | null;
+  goal?: string;
+  implementation?: string;
+  rationale?: string;
+  impactedDepartmentIds?: number[];
+  additionalComments?: string;
+  /** @nullable */
+  completedYear?: number | null;
+  labels?: TaskLabel[];
+  priority?: TaskPriority;
 }
 
 export interface CreateBucketInput {

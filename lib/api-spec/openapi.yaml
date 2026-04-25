@@ -2139,6 +2139,24 @@ components:
         ownerId: { type: ["integer", "null"] }
         ownerName: { type: ["string", "null"] }
         dueAt: { type: ["string", "null"], format: date-time }
+        # --- Initiative metadata (project IS the initiative) ---
+        suggestedById: { type: ["integer", "null"] }
+        suggestedByName: { type: ["string", "null"] }
+        goal: { type: string }
+        implementation: { type: string }
+        rationale: { type: string }
+        impactedDepartmentIds:
+          type: array
+          items: { type: integer }
+        impactedDepartmentNames:
+          type: array
+          items: { type: string }
+        additionalComments: { type: string }
+        completedYear: { type: ["integer", "null"] }
+        labels:
+          type: array
+          items: { $ref: "#/components/schemas/TaskLabel" }
+        priority: { $ref: "#/components/schemas/TaskPriority" }
         bucketCount: { type: integer }
         taskCount: { type: integer }
         completedTaskCount: { type: integer }
@@ -2150,6 +2168,14 @@ components:
         - description
         - color
         - status
+        - goal
+        - implementation
+        - rationale
+        - impactedDepartmentIds
+        - impactedDepartmentNames
+        - additionalComments
+        - labels
+        - priority
         - bucketCount
         - taskCount
         - completedTaskCount
@@ -2270,6 +2296,18 @@ components:
         departmentId: { type: ["integer", "null"] }
         ownerId: { type: ["integer", "null"] }
         dueAt: { type: ["string", "null"], format: date-time }
+        suggestedById: { type: ["integer", "null"] }
+        goal: { type: string }
+        implementation: { type: string }
+        rationale: { type: string }
+        impactedDepartmentIds:
+          type: array
+          items: { type: integer }
+        additionalComments: { type: string }
+        labels:
+          type: array
+          items: { $ref: "#/components/schemas/TaskLabel" }
+        priority: { $ref: "#/components/schemas/TaskPriority" }
       required: [name]
 
     UpdateProjectInput:
@@ -2282,6 +2320,19 @@ components:
         departmentId: { type: ["integer", "null"] }
         ownerId: { type: ["integer", "null"] }
         dueAt: { type: ["string", "null"], format: date-time }
+        suggestedById: { type: ["integer", "null"] }
+        goal: { type: string }
+        implementation: { type: string }
+        rationale: { type: string }
+        impactedDepartmentIds:
+          type: array
+          items: { type: integer }
+        additionalComments: { type: string }
+        completedYear: { type: ["integer", "null"] }
+        labels:
+          type: array
+          items: { $ref: "#/components/schemas/TaskLabel" }
+        priority: { $ref: "#/components/schemas/TaskPriority" }
 
     CreateBucketInput:
       type: object

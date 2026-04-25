@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProjectStatus } from "./projectStatus";
+import type { TaskLabel } from "./taskLabel";
+import type { TaskPriority } from "./taskPriority";
 
 export interface CreateProjectInput {
   name: string;
@@ -18,4 +20,13 @@ export interface CreateProjectInput {
   ownerId?: number | null;
   /** @nullable */
   dueAt?: Date | null;
+  /** @nullable */
+  suggestedById?: number | null;
+  goal?: string;
+  implementation?: string;
+  rationale?: string;
+  impactedDepartmentIds?: number[];
+  additionalComments?: string;
+  labels?: TaskLabel[];
+  priority?: TaskPriority;
 }

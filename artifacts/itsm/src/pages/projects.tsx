@@ -2,18 +2,12 @@ import { useState, useMemo } from "react";
 import { Link, useRoute } from "wouter";
 import {
   useListProjects,
-  useCreateProject,
   useListDepartments,
-  useListAgents,
   useGetSession,
-  getListProjectsQueryKey,
   type ProjectSummary,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -23,15 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { ProjectEditorDialog } from "@/components/project-editor-dialog";
 import { Plus, Search, KanbanSquare, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -80,8 +66,6 @@ function formatDue(iso: string | null | undefined) {
 }
 
 export default function ProjectsPage() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
   const { data: session } = useGetSession();
   const canCreate = session?.role === "admin" || session?.role === "agent";
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -119,22 +103,20 @@ export default function ProjectsPage() {
           </p>
         </div>
         {canCreate && (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-new-project">
-                <Plus className="h-4 w-4 mr-1.5" /> New project
-              </Button>
-            </DialogTrigger>
-            <NewProjectDialog
-              onCreated={() => {
-                setOpen(false);
-                queryClient.invalidateQueries({
-                  queryKey: getListProjectsQueryKey(),
-                });
-                toast({ title: "Project created" });
-              }}
-            />
-          </Dialog>
+          <Button
+            data-testid="button-new-project"
+            onClick={() => setOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> New project
+          </Button>
+        )}
+        {canCreate && (
+          <ProjectEditorDialog
+            mode="create"
+            defaultDepartmentId={activeDept?.id ?? null}
+            open={open}
+            onOpenChange={setOpen}
+          />
         )}
       </div>
 
@@ -282,146 +264,5 @@ export default function ProjectsPage() {
         })}
       </div>
     </div>
-  );
-}
-
-function NewProjectDialog({ onCreated }: { onCreated: () => void }) {
-  const { data: departments } = useListDepartments({ scope: "accessible" });
-  const { data: agents } = useListAgents({});
-  const createMutation = useCreateProject();
-  const { toast } = useToast();
-
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [color, setColor] = useState(COLOR_SWATCHES[0]);
-  const [departmentId, setDepartmentId] = useState<string>("none");
-  const [ownerId, setOwnerId] = useState<string>("none");
-
-  const submit = () => {
-    if (!name.trim()) {
-      toast({ title: "Name is required", variant: "destructive" });
-      return;
-    }
-    createMutation.mutate(
-      {
-        data: {
-          name: name.trim(),
-          description: description.trim(),
-          color,
-          status: "active",
-          departmentId: departmentId === "none" ? null : Number(departmentId),
-          ownerId: ownerId === "none" ? null : Number(ownerId),
-        },
-      },
-      {
-        onSuccess: () => {
-          setName("");
-          setDescription("");
-          setDepartmentId("none");
-          setOwnerId("none");
-          onCreated();
-        },
-      },
-    );
-  };
-
-  return (
-    <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
-      <DialogHeader>
-        <DialogTitle>New project</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-3.5">
-        <div>
-          <Label htmlFor="proj-name" className="text-[12.5px]">
-            Name
-          </Label>
-          <Input
-            id="proj-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. IT Initiatives"
-            className="mt-1"
-            data-testid="input-project-name"
-          />
-        </div>
-        <div>
-          <Label htmlFor="proj-desc" className="text-[12.5px]">
-            Description
-          </Label>
-          <Textarea
-            id="proj-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What's this board for?"
-            className="mt-1 min-h-[70px]"
-            data-testid="textarea-project-desc"
-          />
-        </div>
-        <div>
-          <Label className="text-[12.5px]">Color</Label>
-          <div className="flex gap-1.5 mt-1.5">
-            {COLOR_SWATCHES.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setColor(c)}
-                className={cn(
-                  "h-7 w-7 rounded-full ring-2 transition-all",
-                  color === c
-                    ? "ring-foreground/40 scale-110"
-                    : "ring-transparent hover:ring-foreground/20",
-                )}
-                style={{ backgroundColor: c }}
-                aria-label={`Color ${c}`}
-                data-testid={`color-${c}`}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-[12.5px]">Department</Label>
-            <Select value={departmentId} onValueChange={setDepartmentId}>
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {departments?.map((d) => (
-                  <SelectItem key={d.id} value={String(d.id)}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-[12.5px]">Owner</Label>
-            <Select value={ownerId} onValueChange={setOwnerId}>
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Me (default)</SelectItem>
-                {agents?.map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
-      <DialogFooter>
-        <Button
-          onClick={submit}
-          disabled={createMutation.isPending}
-          data-testid="button-create-project"
-        >
-          {createMutation.isPending ? "Creating..." : "Create project"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
   );
 }

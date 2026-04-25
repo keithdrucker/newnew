@@ -9,7 +9,6 @@ import {
   useUpdateProjectTask,
   useDeleteProjectTask,
   useListAgents,
-  useListDepartments,
   useListProjectTaskComments,
   useCreateProjectTaskComment,
   useDeleteProjectTaskComment,
@@ -57,25 +56,23 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { ProjectEditorDialog } from "@/components/project-editor-dialog";
 import {
   ArrowLeft,
-  Building2,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
   Filter,
-  Lightbulb,
   ListChecks,
   MessageSquare,
   MoreHorizontal,
+  Pencil,
   Plus,
   Search,
   Send,
   Share2,
-  Target,
   Trash2,
-  Wrench,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -150,7 +147,12 @@ export default function ProjectBoard() {
   const { data: session } = useGetSession();
   const canManage = session?.role === "admin" || session?.role === "agent";
   const [search, setSearch] = useState("");
-  const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
+  const [taskDialog, setTaskDialog] = useState<
+    | { mode: "edit"; task: ProjectTask }
+    | { mode: "create"; bucketId: number }
+    | null
+  >(null);
+  const [editingProject, setEditingProject] = useState(false);
 
   const filtered = useMemo(() => {
     if (!project) return [];
@@ -188,7 +190,11 @@ export default function ProjectBoard() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-0px)]" data-testid="project-board">
-      <BoardHeader project={project} />
+      <BoardHeader
+        project={project}
+        canManage={canManage}
+        onEditProject={() => setEditingProject(true)}
+      />
       <BoardToolbar
         projectId={project.id}
         search={search}
@@ -202,7 +208,17 @@ export default function ProjectBoard() {
               key={bucket.id}
               projectId={project.id}
               bucket={bucket}
-              onEditTask={canManage ? setEditingTask : null}
+              onEditTask={
+                canManage
+                  ? (task) => setTaskDialog({ mode: "edit", task })
+                  : null
+              }
+              onCreateTask={
+                canManage
+                  ? (bucketId) =>
+                      setTaskDialog({ mode: "create", bucketId })
+                  : null
+              }
               canManage={canManage}
             />
           ))}
@@ -210,19 +226,36 @@ export default function ProjectBoard() {
         </div>
       </div>
 
-      {canManage && editingTask && (
+      {canManage && taskDialog && (
         <TaskEditorDialog
-          task={editingTask}
+          state={taskDialog}
           buckets={project.buckets}
           projectId={project.id}
-          onClose={() => setEditingTask(null)}
+          onClose={() => setTaskDialog(null)}
+        />
+      )}
+
+      {canManage && (
+        <ProjectEditorDialog
+          mode="edit"
+          project={project}
+          open={editingProject}
+          onOpenChange={setEditingProject}
         />
       )}
     </div>
   );
 }
 
-function BoardHeader({ project }: { project: ProjectDetail }) {
+function BoardHeader({
+  project,
+  canManage,
+  onEditProject,
+}: {
+  project: ProjectDetail;
+  canManage: boolean;
+  onEditProject: () => void;
+}) {
   return (
     <div className="bg-[#0f0f1a] text-white border-b border-white/10">
       <div className="px-6 pt-3 pb-1.5 flex items-center gap-3 text-[12.5px] text-white/60">
@@ -252,6 +285,17 @@ function BoardHeader({ project }: { project: ProjectDetail }) {
           {project.completedTaskCount > 0 &&
             ` · ${project.completedTaskCount} done`}
         </span>
+        <div className="flex-1" />
+        {canManage && (
+          <button
+            type="button"
+            onClick={onEditProject}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] text-white/80 bg-white/5 hover:bg-white/10 transition-colors"
+            data-testid="button-edit-project"
+          >
+            <Pencil className="h-3.5 w-3.5" /> Edit details
+          </button>
+        )}
       </div>
       <div className="px-4 flex items-end gap-1 -mb-px">
         {["Board", "Charts", "Schedule"].map((tab) => (
@@ -325,11 +369,13 @@ function BucketColumn({
   projectId,
   bucket,
   onEditTask,
+  onCreateTask,
   canManage,
 }: {
   projectId: number;
   bucket: ProjectBucketWithTasks;
   onEditTask: ((task: ProjectTask) => void) | null;
+  onCreateTask: ((bucketId: number) => void) | null;
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -338,7 +384,6 @@ function BucketColumn({
   const [name, setName] = useState(bucket.name);
   const renameMutation = useUpdateProjectBucket();
   const deleteMutation = useDeleteProjectBucket();
-  const [adding, setAdding] = useState(false);
 
   const invalidate = () =>
     queryClient.invalidateQueries({
@@ -455,23 +500,16 @@ function BucketColumn({
       </div>
 
       <div className="flex flex-col gap-2 overflow-y-auto pr-1 pb-2">
-        {canManage &&
-          (adding ? (
-            <NewTaskInline
-              projectId={projectId}
-              bucketId={bucket.id}
-              onClose={() => setAdding(false)}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="flex items-center gap-1.5 text-[12.5px] text-white/55 hover:text-white py-1.5 px-2 rounded hover:bg-white/5 transition-colors"
-              data-testid={`add-task-${bucket.id}`}
-            >
-              <Plus className="h-3.5 w-3.5" /> Add task
-            </button>
-          ))}
+        {canManage && onCreateTask && (
+          <button
+            type="button"
+            onClick={() => onCreateTask(bucket.id)}
+            className="flex items-center gap-1.5 text-[12.5px] text-white/55 hover:text-white py-1.5 px-2 rounded hover:bg-white/5 transition-colors"
+            data-testid={`add-task-${bucket.id}`}
+          >
+            <Plus className="h-3.5 w-3.5" /> Add task
+          </button>
+        )}
         {bucket.tasks.map((task) => (
           <TaskCard
             key={task.id}
@@ -485,80 +523,6 @@ function BucketColumn({
   );
 }
 
-function NewTaskInline({
-  projectId,
-  bucketId,
-  onClose,
-}: {
-  projectId: number;
-  bucketId: number;
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const [title, setTitle] = useState("");
-  const createMutation = useCreateProjectTask();
-
-  const submit = () => {
-    if (!title.trim()) {
-      onClose();
-      return;
-    }
-    createMutation.mutate(
-      { id: projectId, data: { bucketId, title: title.trim() } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({
-            queryKey: getGetProjectQueryKey(projectId),
-          });
-          queryClient.invalidateQueries({
-            queryKey: getListProjectsQueryKey(),
-          });
-          setTitle("");
-          onClose();
-        },
-      },
-    );
-  };
-
-  return (
-    <div className="rounded-md bg-[#2a2a3d] border border-white/10 p-2">
-      <Textarea
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            submit();
-          }
-          if (e.key === "Escape") onClose();
-        }}
-        placeholder="Enter a task name"
-        autoFocus
-        className="min-h-[52px] text-[13px] bg-transparent border-0 text-white placeholder:text-white/40 focus-visible:ring-0 resize-none p-0"
-        data-testid="input-new-task-title"
-      />
-      <div className="flex justify-end gap-1.5 mt-1.5">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onClose}
-          className="h-7 px-2 text-white/70 hover:text-white hover:bg-white/5"
-        >
-          Cancel
-        </Button>
-        <Button
-          size="sm"
-          onClick={submit}
-          disabled={createMutation.isPending}
-          className="h-7 px-3"
-          data-testid="button-submit-new-task"
-        >
-          Add
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function TaskCard({
   task,
@@ -820,12 +784,14 @@ function AddBucketColumn({ projectId }: { projectId: number }) {
 // about an idea: who proposed it, what it is, why we'd do it, how we'd
 // do it, and the running activity log of what's been done so far.
 function TaskEditorDialog({
-  task,
+  state,
   buckets,
   projectId,
   onClose,
 }: {
-  task: ProjectTask;
+  state:
+    | { mode: "edit"; task: ProjectTask }
+    | { mode: "create"; bucketId: number };
   buckets: ProjectBucketWithTasks[];
   projectId: number;
   onClose: () => void;
@@ -833,44 +799,38 @@ function TaskEditorDialog({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: agents } = useListAgents({});
-  const { data: departments } = useListDepartments();
+  const createMutation = useCreateProjectTask();
   const updateMutation = useUpdateProjectTask();
   const deleteMutation = useDeleteProjectTask();
 
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description);
-  const [bucketId, setBucketId] = useState<number>(task.bucketId);
+  const isEdit = state.mode === "edit";
+  const task = isEdit ? state.task : null;
+
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [description, setDescription] = useState(task?.description ?? "");
+  const [bucketId, setBucketId] = useState<number>(
+    task?.bucketId ?? (state.mode === "create" ? state.bucketId : 0),
+  );
   const [assigneeId, setAssigneeId] = useState<string>(
-    task.assigneeId == null ? "none" : String(task.assigneeId),
+    task?.assigneeId == null ? "none" : String(task.assigneeId),
   );
   const [priority, setPriority] = useState<ProjectTask["priority"]>(
-    task.priority,
+    task?.priority ?? "medium",
   );
   const [dueDate, setDueDate] = useState<string>(
-    task.dueAt ? task.dueAt.substring(0, 10) : "",
+    task?.dueAt ? task.dueAt.substring(0, 10) : "",
   );
-  const [labels, setLabels] = useState<TaskLabel[]>(task.labels);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(task.checklist);
+  const [labels, setLabels] = useState<TaskLabel[]>(task?.labels ?? []);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(
+    task?.checklist ?? [],
+  );
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newLabelName, setNewLabelName] = useState("");
   const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[0].value);
 
-  // Initiative fields.
-  const [suggestedById, setSuggestedById] = useState<string>(
-    task.suggestedById == null ? "none" : String(task.suggestedById),
-  );
-  const [goal, setGoal] = useState(task.goal);
-  const [implementation, setImplementation] = useState(task.implementation);
-  const [rationale, setRationale] = useState(task.rationale);
-  const [impactedDepartmentIds, setImpactedDepartmentIds] = useState<number[]>(
-    task.impactedDepartmentIds,
-  );
-  const [additionalComments, setAdditionalComments] = useState(
-    task.additionalComments,
-  );
-
   // Keep local form state in sync if the task prop changes (e.g. after save).
   useEffect(() => {
+    if (!task) return;
     setTitle(task.title);
     setDescription(task.description);
     setBucketId(task.bucketId);
@@ -879,14 +839,6 @@ function TaskEditorDialog({
     setDueDate(task.dueAt ? task.dueAt.substring(0, 10) : "");
     setLabels(task.labels);
     setChecklist(task.checklist);
-    setSuggestedById(
-      task.suggestedById == null ? "none" : String(task.suggestedById),
-    );
-    setGoal(task.goal);
-    setImplementation(task.implementation);
-    setRationale(task.rationale);
-    setImpactedDepartmentIds(task.impactedDepartmentIds);
-    setAdditionalComments(task.additionalComments);
   }, [task]);
 
   const invalidate = () => {
@@ -901,50 +853,62 @@ function TaskEditorDialog({
       toast({ title: "Title is required", variant: "destructive" });
       return;
     }
-    updateMutation.mutate(
-      {
-        id: task.id,
-        data: {
-          title: title.trim(),
-          description,
-          bucketId,
-          assigneeId: assigneeId === "none" ? null : Number(assigneeId),
-          priority,
-          dueAt: dueDate ? new Date(dueDate).toISOString() : null,
-          labels,
-          checklist,
-          suggestedById:
-            suggestedById === "none" ? null : Number(suggestedById),
-          goal,
-          implementation,
-          rationale,
-          impactedDepartmentIds,
-          additionalComments,
+    const payload = {
+      title: title.trim(),
+      description,
+      bucketId,
+      assigneeId: assigneeId === "none" ? null : Number(assigneeId),
+      priority,
+      dueAt: dueDate ? new Date(dueDate).toISOString() : null,
+      labels,
+      checklist,
+    };
+    if (isEdit && task) {
+      updateMutation.mutate(
+        { id: task.id, data: payload },
+        {
+          onSuccess: () => {
+            invalidate();
+            toast({ title: "Work step updated" });
+            onClose();
+          },
         },
-      },
+      );
+    } else {
+      createMutation.mutate(
+        { id: projectId, data: payload },
+        {
+          onSuccess: () => {
+            invalidate();
+            toast({ title: "Work step added" });
+            onClose();
+          },
+          onError: () =>
+            toast({
+              title: "Could not add work step",
+              variant: "destructive",
+            }),
+        },
+      );
+    }
+  };
+
+  const remove = () => {
+    if (!task) return;
+    if (!window.confirm("Delete this work step?")) return;
+    deleteMutation.mutate(
+      { id: task.id },
       {
         onSuccess: () => {
           invalidate();
-          toast({ title: "Initiative updated" });
+          toast({ title: "Work step deleted" });
           onClose();
         },
       },
     );
   };
 
-  const remove = () => {
-    if (!window.confirm("Delete this initiative?")) return;
-    deleteMutation.mutate(
-      { id: task.id },
-      {
-        onSuccess: () => {
-          invalidate();
-          toast({ title: "Initiative deleted" });
-          onClose();
-        },
-      },
-    );
-  };
+  const saving = isEdit ? updateMutation.isPending : createMutation.isPending;
 
   const addLabel = () => {
     const trimmed = newLabelName.trim();
@@ -960,12 +924,6 @@ function TaskEditorDialog({
     setNewChecklistItem("");
   };
 
-  const toggleDept = (id: number) => {
-    setImpactedDepartmentIds((prev) =>
-      prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id],
-    );
-  };
-
   const completedDone = checklist.filter((c) => c.done).length;
   const checklistPct = checklist.length
     ? Math.round((completedDone / checklist.length) * 100)
@@ -979,8 +937,8 @@ function TaskEditorDialog({
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <span>Initiative detail</span>
-            {task.completedYear && (
+            <span>{isEdit ? "Work step" : "New work step"}</span>
+            {task?.completedYear && (
               <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-medium">
                 Completed {task.completedYear}
               </span>
@@ -1003,134 +961,20 @@ function TaskEditorDialog({
             />
           </div>
 
-          {/* IDEA */}
-          <section className="rounded-md border border-border/60 p-3 space-y-3 bg-muted/20">
-            <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1.5">
-              <Lightbulb className="h-3.5 w-3.5" /> Idea
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[12.5px]">Suggested by</Label>
-                <Select
-                  value={suggestedById}
-                  onValueChange={setSuggestedById}
-                >
-                  <SelectTrigger
-                    className="mt-1"
-                    data-testid="select-task-suggested-by"
-                  >
-                    <SelectValue placeholder="Pick a person" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Not specified</SelectItem>
-                    {agents?.map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="task-goal" className="text-[12.5px] inline-flex items-center gap-1">
-                  <Target className="h-3 w-3" /> Goal
-                </Label>
-                <Input
-                  id="task-goal"
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  placeholder="What outcome are we after?"
-                  className="mt-1"
-                  data-testid="input-task-goal"
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="task-desc" className="text-[12.5px]">
-                Brief description
-              </Label>
-              <Textarea
-                id="task-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="What is the idea, in a sentence or two?"
-                className="mt-1 min-h-[70px]"
-                data-testid="input-task-description"
-              />
-            </div>
-          </section>
-
-          {/* PLAN */}
-          <section className="rounded-md border border-border/60 p-3 space-y-3 bg-muted/20">
-            <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1.5">
-              <Wrench className="h-3.5 w-3.5" /> Plan
-            </h4>
-            <div>
-              <Label htmlFor="task-impl" className="text-[12.5px]">
-                How should it be implemented?
-              </Label>
-              <Textarea
-                id="task-impl"
-                value={implementation}
-                onChange={(e) => setImplementation(e.target.value)}
-                placeholder="Steps, tools, vendors, rollout approach..."
-                className="mt-1 min-h-[80px]"
-                data-testid="input-task-implementation"
-              />
-            </div>
-            <div>
-              <Label htmlFor="task-rationale" className="text-[12.5px]">
-                Why is there a need to implement this?
-              </Label>
-              <Textarea
-                id="task-rationale"
-                value={rationale}
-                onChange={(e) => setRationale(e.target.value)}
-                placeholder="The pain or opportunity this addresses..."
-                className="mt-1 min-h-[70px]"
-                data-testid="input-task-rationale"
-              />
-            </div>
-            <div>
-              <Label className="text-[12.5px] inline-flex items-center gap-1">
-                <Building2 className="h-3 w-3" /> Impacted departments
-              </Label>
-              <div
-                className="mt-1.5 flex flex-wrap gap-1.5"
-                data-testid="impacted-departments"
-              >
-                {(departments ?? []).length === 0 && (
-                  <span className="text-[12px] text-muted-foreground">
-                    Loading departments...
-                  </span>
-                )}
-                {departments?.map((d) => {
-                  const selected = impactedDepartmentIds.includes(d.id);
-                  return (
-                    <button
-                      key={d.id}
-                      type="button"
-                      onClick={() => toggleDept(d.id)}
-                      className={cn(
-                        "text-[11.5px] font-medium px-2 py-1 rounded border transition-colors",
-                        selected
-                          ? "border-transparent text-white"
-                          : "border-border bg-background hover:bg-muted",
-                      )}
-                      style={
-                        selected
-                          ? { backgroundColor: d.color || "#475569" }
-                          : undefined
-                      }
-                      data-testid={`dept-toggle-${d.id}`}
-                    >
-                      {d.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
+          {/* Description */}
+          <div>
+            <Label htmlFor="task-desc" className="text-[12.5px]">
+              Description
+            </Label>
+            <Textarea
+              id="task-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What does this step involve?"
+              className="mt-1 min-h-[70px]"
+              data-testid="input-task-description"
+            />
+          </div>
 
           {/* WORKFLOW */}
           <section className="rounded-md border border-border/60 p-3 space-y-3 bg-muted/20">
@@ -1462,35 +1306,24 @@ function TaskEditorDialog({
             </div>
           </section>
 
-          {/* ADDITIONAL COMMENTS */}
-          <div>
-            <Label htmlFor="task-additional" className="text-[12.5px]">
-              Additional comments
-            </Label>
-            <Textarea
-              id="task-additional"
-              value={additionalComments}
-              onChange={(e) => setAdditionalComments(e.target.value)}
-              placeholder="Anything else worth capturing..."
-              className="mt-1 min-h-[70px]"
-              data-testid="input-task-additional"
-            />
-          </div>
-
           {/* ACTIVITY LOG */}
-          <ActivityLog taskId={task.id} />
+          {isEdit && task && <ActivityLog taskId={task.id} />}
         </div>
 
         <DialogFooter className="flex sm:justify-between">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={remove}
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            data-testid="button-delete-task"
-          >
-            <Trash2 className="h-4 w-4 mr-1.5" /> Delete initiative
-          </Button>
+          {isEdit ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={remove}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              data-testid="button-delete-task"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" /> Delete work step
+            </Button>
+          ) : (
+            <span />
+          )}
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
@@ -1498,10 +1331,16 @@ function TaskEditorDialog({
             <Button
               type="button"
               onClick={save}
-              disabled={updateMutation.isPending}
+              disabled={saving}
               data-testid="button-save-task"
             >
-              {updateMutation.isPending ? "Saving..." : "Save"}
+              {saving
+                ? isEdit
+                  ? "Saving..."
+                  : "Adding..."
+                : isEdit
+                  ? "Save"
+                  : "Add work step"}
             </Button>
           </div>
         </DialogFooter>
