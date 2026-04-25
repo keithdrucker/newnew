@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import {
   useListProjects,
   useListDepartments,
+  getListProjectsQueryKey,
   type ProjectSummary,
 } from "@workspace/api-client-react";
 import {
@@ -71,10 +72,12 @@ export default function ProjectsDashboard() {
   const queryDeptId =
     departmentId === "all" ? undefined : Number(departmentId);
 
+  const projectsParams = { departmentId: queryDeptId };
   const { data: projects, isLoading, isError, error } = useListProjects(
-    { departmentId: queryDeptId },
+    projectsParams,
     {
       query: {
+        queryKey: getListProjectsQueryKey(projectsParams),
         retry: (failureCount, err) => {
           const status = (err as { status?: number } | null)?.status ?? 0;
           if (status >= 400 && status < 500) return false;

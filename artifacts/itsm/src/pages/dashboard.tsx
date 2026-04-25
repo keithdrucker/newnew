@@ -5,6 +5,7 @@ import {
   useGetSession,
   useListDepartments,
   useListAgents,
+  getListAgentsQueryKey,
 } from "@workspace/api-client-react";
 import {
   Card,
@@ -66,10 +67,13 @@ export default function Dashboard() {
 
   // Agents shown in the picker are scoped to the selected department.
   // When "All Departments" is selected, the picker is hidden.
-  const { data: agents } = useListAgents(
-    queryDeptId != null ? { departmentId: queryDeptId } : {},
-    { query: { enabled: queryDeptId != null } },
-  );
+  const agentsParams = queryDeptId != null ? { departmentId: queryDeptId } : {};
+  const { data: agents } = useListAgents(agentsParams, {
+    query: {
+      queryKey: getListAgentsQueryKey(agentsParams),
+      enabled: queryDeptId != null,
+    },
+  });
 
   // Reset the agent filter whenever the department changes so we don't keep
   // a stale assignee that isn't in the new department's agent list.

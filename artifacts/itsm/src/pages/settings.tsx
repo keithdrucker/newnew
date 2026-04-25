@@ -119,22 +119,25 @@ function TicketBoardsCard() {
             className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
             data-testid="list-boards"
           >
-            {departments.map((d) => (
-              <BoardRow
-                key={d.id}
-                board={{
-                  id: d.id,
-                  name: d.name,
-                  slug: d.slug,
-                  color: d.color,
-                  icon: d.icon,
-                  description: d.description,
-                  ticketCount: d.ticketCount,
-                }}
-                onEdit={() => setEditing(d)}
-                onDelete={() => setDeleting(d)}
-              />
-            ))}
+            {departments.map((d) => {
+              const board: BoardRowData = {
+                id: d.id,
+                name: d.name,
+                slug: d.slug,
+                color: d.color,
+                icon: d.icon,
+                description: d.description ?? null,
+                ticketCount: d.ticketCount,
+              };
+              return (
+                <BoardRow
+                  key={d.id}
+                  board={board}
+                  onEdit={() => setEditing(board)}
+                  onDelete={() => setDeleting(board)}
+                />
+              );
+            })}
           </ul>
         )}
       </CardContent>

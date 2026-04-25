@@ -135,7 +135,7 @@ export default function BoardSettings({
             slug: department.slug,
             color: department.color,
             icon: department.icon,
-            description: department.description,
+            description: department.description ?? null,
             ticketCount: department.ticketCount,
           }}
           onAfterDelete={() => setLocation("/settings")}
