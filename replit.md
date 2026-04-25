@@ -72,6 +72,7 @@ The project utilizes a pnpm workspace monorepo with each package managing its ow
     - **Ticket Board**: Collapsible groups for "All Tickets" and 13 departments, showing open ticket counts.
     - **Admin Sections**: People, Agents, Knowledge Base, Assets, Settings, Applications (software catalog), Vendors.
     - **Board Settings**: Manage agents, portal settings, SLA, and assignment.
+    - **Tests**: `pnpm --filter @workspace/itsm run test` runs the Vitest suite (jsdom + React Testing Library). Setup lives in `artifacts/itsm/src/test/setup.ts`, configured by `artifacts/itsm/vitest.config.ts`. The suite covers `src/components/layout/side-nav.tsx` — Dashboard / Tickets / Projects dropdown auto-expansion + active-state highlighting (including `*/dept/:slug` routes), and role-based visibility (Projects hidden for `end_user`, Administration only for `admin`). Sidebar children expose `data-testid` hooks (`nav-dashboard`, `nav-dashboard-overview|tickets|projects`, `nav-tickets`, `nav-tickets-all`, `nav-dept-<slug>`, `nav-projects`, `nav-projects-all`, `nav-projects-dept-<slug>`, `nav-assets|applications|vendors|people|settings`). Tests mock `@workspace/api-client-react` and use `wouter/memory-location` to drive the active route.
 - **Harmony Support (`support`)**:
     - **User-centric Interface**: Lists user's open conversations, allows creating new requests, and provides a chat-style view of tickets.
     - **LLM Extension Ready**: Chat message component supports `user`, `agent`, and `assistant` roles for future AI integration.
