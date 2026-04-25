@@ -93,7 +93,7 @@ export default function Tickets() {
   const [, params] = useRoute("/tickets/dept/:slug");
   const deptSlug = params?.slug ?? null;
 
-  const { data: departments } = useListDepartments();
+  const { data: departments } = useListDepartments({ scope: "accessible" });
   const dept = deptSlug
     ? (departments?.find((d) => d.slug === deptSlug) ?? null)
     : null;

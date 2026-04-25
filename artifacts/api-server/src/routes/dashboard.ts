@@ -16,6 +16,7 @@ import {
 } from "@workspace/api-zod";
 import { getCurrentUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
+import { visibleDepartmentIds } from "../lib/board-access";
 
 const router: IRouter = Router();
 
@@ -23,18 +24,30 @@ function rangeStart(rangeDays: number): Date {
   return new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
 }
 
+/**
+ * Resolve the department filter for the dashboard endpoints.
+ * - admin: honors paramDeptId; null means all departments
+ * - agent: scoped to visibleDepartmentIds (board memberships + primary dept).
+ *   If paramDeptId is supplied, it must be inside the agent's allowed set,
+ *   otherwise it is dropped and the full allowed set is used.
+ * - end_user: dashboards are scoped via reporterId at the call site, so
+ *   department filtering here just honors paramDeptId if present.
+ */
 async function applyAccess(
   user: Awaited<ReturnType<typeof getCurrentUser>>,
   paramDeptId: number | undefined,
-): Promise<{ deptFilter: number | null }> {
-  if (user.role === "agent" && user.departmentId != null) {
-    return { deptFilter: user.departmentId };
+): Promise<{ deptIds: number[] | null }> {
+  if (user.role === "agent") {
+    const allowed = (await visibleDepartmentIds(user)) ?? [];
+    if (paramDeptId != null && allowed.includes(paramDeptId)) {
+      return { deptIds: [paramDeptId] };
+    }
+    return { deptIds: allowed };
   }
   if (user.role === "end_user") {
-    // end_user dashboards are scoped via reporter, not department.
-    return { deptFilter: paramDeptId ?? null };
+    return { deptIds: paramDeptId != null ? [paramDeptId] : null };
   }
-  return { deptFilter: paramDeptId ?? null };
+  return { deptIds: paramDeptId != null ? [paramDeptId] : null };
 }
 
 router.get("/dashboard/overview", async (req, res): Promise<void> => {
@@ -46,12 +59,18 @@ router.get("/dashboard/overview", async (req, res): Promise<void> => {
   }
   const rangeDays = params.data.rangeDays ?? 30;
   const since = rangeStart(rangeDays);
-  const { deptFilter } = await applyAccess(user, params.data.departmentId);
+  const { deptIds } = await applyAccess(user, params.data.departmentId);
 
   const conds: Array<ReturnType<typeof eq>> = [
     gte(ticketsTable.createdAt, since),
   ];
-  if (deptFilter != null) conds.push(eq(ticketsTable.departmentId, deptFilter));
+  if (deptIds != null) {
+    if (deptIds.length === 0) {
+      conds.push(sql`false` as unknown as ReturnType<typeof eq>);
+    } else {
+      conds.push(inArray(ticketsTable.departmentId, deptIds));
+    }
+  }
   if (params.data.assigneeId != null)
     conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
   if (user.role === "end_user") conds.push(eq(ticketsTable.reporterId, user.id));
@@ -149,7 +168,8 @@ router.get("/dashboard/overview", async (req, res): Promise<void> => {
 
   const data = {
     rangeDays,
-    departmentId: deptFilter ?? null,
+    departmentId:
+      deptIds != null && deptIds.length === 1 ? deptIds[0] : null,
     averageResponseSeconds,
     averageResolutionSeconds,
     slaResponseCompliance: Math.round(slaResponseCompliance * 1000) / 1000,
@@ -178,12 +198,18 @@ router.get("/dashboard/timeseries", async (req, res): Promise<void> => {
   }
   const rangeDays = params.data.rangeDays ?? 30;
   const since = rangeStart(rangeDays);
-  const { deptFilter } = await applyAccess(user, params.data.departmentId);
+  const { deptIds } = await applyAccess(user, params.data.departmentId);
 
   const conds: Array<ReturnType<typeof eq>> = [
     gte(ticketsTable.createdAt, since),
   ];
-  if (deptFilter != null) conds.push(eq(ticketsTable.departmentId, deptFilter));
+  if (deptIds != null) {
+    if (deptIds.length === 0) {
+      conds.push(sql`false` as unknown as ReturnType<typeof eq>);
+    } else {
+      conds.push(inArray(ticketsTable.departmentId, deptIds));
+    }
+  }
   if (params.data.assigneeId != null)
     conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
   if (user.role === "end_user") conds.push(eq(ticketsTable.reporterId, user.id));
@@ -262,13 +288,22 @@ router.get("/dashboard/breached", async (req, res): Promise<void> => {
   }
   const rangeDays = params.data.rangeDays ?? 30;
   const since = rangeStart(rangeDays);
-  const { deptFilter } = await applyAccess(user, params.data.departmentId);
+  const { deptIds: allowedDeptIds } = await applyAccess(
+    user,
+    params.data.departmentId,
+  );
 
   const conds: Array<ReturnType<typeof eq>> = [
     gte(ticketsTable.createdAt, since),
     eq(ticketsTable.slaBreached, true),
   ];
-  if (deptFilter != null) conds.push(eq(ticketsTable.departmentId, deptFilter));
+  if (allowedDeptIds != null) {
+    if (allowedDeptIds.length === 0) {
+      conds.push(sql`false` as unknown as ReturnType<typeof eq>);
+    } else {
+      conds.push(inArray(ticketsTable.departmentId, allowedDeptIds));
+    }
+  }
   if (params.data.assigneeId != null)
     conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
   if (user.role === "end_user") conds.push(eq(ticketsTable.reporterId, user.id));

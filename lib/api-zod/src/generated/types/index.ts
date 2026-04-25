@@ -65,6 +65,8 @@ export * from "./listApplicationsParams";
 export * from "./listApplicationsStatus";
 export * from "./listAssetsParams";
 export * from "./listAssetsStatus";
+export * from "./listDepartmentsParams";
+export * from "./listDepartmentsScope";
 export * from "./listKbArticlesParams";
 export * from "./listKbArticlesSource";
 export * from "./listKbArticlesStatus";

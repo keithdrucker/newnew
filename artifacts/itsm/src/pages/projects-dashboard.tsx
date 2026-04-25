@@ -66,7 +66,7 @@ function formatDue(iso: string | null | undefined) {
 
 export default function ProjectsDashboard() {
   const [departmentId, setDepartmentId] = useState<string>("all");
-  const { data: departments } = useListDepartments();
+  const { data: departments } = useListDepartments({ scope: "accessible" });
 
   const queryDeptId =
     departmentId === "all" ? undefined : Number(departmentId);

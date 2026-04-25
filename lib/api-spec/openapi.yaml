@@ -73,6 +73,18 @@ paths:
       operationId: listDepartments
       tags: [departments]
       summary: List all departments (boards)
+      parameters:
+        - in: query
+          name: scope
+          required: false
+          schema:
+            type: string
+            enum: [all, accessible]
+            default: all
+          description: >
+            When set to `accessible`, returns only departments the current
+            user can see data for (their visible boards). Admins always
+            receive all departments regardless of this flag.
       responses:
         "200":
           description: Departments

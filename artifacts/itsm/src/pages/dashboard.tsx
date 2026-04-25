@@ -58,7 +58,7 @@ export default function Dashboard() {
   const [departmentId, setDepartmentId] = useState<string>("all");
   const [assigneeId, setAssigneeId] = useState<string>("all");
 
-  const { data: departments } = useListDepartments();
+  const { data: departments } = useListDepartments({ scope: "accessible" });
 
   const queryDeptId = departmentId === "all" ? undefined : Number(departmentId);
   const queryRangeDays = Number(rangeDays) as 30 | 180 | 365;

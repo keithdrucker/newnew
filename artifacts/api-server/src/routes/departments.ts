@@ -17,10 +17,11 @@ import {
   DeleteDepartmentParams,
 } from "@workspace/api-zod";
 import { getCurrentUser } from "../lib/session";
+import { visibleDepartmentIds } from "../lib/board-access";
 
 const router: IRouter = Router();
 
-async function loadDepartmentsWithCounts() {
+async function loadDepartmentsWithCounts(allowedIds?: Set<number>) {
   const counts = await db
     .select({
       departmentId: ticketsTable.departmentId,
@@ -34,7 +35,8 @@ async function loadDepartmentsWithCounts() {
     .select()
     .from(departmentsTable)
     .orderBy(departmentsTable.name);
-  return rows.map((d) => ({
+  const filtered = allowedIds ? rows.filter((d) => allowedIds.has(d.id)) : rows;
+  return filtered.map((d) => ({
     id: d.id,
     name: d.name,
     slug: d.slug,
@@ -45,8 +47,24 @@ async function loadDepartmentsWithCounts() {
   }));
 }
 
-router.get("/departments", async (_req, res): Promise<void> => {
-  const data = await loadDepartmentsWithCounts();
+router.get("/departments", async (req, res): Promise<void> => {
+  const user = await getCurrentUser(req);
+  // Non-admin users are always scoped to departments they can see, regardless
+  // of the scope query param. Admins see everything; the scope param is a
+  // no-op for them. This avoids information disclosure of department names
+  // and ticket counts to users who shouldn't see other boards.
+  let allowed: Set<number> | undefined;
+  if (user.role === "admin") {
+    allowed = undefined;
+  } else if (user.role === "agent") {
+    const ids = await visibleDepartmentIds(user);
+    allowed = new Set(ids);
+  } else {
+    allowed = new Set(
+      user.departmentId != null ? [user.departmentId] : [],
+    );
+  }
+  const data = await loadDepartmentsWithCounts(allowed);
   res.json(ListDepartmentsResponse.parse(data));
 });
 

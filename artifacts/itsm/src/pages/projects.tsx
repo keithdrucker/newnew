@@ -87,7 +87,7 @@ export default function ProjectsPage() {
 
   const [, deptRouteMatch] = useRoute("/projects/dept/:slug");
   const deptSlug = deptRouteMatch?.slug;
-  const { data: departments } = useListDepartments();
+  const { data: departments } = useListDepartments({ scope: "accessible" });
   const activeDept = useMemo(
     () => departments?.find((d) => d.slug === deptSlug),
     [departments, deptSlug],
@@ -274,7 +274,7 @@ export default function ProjectsPage() {
 }
 
 function NewProjectDialog({ onCreated }: { onCreated: () => void }) {
-  const { data: departments } = useListDepartments();
+  const { data: departments } = useListDepartments({ scope: "accessible" });
   const { data: agents } = useListAgents({});
   const createMutation = useCreateProject();
   const { toast } = useToast();

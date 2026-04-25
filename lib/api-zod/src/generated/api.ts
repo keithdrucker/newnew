@@ -45,6 +45,17 @@ export const SwitchSessionResponse = zod.object({
 /**
  * @summary List all departments (boards)
  */
+export const listDepartmentsQueryScopeDefault = `all`;
+
+export const ListDepartmentsQueryParams = zod.object({
+  scope: zod
+    .enum(["all", "accessible"])
+    .default(listDepartmentsQueryScopeDefault)
+    .describe(
+      "When set to `accessible`, returns only departments the current user can see data for (their visible boards). Admins always receive all departments regardless of this flag.\n",
+    ),
+});
+
 export const ListDepartmentsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),

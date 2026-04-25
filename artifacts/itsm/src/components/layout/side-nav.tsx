@@ -375,7 +375,7 @@ function TicketsNavItem({
   const allActive = location === "/tickets";
   const [, deptMatch] = useRoute("/tickets/dept/:slug");
   const activeDeptSlug = deptMatch?.slug;
-  const { data: departments } = useListDepartments();
+  const { data: departments } = useListDepartments({ scope: "accessible" });
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -472,7 +472,7 @@ function ProjectsNavItem({
   const allActive = location === "/projects";
   const [, deptMatch] = useRoute("/projects/dept/:slug");
   const activeDeptSlug = deptMatch?.slug;
-  const { data: departments } = useListDepartments();
+  const { data: departments } = useListDepartments({ scope: "accessible" });
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>

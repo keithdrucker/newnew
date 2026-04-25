@@ -47,6 +47,7 @@ import type {
   ListAgentsParams,
   ListApplicationsParams,
   ListAssetsParams,
+  ListDepartmentsParams,
   ListKbArticlesParams,
   ListPeopleParams,
   ListProjectsParams,
@@ -326,41 +327,57 @@ export const useSwitchSession = <
 /**
  * @summary List all departments (boards)
  */
-export const getListDepartmentsUrl = () => {
-  return `/api/departments`;
+export const getListDepartmentsUrl = (params?: ListDepartmentsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/departments?${stringifiedParams}`
+    : `/api/departments`;
 };
 
 export const listDepartments = async (
+  params?: ListDepartmentsParams,
   options?: RequestInit,
 ): Promise<Department[]> => {
-  return customFetch<Department[]>(getListDepartmentsUrl(), {
+  return customFetch<Department[]>(getListDepartmentsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListDepartmentsQueryKey = () => {
-  return [`/api/departments`] as const;
+export const getListDepartmentsQueryKey = (params?: ListDepartmentsParams) => {
+  return [`/api/departments`, ...(params ? [params] : [])] as const;
 };
 
 export const getListDepartmentsQueryOptions = <
   TData = Awaited<ReturnType<typeof listDepartments>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listDepartments>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: ListDepartmentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDepartments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getListDepartmentsQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getListDepartmentsQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listDepartments>>> = ({
     signal,
-  }) => listDepartments({ signal, ...requestOptions });
+  }) => listDepartments(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listDepartments>>,
@@ -381,15 +398,18 @@ export type ListDepartmentsQueryError = ErrorType<unknown>;
 export function useListDepartments<
   TData = Awaited<ReturnType<typeof listDepartments>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listDepartments>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListDepartmentsQueryOptions(options);
+>(
+  params?: ListDepartmentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDepartments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDepartmentsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

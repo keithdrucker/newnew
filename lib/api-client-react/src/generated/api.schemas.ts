@@ -1176,6 +1176,22 @@ export interface UpdateTaskInput {
   completed?: boolean;
 }
 
+export type ListDepartmentsParams = {
+  /**
+ * When set to `accessible`, returns only departments the current user can see data for (their visible boards). Admins always receive all departments regardless of this flag.
+
+ */
+  scope?: ListDepartmentsScope;
+};
+
+export type ListDepartmentsScope =
+  (typeof ListDepartmentsScope)[keyof typeof ListDepartmentsScope];
+
+export const ListDepartmentsScope = {
+  all: "all",
+  accessible: "accessible",
+} as const;
+
 export type ListTicketsParams = {
   departmentId?: number;
   status?: ListTicketsStatus;
