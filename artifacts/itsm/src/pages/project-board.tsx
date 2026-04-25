@@ -202,7 +202,7 @@ export default function ProjectBoard() {
               key={bucket.id}
               projectId={project.id}
               bucket={bucket}
-              onEditTask={setEditingTask}
+              onEditTask={canManage ? setEditingTask : null}
               canManage={canManage}
             />
           ))}
@@ -210,7 +210,7 @@ export default function ProjectBoard() {
         </div>
       </div>
 
-      {editingTask && (
+      {canManage && editingTask && (
         <TaskEditorDialog
           task={editingTask}
           buckets={project.buckets}
@@ -329,7 +329,7 @@ function BucketColumn({
 }: {
   projectId: number;
   bucket: ProjectBucketWithTasks;
-  onEditTask: (task: ProjectTask) => void;
+  onEditTask: ((task: ProjectTask) => void) | null;
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -473,7 +473,12 @@ function BucketColumn({
             </button>
           ))}
         {bucket.tasks.map((task) => (
-          <TaskCard key={task.id} task={task} onClick={() => onEditTask(task)} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            onClick={onEditTask ? () => onEditTask(task) : null}
+            canManage={canManage}
+          />
         ))}
       </div>
     </div>
@@ -558,9 +563,11 @@ function NewTaskInline({
 function TaskCard({
   task,
   onClick,
+  canManage,
 }: {
   task: ProjectTask;
-  onClick: () => void;
+  onClick: (() => void) | null;
+  canManage: boolean;
 }) {
   const queryClient = useQueryClient();
   const updateMutation = useUpdateProjectTask();
@@ -585,18 +592,28 @@ function TaskCard({
     );
   };
 
+  const interactive = canManage && onClick !== null;
+
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      className="text-left rounded-md bg-[#2a2a3d] hover:bg-[#33334a] border border-white/5 hover:border-white/10 transition-all overflow-hidden p-2.5 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+      {...(interactive
+        ? {
+            role: "button",
+            tabIndex: 0,
+            onClick,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            },
+          }
+        : {})}
+      className={cn(
+        "text-left rounded-md bg-[#2a2a3d] border border-white/5 transition-all overflow-hidden p-2.5 group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60",
+        interactive &&
+          "hover:bg-[#33334a] hover:border-white/10 cursor-pointer",
+      )}
       data-testid={`task-card-${task.id}`}
     >
       {task.labels.length > 0 && (
@@ -614,21 +631,35 @@ function TaskCard({
       )}
 
       <div className="flex items-start gap-2">
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={task.completed}
-          aria-label={task.completed ? "Mark as incomplete" : "Mark as complete"}
-          onClick={toggleComplete}
-          className="shrink-0 mt-0.5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 rounded-full"
-          data-testid={`task-toggle-${task.id}`}
-        >
-          {task.completed ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          ) : (
-            <CircleDashed className="h-4 w-4 text-white/40 group-hover:text-white/70 transition-colors" />
-          )}
-        </button>
+        {canManage ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={task.completed}
+            aria-label={
+              task.completed ? "Mark as incomplete" : "Mark as complete"
+            }
+            onClick={toggleComplete}
+            className="shrink-0 mt-0.5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 rounded-full"
+            data-testid={`task-toggle-${task.id}`}
+          >
+            {task.completed ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            ) : (
+              <CircleDashed className="h-4 w-4 text-white/40 group-hover:text-white/70 transition-colors" />
+            )}
+          </button>
+        ) : task.completed ? (
+          <CheckCircle2
+            className="h-4 w-4 shrink-0 mt-0.5 text-emerald-400"
+            aria-label="Completed"
+          />
+        ) : (
+          <CircleDashed
+            className="h-4 w-4 shrink-0 mt-0.5 text-white/40"
+            aria-label="Not completed"
+          />
+        )}
         <p
           className={cn(
             "text-[13px] leading-snug text-white/95",

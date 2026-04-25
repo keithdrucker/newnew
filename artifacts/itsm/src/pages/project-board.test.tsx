@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Router as WouterRouter } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -243,7 +244,7 @@ describe("ProjectBoard page — role-scoped rendering", () => {
     expect(screen.getByTestId("bucket-menu-10")).toBeInTheDocument();
   });
 
-  it("renders the read-only view of a project the end_user has access to", () => {
+  it("renders the read-only view of a project the end_user has access to", async () => {
     useGetSessionMock.mockReturnValue({ data: endUserSession });
     useGetProjectMock.mockReturnValue({
       data: makeProject({
@@ -291,6 +292,34 @@ describe("ProjectBoard page — role-scoped rendering", () => {
     const bucketName = screen.getByTestId("bucket-name-5");
     expect(bucketName).toBeInTheDocument();
     expect(bucketName.tagName).not.toBe("BUTTON");
+
+    // Task-level write affordances must also be hidden:
+    //  - the per-card complete-toggle checkbox is gone
+    //  - the card is not interactive (not a button, no role/tabindex)
+    //  - clicking it does not surface the editor dialog
+    expect(screen.queryByTestId("task-toggle-301")).not.toBeInTheDocument();
+
+    const taskCard = screen.getByTestId("task-card-301");
+    expect(taskCard.getAttribute("role")).not.toBe("button");
+    expect(taskCard.getAttribute("tabindex")).toBeNull();
+
+    await userEvent.click(taskCard);
+
+    // None of the editor dialog's edit controls render — no title input,
+    // no save / delete buttons, no comment composer.
+    expect(screen.queryByTestId("input-task-title")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("button-save-task")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("button-delete-task")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("select-task-bucket")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("select-task-assignee")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("select-task-suggested-by"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("input-task-due")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("input-new-label")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("input-new-checklist")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("input-new-comment")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("button-post-comment")).not.toBeInTheDocument();
   });
 
   it("shows the access-denied state for an agent opening a project outside their department", () => {
