@@ -31,6 +31,7 @@ import type {
   CreateKbArticleInput,
   CreatePersonInput,
   CreateProjectInput,
+  CreateProjectTaskCommentInput,
   CreateTaskInput,
   CreateTicketInput,
   CreateTicketViewInput,
@@ -58,6 +59,7 @@ import type {
   ProjectDetail,
   ProjectSummary,
   ProjectTask,
+  ProjectTaskComment,
   Session,
   SwitchSessionInput,
   Ticket,
@@ -5323,6 +5325,252 @@ export const useDeleteProjectTask = <
   TContext
 > => {
   return useMutation(getDeleteProjectTaskMutationOptions(options));
+};
+
+export const getListProjectTaskCommentsUrl = (id: number) => {
+  return `/api/project-tasks/${id}/comments`;
+};
+
+export const listProjectTaskComments = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ProjectTaskComment[]> => {
+  return customFetch<ProjectTaskComment[]>(getListProjectTaskCommentsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListProjectTaskCommentsQueryKey = (id: number) => {
+  return [`/api/project-tasks/${id}/comments`] as const;
+};
+
+export const getListProjectTaskCommentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProjectTaskComments>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProjectTaskComments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListProjectTaskCommentsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProjectTaskComments>>
+  > = ({ signal }) =>
+    listProjectTaskComments(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProjectTaskComments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProjectTaskCommentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProjectTaskComments>>
+>;
+export type ListProjectTaskCommentsQueryError = ErrorType<unknown>;
+
+export function useListProjectTaskComments<
+  TData = Awaited<ReturnType<typeof listProjectTaskComments>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProjectTaskComments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProjectTaskCommentsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getCreateProjectTaskCommentUrl = (id: number) => {
+  return `/api/project-tasks/${id}/comments`;
+};
+
+export const createProjectTaskComment = async (
+  id: number,
+  createProjectTaskCommentInput: CreateProjectTaskCommentInput,
+  options?: RequestInit,
+): Promise<ProjectTaskComment> => {
+  return customFetch<ProjectTaskComment>(getCreateProjectTaskCommentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createProjectTaskCommentInput),
+  });
+};
+
+export const getCreateProjectTaskCommentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProjectTaskComment>>,
+    TError,
+    { id: number; data: BodyType<CreateProjectTaskCommentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createProjectTaskComment>>,
+  TError,
+  { id: number; data: BodyType<CreateProjectTaskCommentInput> },
+  TContext
+> => {
+  const mutationKey = ["createProjectTaskComment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createProjectTaskComment>>,
+    { id: number; data: BodyType<CreateProjectTaskCommentInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createProjectTaskComment(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateProjectTaskCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createProjectTaskComment>>
+>;
+export type CreateProjectTaskCommentMutationBody =
+  BodyType<CreateProjectTaskCommentInput>;
+export type CreateProjectTaskCommentMutationError = ErrorType<unknown>;
+
+export const useCreateProjectTaskComment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProjectTaskComment>>,
+    TError,
+    { id: number; data: BodyType<CreateProjectTaskCommentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createProjectTaskComment>>,
+  TError,
+  { id: number; data: BodyType<CreateProjectTaskCommentInput> },
+  TContext
+> => {
+  return useMutation(getCreateProjectTaskCommentMutationOptions(options));
+};
+
+export const getDeleteProjectTaskCommentUrl = (
+  id: number,
+  commentId: number,
+) => {
+  return `/api/project-tasks/${id}/comments/${commentId}`;
+};
+
+export const deleteProjectTaskComment = async (
+  id: number,
+  commentId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteProjectTaskCommentUrl(id, commentId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteProjectTaskCommentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+    TError,
+    { id: number; commentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+  TError,
+  { id: number; commentId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteProjectTaskComment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+    { id: number; commentId: number }
+  > = (props) => {
+    const { id, commentId } = props ?? {};
+
+    return deleteProjectTaskComment(id, commentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProjectTaskCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteProjectTaskComment>>
+>;
+
+export type DeleteProjectTaskCommentMutationError = ErrorType<unknown>;
+
+export const useDeleteProjectTaskComment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+    TError,
+    { id: number; commentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+  TError,
+  { id: number; commentId: number },
+  TContext
+> => {
+  return useMutation(getDeleteProjectTaskCommentMutationOptions(options));
 };
 
 /**

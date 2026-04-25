@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, inArray, isNull, max, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, max, or, sql } from "drizzle-orm";
 import {
   db,
   projectsTable,
   projectBucketsTable,
   projectTasksTable,
+  projectTaskCommentsTable,
   departmentsTable,
   usersTable,
   type TaskLabel,
@@ -28,6 +29,10 @@ import {
   UpdateProjectTaskParams,
   UpdateProjectTaskBody,
   DeleteProjectTaskParams,
+  ListProjectTaskCommentsParams,
+  CreateProjectTaskCommentParams,
+  CreateProjectTaskCommentBody,
+  DeleteProjectTaskCommentParams,
 } from "@workspace/api-zod";
 import { getCurrentUser, type SessionUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
@@ -120,7 +125,15 @@ async function loadProjectForTask(taskId: number) {
 function toTaskDto(
   row: typeof projectTasksTable.$inferSelect,
   userMap: Map<number, { id: number; name: string }>,
+  deptMap?: Map<number, { id: number; name: string }>,
+  commentCounts?: Map<number, number>,
 ) {
+  const impactedIds = (row.impactedDepartmentIds ?? []) as number[];
+  const impactedNames = deptMap
+    ? impactedIds
+        .map((id) => deptMap.get(id)?.name)
+        .filter((n): n is string => typeof n === "string")
+    : [];
   return {
     id: row.id,
     projectId: row.projectId,
@@ -137,9 +150,27 @@ function toTaskDto(
     dueAt: row.dueAt ? row.dueAt.toISOString() : null,
     position: row.position,
     completed: row.completed,
+    suggestedById: row.suggestedById ?? null,
+    suggestedByName: row.suggestedById
+      ? (userMap.get(row.suggestedById)?.name ?? null)
+      : null,
+    goal: row.goal,
+    implementation: row.implementation,
+    rationale: row.rationale,
+    impactedDepartmentIds: impactedIds,
+    impactedDepartmentNames: impactedNames,
+    additionalComments: row.additionalComments,
+    completedYear: row.completedYear ?? null,
+    commentCount: commentCounts?.get(row.id) ?? 0,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+// True when a bucket name corresponds to the "completed" pipeline stage.
+// Matches "Completed", "Year Completed", "Year Completed 2025", etc., case-insensitive.
+function isCompletedBucketName(name: string): boolean {
+  return /\bcompleted\b/i.test(name);
 }
 
 async function summarizeProjects(
@@ -237,15 +268,44 @@ async function detailProject(id: number) {
       .orderBy(asc(projectTasksTable.position), asc(projectTasksTable.id)),
   ]);
 
-  const assigneeIds = Array.from(
-    new Set(
-      tasks.map((t) => t.assigneeId).filter((d): d is number => d != null),
-    ),
-  );
-  const users = assigneeIds.length
-    ? await db.select().from(usersTable).where(inArray(usersTable.id, assigneeIds))
-    : [];
+  // Hydrate names for: assignees, suggesters, impacted departments,
+  // plus comment counts per task.
+  const userIds = new Set<number>();
+  const deptIds = new Set<number>();
+  for (const t of tasks) {
+    if (t.assigneeId) userIds.add(t.assigneeId);
+    if (t.suggestedById) userIds.add(t.suggestedById);
+    for (const d of (t.impactedDepartmentIds ?? []) as number[]) deptIds.add(d);
+  }
+  const taskIds = tasks.map((t) => t.id);
+
+  const [users, depts, commentRows] = await Promise.all([
+    userIds.size
+      ? db
+          .select()
+          .from(usersTable)
+          .where(inArray(usersTable.id, Array.from(userIds)))
+      : Promise.resolve([] as (typeof usersTable.$inferSelect)[]),
+    deptIds.size
+      ? db
+          .select()
+          .from(departmentsTable)
+          .where(inArray(departmentsTable.id, Array.from(deptIds)))
+      : Promise.resolve([] as (typeof departmentsTable.$inferSelect)[]),
+    taskIds.length
+      ? db
+          .select({
+            taskId: projectTaskCommentsTable.taskId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(projectTaskCommentsTable)
+          .where(inArray(projectTaskCommentsTable.taskId, taskIds))
+          .groupBy(projectTaskCommentsTable.taskId)
+      : Promise.resolve([] as { taskId: number; count: number }[]),
+  ]);
   const userMap = new Map(users.map((u) => [u.id, u]));
+  const deptMap = new Map(depts.map((d) => [d.id, d]));
+  const commentCounts = new Map(commentRows.map((r) => [r.taskId, r.count]));
 
   const tasksByBucket = new Map<number, typeof tasks>();
   for (const t of tasks) {
@@ -262,7 +322,9 @@ async function detailProject(id: number) {
       name: b.name,
       position: b.position,
       createdAt: b.createdAt.toISOString(),
-      tasks: (tasksByBucket.get(b.id) ?? []).map((t) => toTaskDto(t, userMap)),
+      tasks: (tasksByBucket.get(b.id) ?? []).map((t) =>
+        toTaskDto(t, userMap, deptMap, commentCounts),
+      ),
     })),
   };
 }
@@ -347,11 +409,15 @@ router.post("/projects", async (req, res): Promise<void> => {
     })
     .returning();
 
-  // Seed three default buckets so the board feels alive on first open.
+  // Seed default buckets to mirror the EW Howell initiative pipeline.
   await db.insert(projectBucketsTable).values([
-    { projectId: row.id, name: "To do", position: 0 },
-    { projectId: row.id, name: "In progress", position: 1 },
-    { projectId: row.id, name: "Done", position: 2 },
+    { projectId: row.id, name: "New Suggestions", position: 0 },
+    { projectId: row.id, name: "Future Roadmap", position: 1 },
+    { projectId: row.id, name: "Backlog", position: 2 },
+    { projectId: row.id, name: "Phase 1 - R&D (Go/No-Go)", position: 3 },
+    { projectId: row.id, name: "Phase 2 - Preparation & Planning", position: 4 },
+    { projectId: row.id, name: "Phase 3 - Implementation", position: 5 },
+    { projectId: row.id, name: "Completed", position: 6 },
   ]);
 
   const detail = await detailProject(row.id);
@@ -563,6 +629,14 @@ router.patch("/project-buckets/:id", async (req, res): Promise<void> => {
   const updates: Partial<typeof projectBucketsTable.$inferInsert> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.position !== undefined) updates.position = parsed.data.position;
+
+  // Capture pre-update name so we can detect a transition across the
+  // "completed" boundary and reconcile completedYear on tasks in this bucket.
+  const [existingBucket] = await db
+    .select({ name: projectBucketsTable.name })
+    .from(projectBucketsTable)
+    .where(eq(projectBucketsTable.id, params.data.id));
+
   const [row] = await db
     .update(projectBucketsTable)
     .set(updates)
@@ -572,6 +646,30 @@ router.patch("/project-buckets/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Bucket not found" });
     return;
   }
+
+  if (existingBucket && parsed.data.name !== undefined) {
+    const wasCompleted = isCompletedBucketName(existingBucket.name);
+    const isCompleted = isCompletedBucketName(row.name);
+    if (!wasCompleted && isCompleted) {
+      // Stamp current year on every task in this bucket that's missing one.
+      await db
+        .update(projectTasksTable)
+        .set({ completedYear: new Date().getUTCFullYear() })
+        .where(
+          and(
+            eq(projectTasksTable.bucketId, row.id),
+            isNull(projectTasksTable.completedYear),
+          ),
+        );
+    } else if (wasCompleted && !isCompleted) {
+      // Clear completedYear on tasks now back in an in-flight phase.
+      await db
+        .update(projectTasksTable)
+        .set({ completedYear: null })
+        .where(eq(projectTasksTable.bucketId, row.id));
+    }
+  }
+
   res.json({
     id: row.id,
     projectId: row.projectId,
@@ -662,6 +760,10 @@ router.post("/projects/:id/tasks", async (req, res): Promise<void> => {
     .from(projectTasksTable)
     .where(eq(projectTasksTable.bucketId, parsed.data.bucketId));
 
+  const initialCompletedYear = isCompletedBucketName(bucket.name)
+    ? new Date().getUTCFullYear()
+    : null;
+
   const [row] = await db
     .insert(projectTasksTable)
     .values({
@@ -676,18 +778,37 @@ router.post("/projects/:id/tasks", async (req, res): Promise<void> => {
       dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
       position: (maxPos ?? -1) + 1,
       completed: false,
+      suggestedById: parsed.data.suggestedById ?? null,
+      goal: parsed.data.goal ?? "",
+      implementation: parsed.data.implementation ?? "",
+      rationale: parsed.data.rationale ?? "",
+      impactedDepartmentIds: parsed.data.impactedDepartmentIds ?? [],
+      additionalComments: parsed.data.additionalComments ?? "",
+      completedYear: initialCompletedYear,
     })
     .returning();
 
   const userMap = new Map<number, { id: number; name: string }>();
-  if (row.assigneeId) {
-    const [u] = await db
+  const userIdsToFetch = [row.assigneeId, row.suggestedById].filter(
+    (id): id is number => id != null,
+  );
+  if (userIdsToFetch.length) {
+    const us = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.id, row.assigneeId));
-    if (u) userMap.set(u.id, u);
+      .where(inArray(usersTable.id, userIdsToFetch));
+    for (const u of us) userMap.set(u.id, u);
   }
-  res.status(201).json(toTaskDto(row, userMap));
+  const deptMap = new Map<number, { id: number; name: string }>();
+  const impacted = (row.impactedDepartmentIds ?? []) as number[];
+  if (impacted.length) {
+    const ds = await db
+      .select()
+      .from(departmentsTable)
+      .where(inArray(departmentsTable.id, impacted));
+    for (const d of ds) deptMap.set(d.id, d);
+  }
+  res.status(201).json(toTaskDto(row, userMap, deptMap, new Map()));
 });
 
 router.patch("/project-tasks/:id", async (req, res): Promise<void> => {
@@ -726,6 +847,10 @@ router.patch("/project-tasks/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // If the bucket changed, validate it and remember its new name so we can
+  // auto-stamp / clear completedYear when entering or leaving a "Completed"
+  // pipeline stage.
+  let newBucketName: string | null = null;
   if (
     parsed.data.bucketId !== undefined &&
     parsed.data.bucketId !== existing.bucketId
@@ -738,6 +863,7 @@ router.patch("/project-tasks/:id", async (req, res): Promise<void> => {
       res.status(400).json({ error: "Bucket does not belong to this project" });
       return;
     }
+    newBucketName = bucket.name;
   }
 
   const updates: Partial<typeof projectTasksTable.$inferInsert> = {};
@@ -756,6 +882,28 @@ router.patch("/project-tasks/:id", async (req, res): Promise<void> => {
   if (parsed.data.position !== undefined) updates.position = parsed.data.position;
   if (parsed.data.completed !== undefined)
     updates.completed = parsed.data.completed;
+  if (parsed.data.suggestedById !== undefined)
+    updates.suggestedById = parsed.data.suggestedById;
+  if (parsed.data.goal !== undefined) updates.goal = parsed.data.goal;
+  if (parsed.data.implementation !== undefined)
+    updates.implementation = parsed.data.implementation;
+  if (parsed.data.rationale !== undefined)
+    updates.rationale = parsed.data.rationale;
+  if (parsed.data.impactedDepartmentIds !== undefined)
+    updates.impactedDepartmentIds = parsed.data.impactedDepartmentIds;
+  if (parsed.data.additionalComments !== undefined)
+    updates.additionalComments = parsed.data.additionalComments;
+
+  // Auto-stamp completedYear when card moves into a "Completed" bucket,
+  // and clear it when moving out. Only triggered on bucket changes so we
+  // don't clobber a manually-set year on other edits.
+  if (newBucketName !== null) {
+    if (isCompletedBucketName(newBucketName) && !existing.completedYear) {
+      updates.completedYear = new Date().getUTCFullYear();
+    } else if (!isCompletedBucketName(newBucketName)) {
+      updates.completedYear = null;
+    }
+  }
 
   const [row] = await db
     .update(projectTasksTable)
@@ -764,14 +912,32 @@ router.patch("/project-tasks/:id", async (req, res): Promise<void> => {
     .returning();
 
   const userMap = new Map<number, { id: number; name: string }>();
-  if (row.assigneeId) {
-    const [u] = await db
+  const userIdsToFetch = [row.assigneeId, row.suggestedById].filter(
+    (id): id is number => id != null,
+  );
+  if (userIdsToFetch.length) {
+    const us = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.id, row.assigneeId));
-    if (u) userMap.set(u.id, u);
+      .where(inArray(usersTable.id, userIdsToFetch));
+    for (const u of us) userMap.set(u.id, u);
   }
-  res.json(toTaskDto(row, userMap));
+  const deptMap = new Map<number, { id: number; name: string }>();
+  const impacted = (row.impactedDepartmentIds ?? []) as number[];
+  if (impacted.length) {
+    const ds = await db
+      .select()
+      .from(departmentsTable)
+      .where(inArray(departmentsTable.id, impacted));
+    for (const d of ds) deptMap.set(d.id, d);
+  }
+  const [{ count: cc } = { count: 0 }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(projectTaskCommentsTable)
+    .where(eq(projectTaskCommentsTable.taskId, row.id));
+  res.json(
+    toTaskDto(row, userMap, deptMap, new Map([[row.id, cc ?? 0]])),
+  );
 });
 
 router.delete("/project-tasks/:id", async (req, res): Promise<void> => {
@@ -804,5 +970,145 @@ router.delete("/project-tasks/:id", async (req, res): Promise<void> => {
   }
   res.sendStatus(204);
 });
+
+// ---------- Task comments (activity log) ----------
+
+function commentToDto(
+  row: typeof projectTaskCommentsTable.$inferSelect,
+  authorMap: Map<number, { id: number; name: string }>,
+) {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    authorId: row.authorId ?? null,
+    authorName: row.authorId
+      ? (authorMap.get(row.authorId)?.name ?? null)
+      : null,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+router.get("/project-tasks/:id/comments", async (req, res): Promise<void> => {
+  const user = await getCurrentUser(req);
+  if (user.role === "end_user") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const params = ListProjectTaskCommentsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const project = await loadProjectForTask(params.data.id);
+  if (!project) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+  if (!(await authorizeProjectAccess(user, project, "read"))) {
+    res.status(403).json({ error: "Forbidden on this project" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(projectTaskCommentsTable)
+    .where(eq(projectTaskCommentsTable.taskId, params.data.id))
+    .orderBy(asc(projectTaskCommentsTable.createdAt), asc(projectTaskCommentsTable.id));
+
+  const authorIds = Array.from(
+    new Set(rows.map((r) => r.authorId).filter((d): d is number => d != null)),
+  );
+  const authors = authorIds.length
+    ? await db.select().from(usersTable).where(inArray(usersTable.id, authorIds))
+    : [];
+  const authorMap = new Map(authors.map((u) => [u.id, u]));
+
+  res.json(rows.map((r) => commentToDto(r, authorMap)));
+});
+
+router.post("/project-tasks/:id/comments", async (req, res): Promise<void> => {
+  const user = await getCurrentUser(req);
+  if (user.role === "end_user") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const params = CreateProjectTaskCommentParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = CreateProjectTaskCommentBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const body = parsed.data.body.trim();
+  if (!body) {
+    res.status(400).json({ error: "Comment body is required" });
+    return;
+  }
+  const project = await loadProjectForTask(params.data.id);
+  if (!project) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+  if (!(await authorizeProjectAccess(user, project, "modify"))) {
+    res.status(403).json({ error: "Forbidden on this project" });
+    return;
+  }
+  const [row] = await db
+    .insert(projectTaskCommentsTable)
+    .values({
+      taskId: params.data.id,
+      authorId: user.id,
+      body,
+    })
+    .returning();
+  const authorMap = new Map<number, { id: number; name: string }>([
+    [user.id, { id: user.id, name: user.name }],
+  ]);
+  res.status(201).json(commentToDto(row, authorMap));
+});
+
+router.delete(
+  "/project-tasks/:id/comments/:commentId",
+  async (req, res): Promise<void> => {
+    const user = await getCurrentUser(req);
+    if (user.role === "end_user") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const params = DeleteProjectTaskCommentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const project = await loadProjectForTask(params.data.id);
+    if (!project) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+    const [comment] = await db
+      .select()
+      .from(projectTaskCommentsTable)
+      .where(eq(projectTaskCommentsTable.id, params.data.commentId));
+    if (!comment || comment.taskId !== params.data.id) {
+      res.status(404).json({ error: "Comment not found" });
+      return;
+    }
+    // Author can always delete their own; otherwise need modify access.
+    const isAuthor = comment.authorId === user.id;
+    if (!isAuthor) {
+      if (!(await authorizeProjectAccess(user, project, "modify"))) {
+        res.status(403).json({ error: "Forbidden on this project" });
+        return;
+      }
+    }
+    await db
+      .delete(projectTaskCommentsTable)
+      .where(eq(projectTaskCommentsTable.id, params.data.commentId));
+    res.sendStatus(204);
+  },
+);
 
 export default router;

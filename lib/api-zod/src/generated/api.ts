@@ -1407,6 +1407,16 @@ export const GetProjectResponse = zod
                   dueAt: zod.coerce.date().nullish(),
                   position: zod.number(),
                   completed: zod.boolean(),
+                  suggestedById: zod.number().nullish(),
+                  suggestedByName: zod.string().nullish(),
+                  goal: zod.string(),
+                  implementation: zod.string(),
+                  rationale: zod.string(),
+                  impactedDepartmentIds: zod.array(zod.number()),
+                  impactedDepartmentNames: zod.array(zod.string()),
+                  additionalComments: zod.string(),
+                  completedYear: zod.number().nullish(),
+                  commentCount: zod.number(),
                   createdAt: zod.coerce.date(),
                   updatedAt: zod.coerce.date(),
                 }),
@@ -1487,6 +1497,16 @@ export const UpdateProjectResponse = zod
                   dueAt: zod.coerce.date().nullish(),
                   position: zod.number(),
                   completed: zod.boolean(),
+                  suggestedById: zod.number().nullish(),
+                  suggestedByName: zod.string().nullish(),
+                  goal: zod.string(),
+                  implementation: zod.string(),
+                  rationale: zod.string(),
+                  impactedDepartmentIds: zod.array(zod.number()),
+                  impactedDepartmentNames: zod.array(zod.string()),
+                  additionalComments: zod.string(),
+                  completedYear: zod.number().nullish(),
+                  commentCount: zod.number(),
                   createdAt: zod.coerce.date(),
                   updatedAt: zod.coerce.date(),
                 }),
@@ -1557,6 +1577,12 @@ export const CreateProjectTaskBody = zod.object({
   assigneeId: zod.number().nullish(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   dueAt: zod.coerce.date().nullish(),
+  suggestedById: zod.number().nullish(),
+  goal: zod.string().optional(),
+  implementation: zod.string().optional(),
+  rationale: zod.string().optional(),
+  impactedDepartmentIds: zod.array(zod.number()).optional(),
+  additionalComments: zod.string().optional(),
 });
 
 export const UpdateProjectTaskParams = zod.object({
@@ -1588,6 +1614,12 @@ export const UpdateProjectTaskBody = zod.object({
   dueAt: zod.coerce.date().nullish(),
   position: zod.number().optional(),
   completed: zod.boolean().optional(),
+  suggestedById: zod.number().nullish(),
+  goal: zod.string().optional(),
+  implementation: zod.string().optional(),
+  rationale: zod.string().optional(),
+  impactedDepartmentIds: zod.array(zod.number()).optional(),
+  additionalComments: zod.string().optional(),
 });
 
 export const UpdateProjectTaskResponse = zod.object({
@@ -1614,12 +1646,51 @@ export const UpdateProjectTaskResponse = zod.object({
   dueAt: zod.coerce.date().nullish(),
   position: zod.number(),
   completed: zod.boolean(),
+  suggestedById: zod.number().nullish(),
+  suggestedByName: zod.string().nullish(),
+  goal: zod.string(),
+  implementation: zod.string(),
+  rationale: zod.string(),
+  impactedDepartmentIds: zod.array(zod.number()),
+  impactedDepartmentNames: zod.array(zod.string()),
+  additionalComments: zod.string(),
+  completedYear: zod.number().nullish(),
+  commentCount: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
 
 export const DeleteProjectTaskParams = zod.object({
   id: zod.coerce.number(),
+});
+
+export const ListProjectTaskCommentsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListProjectTaskCommentsResponseItem = zod.object({
+  id: zod.number(),
+  taskId: zod.number(),
+  authorId: zod.number().nullish(),
+  authorName: zod.string().nullish(),
+  body: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListProjectTaskCommentsResponse = zod.array(
+  ListProjectTaskCommentsResponseItem,
+);
+
+export const CreateProjectTaskCommentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateProjectTaskCommentBody = zod.object({
+  body: zod.string(),
+});
+
+export const DeleteProjectTaskCommentParams = zod.object({
+  id: zod.coerce.number(),
+  commentId: zod.coerce.number(),
 });
 
 /**

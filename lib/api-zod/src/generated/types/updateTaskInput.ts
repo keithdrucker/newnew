@@ -22,4 +22,11 @@ export interface UpdateTaskInput {
   dueAt?: Date | null;
   position?: number;
   completed?: boolean;
+  /** @nullable */
+  suggestedById?: number | null;
+  goal?: string;
+  implementation?: string;
+  rationale?: string;
+  impactedDepartmentIds?: number[];
+  additionalComments?: string;
 }

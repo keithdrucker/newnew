@@ -1132,6 +1132,59 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /project-tasks/{id}/comments:
+    get:
+      operationId: listProjectTaskComments
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Comments on the task, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProjectTaskComment" }
+    post:
+      operationId: createProjectTaskComment
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProjectTaskCommentInput" }
+      responses:
+        "201":
+          description: Comment created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTaskComment" }
+
+  /project-tasks/{id}/comments/{commentId}:
+    delete:
+      operationId: deleteProjectTaskComment
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: commentId
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
   /dashboard/overview:
     get:
       operationId: getDashboardOverview
@@ -2131,6 +2184,20 @@ components:
         dueAt: { type: ["string", "null"], format: date-time }
         position: { type: integer }
         completed: { type: boolean }
+        suggestedById: { type: ["integer", "null"] }
+        suggestedByName: { type: ["string", "null"] }
+        goal: { type: string }
+        implementation: { type: string }
+        rationale: { type: string }
+        impactedDepartmentIds:
+          type: array
+          items: { type: integer }
+        impactedDepartmentNames:
+          type: array
+          items: { type: string }
+        additionalComments: { type: string }
+        completedYear: { type: ["integer", "null"] }
+        commentCount: { type: integer }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required:
@@ -2144,8 +2211,32 @@ components:
         - priority
         - position
         - completed
+        - goal
+        - implementation
+        - rationale
+        - impactedDepartmentIds
+        - impactedDepartmentNames
+        - additionalComments
+        - commentCount
         - createdAt
         - updatedAt
+
+    ProjectTaskComment:
+      type: object
+      properties:
+        id: { type: integer }
+        taskId: { type: integer }
+        authorId: { type: ["integer", "null"] }
+        authorName: { type: ["string", "null"] }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, taskId, body, createdAt]
+
+    CreateProjectTaskCommentInput:
+      type: object
+      properties:
+        body: { type: string }
+      required: [body]
 
     ProjectBucketWithTasks:
       allOf:
@@ -2217,6 +2308,14 @@ components:
         assigneeId: { type: ["integer", "null"] }
         priority: { $ref: "#/components/schemas/TaskPriority" }
         dueAt: { type: ["string", "null"], format: date-time }
+        suggestedById: { type: ["integer", "null"] }
+        goal: { type: string }
+        implementation: { type: string }
+        rationale: { type: string }
+        impactedDepartmentIds:
+          type: array
+          items: { type: integer }
+        additionalComments: { type: string }
       required: [bucketId, title]
 
     UpdateTaskInput:
@@ -2236,3 +2335,11 @@ components:
         dueAt: { type: ["string", "null"], format: date-time }
         position: { type: integer }
         completed: { type: boolean }
+        suggestedById: { type: ["integer", "null"] }
+        goal: { type: string }
+        implementation: { type: string }
+        rationale: { type: string }
+        impactedDepartmentIds:
+          type: array
+          items: { type: integer }
+        additionalComments: { type: string }

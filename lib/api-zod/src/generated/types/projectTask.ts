@@ -26,6 +26,19 @@ export interface ProjectTask {
   dueAt?: Date | null;
   position: number;
   completed: boolean;
+  /** @nullable */
+  suggestedById?: number | null;
+  /** @nullable */
+  suggestedByName?: string | null;
+  goal: string;
+  implementation: string;
+  rationale: string;
+  impactedDepartmentIds: number[];
+  impactedDepartmentNames: string[];
+  additionalComments: string;
+  /** @nullable */
+  completedYear?: number | null;
+  commentCount: number;
   createdAt: Date;
   updatedAt: Date;
 }

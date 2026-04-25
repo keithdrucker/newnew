@@ -9,8 +9,13 @@ import {
   useUpdateProjectTask,
   useDeleteProjectTask,
   useListAgents,
+  useListDepartments,
+  useListProjectTaskComments,
+  useCreateProjectTaskComment,
+  useDeleteProjectTaskComment,
   getGetProjectQueryKey,
   getListProjectsQueryKey,
+  getListProjectTaskCommentsQueryKey,
   type ProjectTask,
   type ProjectBucketWithTasks,
   type ProjectDetail,
@@ -53,17 +58,23 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
+  Building2,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
   Filter,
+  Lightbulb,
   ListChecks,
+  MessageSquare,
   MoreHorizontal,
   Plus,
   Search,
+  Send,
   Share2,
+  Target,
   Trash2,
+  Wrench,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -623,12 +634,32 @@ function TaskCard({
         </div>
       )}
 
+      {(task.suggestedByName || task.completedYear) && (
+        <div className="mt-2 flex items-center gap-1.5 text-[10.5px] text-white/55">
+          {task.suggestedByName && (
+            <span className="truncate">
+              Suggested by {task.suggestedByName}
+            </span>
+          )}
+          {task.completedYear && (
+            <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-medium">
+              Completed {task.completedYear}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="mt-2.5 flex items-center justify-between text-[11px] text-white/55">
         <div className="flex items-center gap-2">
           {task.checklist.length > 0 && (
             <span className="inline-flex items-center gap-1">
               <ListChecks className="h-3 w-3" /> {checklistDone}/
               {task.checklist.length}
+            </span>
+          )}
+          {task.commentCount > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <MessageSquare className="h-3 w-3" /> {task.commentCount}
             </span>
           )}
           {due && (
@@ -734,6 +765,13 @@ function AddBucketColumn({ projectId }: { projectId: number }) {
   );
 }
 
+// ---------- Initiative detail dialog ----------
+//
+// Each card on the project board represents a candidate initiative moving
+// through the EW Howell pipeline (New Suggestions → Future Roadmap → …
+// → Completed). The dialog is sectioned to mirror how the team thinks
+// about an idea: who proposed it, what it is, why we'd do it, how we'd
+// do it, and the running activity log of what's been done so far.
 function TaskEditorDialog({
   task,
   buckets,
@@ -748,6 +786,7 @@ function TaskEditorDialog({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: agents } = useListAgents({});
+  const { data: departments } = useListDepartments();
   const updateMutation = useUpdateProjectTask();
   const deleteMutation = useDeleteProjectTask();
 
@@ -769,6 +808,20 @@ function TaskEditorDialog({
   const [newLabelName, setNewLabelName] = useState("");
   const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[0].value);
 
+  // Initiative fields.
+  const [suggestedById, setSuggestedById] = useState<string>(
+    task.suggestedById == null ? "none" : String(task.suggestedById),
+  );
+  const [goal, setGoal] = useState(task.goal);
+  const [implementation, setImplementation] = useState(task.implementation);
+  const [rationale, setRationale] = useState(task.rationale);
+  const [impactedDepartmentIds, setImpactedDepartmentIds] = useState<number[]>(
+    task.impactedDepartmentIds,
+  );
+  const [additionalComments, setAdditionalComments] = useState(
+    task.additionalComments,
+  );
+
   // Keep local form state in sync if the task prop changes (e.g. after save).
   useEffect(() => {
     setTitle(task.title);
@@ -779,6 +832,14 @@ function TaskEditorDialog({
     setDueDate(task.dueAt ? task.dueAt.substring(0, 10) : "");
     setLabels(task.labels);
     setChecklist(task.checklist);
+    setSuggestedById(
+      task.suggestedById == null ? "none" : String(task.suggestedById),
+    );
+    setGoal(task.goal);
+    setImplementation(task.implementation);
+    setRationale(task.rationale);
+    setImpactedDepartmentIds(task.impactedDepartmentIds);
+    setAdditionalComments(task.additionalComments);
   }, [task]);
 
   const invalidate = () => {
@@ -805,12 +866,19 @@ function TaskEditorDialog({
           dueAt: dueDate ? new Date(dueDate).toISOString() : null,
           labels,
           checklist,
+          suggestedById:
+            suggestedById === "none" ? null : Number(suggestedById),
+          goal,
+          implementation,
+          rationale,
+          impactedDepartmentIds,
+          additionalComments,
         },
       },
       {
         onSuccess: () => {
           invalidate();
-          toast({ title: "Task updated" });
+          toast({ title: "Initiative updated" });
           onClose();
         },
       },
@@ -818,13 +886,13 @@ function TaskEditorDialog({
   };
 
   const remove = () => {
-    if (!window.confirm("Delete this task?")) return;
+    if (!window.confirm("Delete this initiative?")) return;
     deleteMutation.mutate(
       { id: task.id },
       {
         onSuccess: () => {
           invalidate();
-          toast({ title: "Task deleted" });
+          toast({ title: "Initiative deleted" });
           onClose();
         },
       },
@@ -845,17 +913,36 @@ function TaskEditorDialog({
     setNewChecklistItem("");
   };
 
+  const toggleDept = (id: number) => {
+    setImpactedDepartmentIds((prev) =>
+      prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id],
+    );
+  };
+
+  const completedDone = checklist.filter((c) => c.done).length;
+  const checklistPct = checklist.length
+    ? Math.round((completedDone / checklist.length) * 100)
+    : 0;
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="sm:max-w-3xl max-h-[92vh] overflow-y-auto"
         aria-describedby={undefined}
       >
         <DialogHeader>
-          <DialogTitle>Edit task</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span>Initiative detail</span>
+            {task.completedYear && (
+              <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-medium">
+                Completed {task.completedYear}
+              </span>
+            )}
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* Title */}
           <div>
             <Label htmlFor="task-title" className="text-[12.5px]">
               Title
@@ -864,165 +951,311 @@ function TaskEditorDialog({
               id="task-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="mt-1"
+              className="mt-1 text-[15px]"
               data-testid="input-task-title"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-[12.5px]">Bucket</Label>
-              <Select
-                value={String(bucketId)}
-                onValueChange={(v) => setBucketId(Number(v))}
-              >
-                <SelectTrigger className="mt-1" data-testid="select-task-bucket">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {buckets.map((b) => (
-                    <SelectItem key={b.id} value={String(b.id)}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[12.5px]">Assignee</Label>
-              <Select value={assigneeId} onValueChange={setAssigneeId}>
-                <SelectTrigger
-                  className="mt-1"
-                  data-testid="select-task-assignee"
+          {/* IDEA */}
+          <section className="rounded-md border border-border/60 p-3 space-y-3 bg-muted/20">
+            <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1.5">
+              <Lightbulb className="h-3.5 w-3.5" /> Idea
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[12.5px]">Suggested by</Label>
+                <Select
+                  value={suggestedById}
+                  onValueChange={setSuggestedById}
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Unassigned</SelectItem>
-                  {agents?.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[12.5px]">Priority</Label>
-              <Select
-                value={priority}
-                onValueChange={(v) =>
-                  setPriority(v as ProjectTask["priority"])
-                }
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="task-due" className="text-[12.5px]">
-                Due date
-              </Label>
-              <Input
-                id="task-due"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="mt-1"
-                data-testid="input-task-due"
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label className="text-[12.5px]">Labels</Label>
-            <div className="flex flex-wrap gap-1.5 mt-1.5 mb-2">
-              {labels.map((label, idx) => (
-                <span
-                  key={`${label.name}-${idx}`}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded text-white"
-                  style={{ backgroundColor: label.color }}
-                >
-                  {label.name}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLabels(labels.filter((_, i) => i !== idx))
-                    }
-                    aria-label="Remove label"
-                    className="hover:bg-black/20 rounded"
+                  <SelectTrigger
+                    className="mt-1"
+                    data-testid="select-task-suggested-by"
                   >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-1.5">
-              <Input
-                value={newLabelName}
-                onChange={(e) => setNewLabelName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addLabel();
-                  }
-                }}
-                placeholder="Add a label"
-                className="h-8 text-[12.5px]"
-                data-testid="input-new-label"
-              />
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="h-8 w-8 rounded-md border flex items-center justify-center"
-                    style={{ backgroundColor: newLabelColor }}
-                    aria-label="Pick label color"
-                  />
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-2">
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {LABEL_COLORS.map((c) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() => setNewLabelColor(c.value)}
-                        className={cn(
-                          "h-6 w-6 rounded ring-2 transition-all",
-                          newLabelColor === c.value
-                            ? "ring-foreground/40"
-                            : "ring-transparent hover:ring-foreground/20",
-                        )}
-                        style={{ backgroundColor: c.value }}
-                        aria-label={c.name}
-                      />
+                    <SelectValue placeholder="Pick a person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not specified</SelectItem>
+                    {agents?.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
                     ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addLabel}
-                className="h-8"
-                data-testid="button-add-label"
-              >
-                Add
-              </Button>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="task-goal" className="text-[12.5px] inline-flex items-center gap-1">
+                  <Target className="h-3 w-3" /> Goal
+                </Label>
+                <Input
+                  id="task-goal"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  placeholder="What outcome are we after?"
+                  className="mt-1"
+                  data-testid="input-task-goal"
+                />
+              </div>
             </div>
-          </div>
+            <div>
+              <Label htmlFor="task-desc" className="text-[12.5px]">
+                Brief description
+              </Label>
+              <Textarea
+                id="task-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What is the idea, in a sentence or two?"
+                className="mt-1 min-h-[70px]"
+                data-testid="input-task-description"
+              />
+            </div>
+          </section>
 
-          <div>
-            <Label className="text-[12.5px]">Checklist</Label>
-            <div className="space-y-1 mt-1.5 mb-2">
+          {/* PLAN */}
+          <section className="rounded-md border border-border/60 p-3 space-y-3 bg-muted/20">
+            <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1.5">
+              <Wrench className="h-3.5 w-3.5" /> Plan
+            </h4>
+            <div>
+              <Label htmlFor="task-impl" className="text-[12.5px]">
+                How should it be implemented?
+              </Label>
+              <Textarea
+                id="task-impl"
+                value={implementation}
+                onChange={(e) => setImplementation(e.target.value)}
+                placeholder="Steps, tools, vendors, rollout approach..."
+                className="mt-1 min-h-[80px]"
+                data-testid="input-task-implementation"
+              />
+            </div>
+            <div>
+              <Label htmlFor="task-rationale" className="text-[12.5px]">
+                Why is there a need to implement this?
+              </Label>
+              <Textarea
+                id="task-rationale"
+                value={rationale}
+                onChange={(e) => setRationale(e.target.value)}
+                placeholder="The pain or opportunity this addresses..."
+                className="mt-1 min-h-[70px]"
+                data-testid="input-task-rationale"
+              />
+            </div>
+            <div>
+              <Label className="text-[12.5px] inline-flex items-center gap-1">
+                <Building2 className="h-3 w-3" /> Impacted departments
+              </Label>
+              <div
+                className="mt-1.5 flex flex-wrap gap-1.5"
+                data-testid="impacted-departments"
+              >
+                {(departments ?? []).length === 0 && (
+                  <span className="text-[12px] text-muted-foreground">
+                    Loading departments...
+                  </span>
+                )}
+                {departments?.map((d) => {
+                  const selected = impactedDepartmentIds.includes(d.id);
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => toggleDept(d.id)}
+                      className={cn(
+                        "text-[11.5px] font-medium px-2 py-1 rounded border transition-colors",
+                        selected
+                          ? "border-transparent text-white"
+                          : "border-border bg-background hover:bg-muted",
+                      )}
+                      style={
+                        selected
+                          ? { backgroundColor: d.color || "#475569" }
+                          : undefined
+                      }
+                      data-testid={`dept-toggle-${d.id}`}
+                    >
+                      {d.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* WORKFLOW */}
+          <section className="rounded-md border border-border/60 p-3 space-y-3 bg-muted/20">
+            <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Workflow
+            </h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[12.5px]">Phase</Label>
+                <Select
+                  value={String(bucketId)}
+                  onValueChange={(v) => setBucketId(Number(v))}
+                >
+                  <SelectTrigger className="mt-1" data-testid="select-task-bucket">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {buckets.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[12.5px]">Owner</Label>
+                <Select value={assigneeId} onValueChange={setAssigneeId}>
+                  <SelectTrigger
+                    className="mt-1"
+                    data-testid="select-task-assignee"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {agents?.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[12.5px]">Priority</Label>
+                <Select
+                  value={priority}
+                  onValueChange={(v) =>
+                    setPriority(v as ProjectTask["priority"])
+                  }
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="task-due" className="text-[12.5px]">
+                  Target date
+                </Label>
+                <Input
+                  id="task-due"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="mt-1"
+                  data-testid="input-task-due"
+                />
+              </div>
+            </div>
+
+            {/* Labels (collapsed-feeling) */}
+            <div>
+              <Label className="text-[12.5px]">Labels</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5 mb-2">
+                {labels.map((label, idx) => (
+                  <span
+                    key={`${label.name}-${idx}`}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded text-white"
+                    style={{ backgroundColor: label.color }}
+                  >
+                    {label.name}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLabels(labels.filter((_, i) => i !== idx))
+                      }
+                      aria-label="Remove label"
+                      className="hover:bg-black/20 rounded"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-1.5">
+                <Input
+                  value={newLabelName}
+                  onChange={(e) => setNewLabelName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addLabel();
+                    }
+                  }}
+                  placeholder="Add a label"
+                  className="h-8 text-[12.5px]"
+                  data-testid="input-new-label"
+                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="h-8 w-8 rounded-md border flex items-center justify-center"
+                      style={{ backgroundColor: newLabelColor }}
+                      aria-label="Pick label color"
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-2">
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {LABEL_COLORS.map((c) => (
+                        <button
+                          key={c.value}
+                          type="button"
+                          onClick={() => setNewLabelColor(c.value)}
+                          className={cn(
+                            "h-6 w-6 rounded ring-2 transition-all",
+                            newLabelColor === c.value
+                              ? "ring-foreground/40"
+                              : "ring-transparent hover:ring-foreground/20",
+                          )}
+                          style={{ backgroundColor: c.value }}
+                          aria-label={c.name}
+                        />
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addLabel}
+                  className="h-8"
+                  data-testid="button-add-label"
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          {/* CHECKLIST (Point A → Z) */}
+          <section className="rounded-md border border-border/60 p-3 space-y-2 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1.5">
+                <ListChecks className="h-3.5 w-3.5" /> Checklist (Point A → Z)
+              </h4>
+              {checklist.length > 0 && (
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {completedDone}/{checklist.length} ({checklistPct}%)
+                </span>
+              )}
+            </div>
+            <div className="space-y-1">
               {checklist.map((item, idx) => (
                 <div
                   key={idx}
@@ -1070,7 +1303,7 @@ function TaskEditorDialog({
                     addChecklistItem();
                   }
                 }}
-                placeholder="Add an item"
+                placeholder="Add a step"
                 className="h-8 text-[12.5px]"
                 data-testid="input-new-checklist"
               />
@@ -1084,20 +1317,25 @@ function TaskEditorDialog({
                 Add
               </Button>
             </div>
-          </div>
+          </section>
 
+          {/* ADDITIONAL COMMENTS */}
           <div>
-            <Label htmlFor="task-desc" className="text-[12.5px]">
-              Notes
+            <Label htmlFor="task-additional" className="text-[12.5px]">
+              Additional comments
             </Label>
             <Textarea
-              id="task-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="More details about this task..."
-              className="mt-1 min-h-[80px]"
+              id="task-additional"
+              value={additionalComments}
+              onChange={(e) => setAdditionalComments(e.target.value)}
+              placeholder="Anything else worth capturing..."
+              className="mt-1 min-h-[70px]"
+              data-testid="input-task-additional"
             />
           </div>
+
+          {/* ACTIVITY LOG */}
+          <ActivityLog taskId={task.id} />
         </div>
 
         <DialogFooter className="flex sm:justify-between">
@@ -1108,7 +1346,7 @@ function TaskEditorDialog({
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
             data-testid="button-delete-task"
           >
-            <Trash2 className="h-4 w-4 mr-1.5" /> Delete task
+            <Trash2 className="h-4 w-4 mr-1.5" /> Delete initiative
           </Button>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -1126,5 +1364,132 @@ function TaskEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Activity log / discussion thread on the initiative. Loaded lazily so
+// the dialog body opens fast even when there's a long history.
+function ActivityLog({ taskId }: { taskId: number }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: comments, isLoading } = useListProjectTaskComments(taskId);
+  const createMutation = useCreateProjectTaskComment();
+  const deleteMutation = useDeleteProjectTaskComment();
+  const [body, setBody] = useState("");
+
+  const invalidateComments = () => {
+    queryClient.invalidateQueries({
+      queryKey: getListProjectTaskCommentsQueryKey(taskId),
+    });
+  };
+
+  const submit = () => {
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    createMutation.mutate(
+      { id: taskId, data: { body: trimmed } },
+      {
+        onSuccess: () => {
+          setBody("");
+          invalidateComments();
+        },
+        onError: () =>
+          toast({ title: "Could not post comment", variant: "destructive" }),
+      },
+    );
+  };
+
+  const remove = (commentId: number) => {
+    if (!window.confirm("Delete this comment?")) return;
+    deleteMutation.mutate(
+      { id: taskId, commentId },
+      { onSuccess: invalidateComments },
+    );
+  };
+
+  const sorted = useMemo(
+    () =>
+      (comments ?? [])
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
+    [comments],
+  );
+
+  return (
+    <section className="rounded-md border border-border/60 p-3 space-y-3 bg-muted/20">
+      <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1.5">
+        <MessageSquare className="h-3.5 w-3.5" /> Activity log
+      </h4>
+
+      <div className="flex gap-2">
+        <Textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Log what was done, decisions made, blockers..."
+          className="min-h-[60px] text-[13px]"
+          data-testid="input-new-comment"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+        />
+        <Button
+          type="button"
+          onClick={submit}
+          disabled={createMutation.isPending || !body.trim()}
+          className="self-end"
+          data-testid="button-post-comment"
+        >
+          <Send className="h-4 w-4 mr-1.5" />
+          Post
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <p className="text-[12px] text-muted-foreground">Loading activity...</p>
+      ) : sorted.length === 0 ? (
+        <p className="text-[12px] text-muted-foreground">
+          No activity yet. Post the first update.
+        </p>
+      ) : (
+        <ul className="space-y-2.5">
+          {sorted.map((c) => (
+            <li
+              key={c.id}
+              className="rounded border border-border/50 bg-background/50 p-2.5 group"
+              data-testid={`comment-${c.id}`}
+            >
+              <div className="flex items-center justify-between text-[11.5px] text-muted-foreground">
+                <span className="font-medium text-foreground/80">
+                  {c.authorName ?? "System"}
+                </span>
+                <div className="flex items-center gap-2">
+                  <time>
+                    {new Date(c.createdAt).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </time>
+                  <button
+                    type="button"
+                    onClick={() => remove(c.id)}
+                    className="opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                    aria-label="Delete comment"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <p className="mt-1 text-[13px] whitespace-pre-wrap">{c.body}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

@@ -88,6 +88,19 @@ export const projectTasksTable = pgTable(
     dueAt: timestamp("due_at", { withTimezone: true }),
     position: integer("position").notNull().default(0),
     completed: boolean("completed").notNull().default(false),
+    // --- Initiative pipeline fields ---
+    suggestedById: integer("suggested_by_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    goal: text("goal").notNull().default(""),
+    implementation: text("implementation").notNull().default(""),
+    rationale: text("rationale").notNull().default(""),
+    impactedDepartmentIds: jsonb("impacted_department_ids")
+      .$type<number[]>()
+      .notNull()
+      .default([]),
+    additionalComments: text("additional_comments").notNull().default(""),
+    completedYear: integer("completed_year"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -102,6 +115,28 @@ export const projectTasksTable = pgTable(
   }),
 );
 
+// Activity log / discussion thread on an initiative (project task).
+export const projectTaskCommentsTable = pgTable(
+  "project_task_comments",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => projectTasksTable.id, { onDelete: "cascade" }),
+    authorId: integer("author_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    taskIdx: index("project_task_comments_task_idx").on(t.taskId),
+  }),
+);
+
 export type Project = typeof projectsTable.$inferSelect;
 export type ProjectBucket = typeof projectBucketsTable.$inferSelect;
 export type ProjectTask = typeof projectTasksTable.$inferSelect;
+export type ProjectTaskComment = typeof projectTaskCommentsTable.$inferSelect;

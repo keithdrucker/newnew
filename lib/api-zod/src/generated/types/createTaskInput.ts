@@ -20,4 +20,11 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   /** @nullable */
   dueAt?: Date | null;
+  /** @nullable */
+  suggestedById?: number | null;
+  goal?: string;
+  implementation?: string;
+  rationale?: string;
+  impactedDepartmentIds?: number[];
+  additionalComments?: string;
 }

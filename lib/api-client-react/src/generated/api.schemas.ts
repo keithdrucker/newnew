@@ -1101,8 +1101,36 @@ export interface ProjectTask {
   dueAt?: string | null;
   position: number;
   completed: boolean;
+  /** @nullable */
+  suggestedById?: number | null;
+  /** @nullable */
+  suggestedByName?: string | null;
+  goal: string;
+  implementation: string;
+  rationale: string;
+  impactedDepartmentIds: number[];
+  impactedDepartmentNames: string[];
+  additionalComments: string;
+  /** @nullable */
+  completedYear?: number | null;
+  commentCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectTaskComment {
+  id: number;
+  taskId: number;
+  /** @nullable */
+  authorId?: number | null;
+  /** @nullable */
+  authorName?: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface CreateProjectTaskCommentInput {
+  body: string;
 }
 
 export type ProjectBucketWithTasks = ProjectBucket & {
@@ -1159,6 +1187,13 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   /** @nullable */
   dueAt?: string | null;
+  /** @nullable */
+  suggestedById?: number | null;
+  goal?: string;
+  implementation?: string;
+  rationale?: string;
+  impactedDepartmentIds?: number[];
+  additionalComments?: string;
 }
 
 export interface UpdateTaskInput {
@@ -1174,6 +1209,13 @@ export interface UpdateTaskInput {
   dueAt?: string | null;
   position?: number;
   completed?: boolean;
+  /** @nullable */
+  suggestedById?: number | null;
+  goal?: string;
+  implementation?: string;
+  rationale?: string;
+  impactedDepartmentIds?: number[];
+  additionalComments?: string;
 }
 
 export type ListDepartmentsParams = {
