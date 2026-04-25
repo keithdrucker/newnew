@@ -6,10 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ProjectBucket {
+export interface DepartmentBucket {
   id: number;
-  projectId: number;
+  departmentId: number;
   name: string;
+  color: string;
   position: number;
   createdAt: Date;
 }

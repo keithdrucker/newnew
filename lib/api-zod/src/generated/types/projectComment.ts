@@ -6,9 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ProjectTaskComment {
+export interface ProjectComment {
   id: number;
-  taskId: number;
+  projectId: number;
   /** @nullable */
   authorId?: number | null;
   /** @nullable */

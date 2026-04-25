@@ -17,7 +17,6 @@ import Assets from "@/pages/assets";
 import Applications from "@/pages/applications";
 import Vendors from "@/pages/vendors";
 import Projects from "@/pages/projects";
-import ProjectBoard from "@/pages/project-board";
 import Settings from "@/pages/settings";
 import BoardSettings from "@/pages/board-settings";
 import {
@@ -45,10 +44,9 @@ function Router() {
         <Route path="/assets" component={Assets} />
         <Route path="/applications" component={Applications} />
         <Route path="/vendors" component={Vendors} />
-        <Route path="/projects" component={Projects} />
         <Route path="/projects/dashboard" component={ProjectsDashboard} />
         <Route path="/projects/dept/:slug" component={Projects} />
-        <Route path="/projects/:id" component={ProjectBoard} />
+        <Route path="/projects" component={Projects} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />
         <Route path="/settings/boards/:slug" component={BoardSettings} />

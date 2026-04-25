@@ -5,6 +5,9 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { DepartmentBucket } from "./departmentBucket";
 import type { ProjectSummary } from "./projectSummary";
 
-export type ProjectDetail = ProjectSummary;
+export type DepartmentBoardColumn = DepartmentBucket & {
+  projects: ProjectSummary[];
+};

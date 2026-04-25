@@ -101,8 +101,8 @@ export default function ProjectsDashboard() {
 
     for (const p of list) {
       counts[p.status] += 1;
-      totalTasks += p.taskCount;
-      doneTasks += p.completedTaskCount;
+      totalTasks += p.checklistTotal;
+      doneTasks += p.checklistDone;
       if (isOverdue(p)) overdue += 1;
       const deptKey = p.departmentName ?? "Cross-functional";
       byDept.set(deptKey, (byDept.get(deptKey) ?? 0) + 1);
@@ -115,11 +115,11 @@ export default function ProjectsDashboard() {
       totalTasks === 0 ? 0 : Math.round((doneTasks / totalTasks) * 100);
 
     const topProgress = [...list]
-      .filter((p) => p.taskCount > 0)
+      .filter((p) => p.checklistTotal > 0)
       .map((p) => ({
         name: p.name,
         color: p.color,
-        pct: Math.round((p.completedTaskCount / p.taskCount) * 100),
+        pct: Math.round((p.checklistDone / p.checklistTotal) * 100),
       }))
       .sort((a, b) => b.pct - a.pct)
       .slice(0, 8);
@@ -400,10 +400,17 @@ export default function ProjectsDashboard() {
                   </p>
                 ) : (
                   <div className="divide-y">
-                    {stats.overdueList.map((p) => (
+                    {stats.overdueList.map((p) => {
+                      const slug = departments?.find(
+                        (d) => d.id === p.departmentId,
+                      )?.slug;
+                      const href = slug
+                        ? `/projects/dept/${slug}`
+                        : "/projects";
+                      return (
                       <Link
                         key={p.id}
-                        href={`/projects/${p.id}`}
+                        href={href}
                         data-testid={`overdue-project-${p.id}`}
                         className="flex items-center justify-between py-2.5 text-sm hover:bg-muted/40 -mx-2 px-2 rounded"
                       >
@@ -431,7 +438,8 @@ export default function ProjectsDashboard() {
                           </span>
                         </div>
                       </Link>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

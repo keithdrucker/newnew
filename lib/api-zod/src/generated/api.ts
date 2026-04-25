@@ -1326,6 +1326,8 @@ export const ListProjectsResponseItem = zod.object({
   status: zod.enum(["active", "on_hold", "completed", "archived"]),
   departmentId: zod.number().nullish(),
   departmentName: zod.string().nullish(),
+  bucketId: zod.number().nullish(),
+  bucketName: zod.string().nullish(),
   ownerId: zod.number().nullish(),
   ownerName: zod.string().nullish(),
   dueAt: zod.coerce.date().nullish(),
@@ -1345,9 +1347,17 @@ export const ListProjectsResponseItem = zod.object({
     }),
   ),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
-  bucketCount: zod.number(),
-  taskCount: zod.number(),
-  completedTaskCount: zod.number(),
+  checklist: zod.array(
+    zod.object({
+      text: zod.string(),
+      done: zod.boolean(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+    }),
+  ),
+  checklistTotal: zod.number(),
+  checklistDone: zod.number(),
+  commentCount: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -1359,6 +1369,7 @@ export const CreateProjectBody = zod.object({
   color: zod.string().optional(),
   status: zod.enum(["active", "on_hold", "completed", "archived"]).optional(),
   departmentId: zod.number().nullish(),
+  bucketId: zod.number().nullish(),
   ownerId: zod.number().nullish(),
   dueAt: zod.coerce.date().nullish(),
   suggestedById: zod.number().nullish(),
@@ -1367,6 +1378,7 @@ export const CreateProjectBody = zod.object({
   rationale: zod.string().optional(),
   impactedDepartmentIds: zod.array(zod.number()).optional(),
   additionalComments: zod.string().optional(),
+  completedYear: zod.number().nullish(),
   labels: zod
     .array(
       zod.object({
@@ -1376,105 +1388,65 @@ export const CreateProjectBody = zod.object({
     )
     .optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
+  checklist: zod
+    .array(
+      zod.object({
+        text: zod.string(),
+        done: zod.boolean(),
+        assigneeId: zod.number().nullish(),
+        assigneeName: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 export const GetProjectParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const GetProjectResponse = zod
-  .object({
-    id: zod.number(),
-    name: zod.string(),
-    description: zod.string(),
-    color: zod.string(),
-    status: zod.enum(["active", "on_hold", "completed", "archived"]),
-    departmentId: zod.number().nullish(),
-    departmentName: zod.string().nullish(),
-    ownerId: zod.number().nullish(),
-    ownerName: zod.string().nullish(),
-    dueAt: zod.coerce.date().nullish(),
-    suggestedById: zod.number().nullish(),
-    suggestedByName: zod.string().nullish(),
-    goal: zod.string(),
-    implementation: zod.string(),
-    rationale: zod.string(),
-    impactedDepartmentIds: zod.array(zod.number()),
-    impactedDepartmentNames: zod.array(zod.string()),
-    additionalComments: zod.string(),
-    completedYear: zod.number().nullish(),
-    labels: zod.array(
-      zod.object({
-        name: zod.string(),
-        color: zod.string(),
-      }),
-    ),
-    priority: zod.enum(["low", "medium", "high", "urgent"]),
-    bucketCount: zod.number(),
-    taskCount: zod.number(),
-    completedTaskCount: zod.number(),
-    createdAt: zod.coerce.date(),
-    updatedAt: zod.coerce.date(),
-  })
-  .and(
+export const GetProjectResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string(),
+  color: zod.string(),
+  status: zod.enum(["active", "on_hold", "completed", "archived"]),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  bucketId: zod.number().nullish(),
+  bucketName: zod.string().nullish(),
+  ownerId: zod.number().nullish(),
+  ownerName: zod.string().nullish(),
+  dueAt: zod.coerce.date().nullish(),
+  suggestedById: zod.number().nullish(),
+  suggestedByName: zod.string().nullish(),
+  goal: zod.string(),
+  implementation: zod.string(),
+  rationale: zod.string(),
+  impactedDepartmentIds: zod.array(zod.number()),
+  impactedDepartmentNames: zod.array(zod.string()),
+  additionalComments: zod.string(),
+  completedYear: zod.number().nullish(),
+  labels: zod.array(
     zod.object({
-      buckets: zod.array(
-        zod
-          .object({
-            id: zod.number(),
-            projectId: zod.number(),
-            name: zod.string(),
-            position: zod.number(),
-            createdAt: zod.coerce.date(),
-          })
-          .and(
-            zod.object({
-              tasks: zod.array(
-                zod.object({
-                  id: zod.number(),
-                  projectId: zod.number(),
-                  bucketId: zod.number(),
-                  title: zod.string(),
-                  description: zod.string(),
-                  labels: zod.array(
-                    zod.object({
-                      name: zod.string(),
-                      color: zod.string(),
-                    }),
-                  ),
-                  checklist: zod.array(
-                    zod.object({
-                      text: zod.string(),
-                      done: zod.boolean(),
-                      assigneeId: zod.number().nullish(),
-                      assigneeName: zod.string().nullish(),
-                    }),
-                  ),
-                  assigneeId: zod.number().nullish(),
-                  assigneeName: zod.string().nullish(),
-                  priority: zod.enum(["low", "medium", "high", "urgent"]),
-                  dueAt: zod.coerce.date().nullish(),
-                  position: zod.number(),
-                  completed: zod.boolean(),
-                  suggestedById: zod.number().nullish(),
-                  suggestedByName: zod.string().nullish(),
-                  goal: zod.string(),
-                  implementation: zod.string(),
-                  rationale: zod.string(),
-                  impactedDepartmentIds: zod.array(zod.number()),
-                  impactedDepartmentNames: zod.array(zod.string()),
-                  additionalComments: zod.string(),
-                  completedYear: zod.number().nullish(),
-                  commentCount: zod.number(),
-                  createdAt: zod.coerce.date(),
-                  updatedAt: zod.coerce.date(),
-                }),
-              ),
-            }),
-          ),
-      ),
+      name: zod.string(),
+      color: zod.string(),
     }),
-  );
+  ),
+  priority: zod.enum(["low", "medium", "high", "urgent"]),
+  checklist: zod.array(
+    zod.object({
+      text: zod.string(),
+      done: zod.boolean(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+    }),
+  ),
+  checklistTotal: zod.number(),
+  checklistDone: zod.number(),
+  commentCount: zod.number(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
 
 export const UpdateProjectParams = zod.object({
   id: zod.coerce.number(),
@@ -1486,6 +1458,7 @@ export const UpdateProjectBody = zod.object({
   color: zod.string().optional(),
   status: zod.enum(["active", "on_hold", "completed", "archived"]).optional(),
   departmentId: zod.number().nullish(),
+  bucketId: zod.number().nullish(),
   ownerId: zod.number().nullish(),
   dueAt: zod.coerce.date().nullish(),
   suggestedById: zod.number().nullish(),
@@ -1504,151 +1477,6 @@ export const UpdateProjectBody = zod.object({
     )
     .optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
-});
-
-export const UpdateProjectResponse = zod
-  .object({
-    id: zod.number(),
-    name: zod.string(),
-    description: zod.string(),
-    color: zod.string(),
-    status: zod.enum(["active", "on_hold", "completed", "archived"]),
-    departmentId: zod.number().nullish(),
-    departmentName: zod.string().nullish(),
-    ownerId: zod.number().nullish(),
-    ownerName: zod.string().nullish(),
-    dueAt: zod.coerce.date().nullish(),
-    suggestedById: zod.number().nullish(),
-    suggestedByName: zod.string().nullish(),
-    goal: zod.string(),
-    implementation: zod.string(),
-    rationale: zod.string(),
-    impactedDepartmentIds: zod.array(zod.number()),
-    impactedDepartmentNames: zod.array(zod.string()),
-    additionalComments: zod.string(),
-    completedYear: zod.number().nullish(),
-    labels: zod.array(
-      zod.object({
-        name: zod.string(),
-        color: zod.string(),
-      }),
-    ),
-    priority: zod.enum(["low", "medium", "high", "urgent"]),
-    bucketCount: zod.number(),
-    taskCount: zod.number(),
-    completedTaskCount: zod.number(),
-    createdAt: zod.coerce.date(),
-    updatedAt: zod.coerce.date(),
-  })
-  .and(
-    zod.object({
-      buckets: zod.array(
-        zod
-          .object({
-            id: zod.number(),
-            projectId: zod.number(),
-            name: zod.string(),
-            position: zod.number(),
-            createdAt: zod.coerce.date(),
-          })
-          .and(
-            zod.object({
-              tasks: zod.array(
-                zod.object({
-                  id: zod.number(),
-                  projectId: zod.number(),
-                  bucketId: zod.number(),
-                  title: zod.string(),
-                  description: zod.string(),
-                  labels: zod.array(
-                    zod.object({
-                      name: zod.string(),
-                      color: zod.string(),
-                    }),
-                  ),
-                  checklist: zod.array(
-                    zod.object({
-                      text: zod.string(),
-                      done: zod.boolean(),
-                      assigneeId: zod.number().nullish(),
-                      assigneeName: zod.string().nullish(),
-                    }),
-                  ),
-                  assigneeId: zod.number().nullish(),
-                  assigneeName: zod.string().nullish(),
-                  priority: zod.enum(["low", "medium", "high", "urgent"]),
-                  dueAt: zod.coerce.date().nullish(),
-                  position: zod.number(),
-                  completed: zod.boolean(),
-                  suggestedById: zod.number().nullish(),
-                  suggestedByName: zod.string().nullish(),
-                  goal: zod.string(),
-                  implementation: zod.string(),
-                  rationale: zod.string(),
-                  impactedDepartmentIds: zod.array(zod.number()),
-                  impactedDepartmentNames: zod.array(zod.string()),
-                  additionalComments: zod.string(),
-                  completedYear: zod.number().nullish(),
-                  commentCount: zod.number(),
-                  createdAt: zod.coerce.date(),
-                  updatedAt: zod.coerce.date(),
-                }),
-              ),
-            }),
-          ),
-      ),
-    }),
-  );
-
-export const DeleteProjectParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const CreateProjectBucketParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const CreateProjectBucketBody = zod.object({
-  name: zod.string(),
-});
-
-export const UpdateProjectBucketParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const UpdateProjectBucketBody = zod.object({
-  name: zod.string().optional(),
-  position: zod.number().optional(),
-});
-
-export const UpdateProjectBucketResponse = zod.object({
-  id: zod.number(),
-  projectId: zod.number(),
-  name: zod.string(),
-  position: zod.number(),
-  createdAt: zod.coerce.date(),
-});
-
-export const DeleteProjectBucketParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const CreateProjectTaskParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const CreateProjectTaskBody = zod.object({
-  bucketId: zod.number(),
-  title: zod.string(),
-  description: zod.string().optional(),
-  labels: zod
-    .array(
-      zod.object({
-        name: zod.string(),
-        color: zod.string(),
-      }),
-    )
-    .optional(),
   checklist: zod
     .array(
       zod.object({
@@ -1659,82 +1487,21 @@ export const CreateProjectTaskBody = zod.object({
       }),
     )
     .optional(),
-  assigneeId: zod.number().nullish(),
-  priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
-  dueAt: zod.coerce.date().nullish(),
-  suggestedById: zod.number().nullish(),
-  goal: zod.string().optional(),
-  implementation: zod.string().optional(),
-  rationale: zod.string().optional(),
-  impactedDepartmentIds: zod.array(zod.number()).optional(),
-  additionalComments: zod.string().optional(),
 });
 
-export const UpdateProjectTaskParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const UpdateProjectTaskBody = zod.object({
-  bucketId: zod.number().optional(),
-  title: zod.string().optional(),
-  description: zod.string().optional(),
-  labels: zod
-    .array(
-      zod.object({
-        name: zod.string(),
-        color: zod.string(),
-      }),
-    )
-    .optional(),
-  checklist: zod
-    .array(
-      zod.object({
-        text: zod.string(),
-        done: zod.boolean(),
-        assigneeId: zod.number().nullish(),
-        assigneeName: zod.string().nullish(),
-      }),
-    )
-    .optional(),
-  assigneeId: zod.number().nullish(),
-  priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
-  dueAt: zod.coerce.date().nullish(),
-  position: zod.number().optional(),
-  completed: zod.boolean().optional(),
-  suggestedById: zod.number().nullish(),
-  goal: zod.string().optional(),
-  implementation: zod.string().optional(),
-  rationale: zod.string().optional(),
-  impactedDepartmentIds: zod.array(zod.number()).optional(),
-  additionalComments: zod.string().optional(),
-});
-
-export const UpdateProjectTaskResponse = zod.object({
+export const UpdateProjectResponse = zod.object({
   id: zod.number(),
-  projectId: zod.number(),
-  bucketId: zod.number(),
-  title: zod.string(),
+  name: zod.string(),
   description: zod.string(),
-  labels: zod.array(
-    zod.object({
-      name: zod.string(),
-      color: zod.string(),
-    }),
-  ),
-  checklist: zod.array(
-    zod.object({
-      text: zod.string(),
-      done: zod.boolean(),
-      assigneeId: zod.number().nullish(),
-      assigneeName: zod.string().nullish(),
-    }),
-  ),
-  assigneeId: zod.number().nullish(),
-  assigneeName: zod.string().nullish(),
-  priority: zod.enum(["low", "medium", "high", "urgent"]),
+  color: zod.string(),
+  status: zod.enum(["active", "on_hold", "completed", "archived"]),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  bucketId: zod.number().nullish(),
+  bucketName: zod.string().nullish(),
+  ownerId: zod.number().nullish(),
+  ownerName: zod.string().nullish(),
   dueAt: zod.coerce.date().nullish(),
-  position: zod.number(),
-  completed: zod.boolean(),
   suggestedById: zod.number().nullish(),
   suggestedByName: zod.string().nullish(),
   goal: zod.string(),
@@ -1744,40 +1511,206 @@ export const UpdateProjectTaskResponse = zod.object({
   impactedDepartmentNames: zod.array(zod.string()),
   additionalComments: zod.string(),
   completedYear: zod.number().nullish(),
+  labels: zod.array(
+    zod.object({
+      name: zod.string(),
+      color: zod.string(),
+    }),
+  ),
+  priority: zod.enum(["low", "medium", "high", "urgent"]),
+  checklist: zod.array(
+    zod.object({
+      text: zod.string(),
+      done: zod.boolean(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+    }),
+  ),
+  checklistTotal: zod.number(),
+  checklistDone: zod.number(),
   commentCount: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
 
-export const DeleteProjectTaskParams = zod.object({
+export const DeleteProjectParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const ListProjectTaskCommentsParams = zod.object({
+/**
+ * @summary Department-level Kanban — phase columns + project cards.
+ */
+export const GetDepartmentBoardParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const ListProjectTaskCommentsResponseItem = zod.object({
+export const GetDepartmentBoardResponse = zod.object({
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  columns: zod.array(
+    zod
+      .object({
+        id: zod.number(),
+        departmentId: zod.number(),
+        name: zod.string(),
+        color: zod.string(),
+        position: zod.number(),
+        createdAt: zod.coerce.date(),
+      })
+      .and(
+        zod.object({
+          projects: zod.array(
+            zod.object({
+              id: zod.number(),
+              name: zod.string(),
+              description: zod.string(),
+              color: zod.string(),
+              status: zod.enum(["active", "on_hold", "completed", "archived"]),
+              departmentId: zod.number().nullish(),
+              departmentName: zod.string().nullish(),
+              bucketId: zod.number().nullish(),
+              bucketName: zod.string().nullish(),
+              ownerId: zod.number().nullish(),
+              ownerName: zod.string().nullish(),
+              dueAt: zod.coerce.date().nullish(),
+              suggestedById: zod.number().nullish(),
+              suggestedByName: zod.string().nullish(),
+              goal: zod.string(),
+              implementation: zod.string(),
+              rationale: zod.string(),
+              impactedDepartmentIds: zod.array(zod.number()),
+              impactedDepartmentNames: zod.array(zod.string()),
+              additionalComments: zod.string(),
+              completedYear: zod.number().nullish(),
+              labels: zod.array(
+                zod.object({
+                  name: zod.string(),
+                  color: zod.string(),
+                }),
+              ),
+              priority: zod.enum(["low", "medium", "high", "urgent"]),
+              checklist: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  done: zod.boolean(),
+                  assigneeId: zod.number().nullish(),
+                  assigneeName: zod.string().nullish(),
+                }),
+              ),
+              checklistTotal: zod.number(),
+              checklistDone: zod.number(),
+              commentCount: zod.number(),
+              createdAt: zod.coerce.date(),
+              updatedAt: zod.coerce.date(),
+            }),
+          ),
+        }),
+      ),
+  ),
+  unassigned: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      description: zod.string(),
+      color: zod.string(),
+      status: zod.enum(["active", "on_hold", "completed", "archived"]),
+      departmentId: zod.number().nullish(),
+      departmentName: zod.string().nullish(),
+      bucketId: zod.number().nullish(),
+      bucketName: zod.string().nullish(),
+      ownerId: zod.number().nullish(),
+      ownerName: zod.string().nullish(),
+      dueAt: zod.coerce.date().nullish(),
+      suggestedById: zod.number().nullish(),
+      suggestedByName: zod.string().nullish(),
+      goal: zod.string(),
+      implementation: zod.string(),
+      rationale: zod.string(),
+      impactedDepartmentIds: zod.array(zod.number()),
+      impactedDepartmentNames: zod.array(zod.string()),
+      additionalComments: zod.string(),
+      completedYear: zod.number().nullish(),
+      labels: zod.array(
+        zod.object({
+          name: zod.string(),
+          color: zod.string(),
+        }),
+      ),
+      priority: zod.enum(["low", "medium", "high", "urgent"]),
+      checklist: zod.array(
+        zod.object({
+          text: zod.string(),
+          done: zod.boolean(),
+          assigneeId: zod.number().nullish(),
+          assigneeName: zod.string().nullish(),
+        }),
+      ),
+      checklistTotal: zod.number(),
+      checklistDone: zod.number(),
+      commentCount: zod.number(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+export const CreateDepartmentBucketParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateDepartmentBucketBody = zod.object({
+  name: zod.string(),
+  color: zod.string().optional(),
+});
+
+export const UpdateDepartmentBucketParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateDepartmentBucketBody = zod.object({
+  name: zod.string().optional(),
+  color: zod.string().optional(),
+  position: zod.number().optional(),
+});
+
+export const UpdateDepartmentBucketResponse = zod.object({
   id: zod.number(),
-  taskId: zod.number(),
+  departmentId: zod.number(),
+  name: zod.string(),
+  color: zod.string(),
+  position: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+
+export const DeleteDepartmentBucketParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListProjectCommentsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListProjectCommentsResponseItem = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
   authorId: zod.number().nullish(),
   authorName: zod.string().nullish(),
   body: zod.string(),
   createdAt: zod.coerce.date(),
 });
-export const ListProjectTaskCommentsResponse = zod.array(
-  ListProjectTaskCommentsResponseItem,
+export const ListProjectCommentsResponse = zod.array(
+  ListProjectCommentsResponseItem,
 );
 
-export const CreateProjectTaskCommentParams = zod.object({
+export const CreateProjectCommentParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const CreateProjectTaskCommentBody = zod.object({
+export const CreateProjectCommentBody = zod.object({
   body: zod.string(),
 });
 
-export const DeleteProjectTaskCommentParams = zod.object({
+export const DeleteProjectCommentParams = zod.object({
   id: zod.coerce.number(),
   commentId: zod.coerce.number(),
 });

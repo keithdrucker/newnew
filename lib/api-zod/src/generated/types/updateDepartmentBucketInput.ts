@@ -6,7 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface UpdateBucketInput {
+export interface UpdateDepartmentBucketInput {
   name?: string;
+  color?: string;
   position?: number;
 }

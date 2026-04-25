@@ -1068,6 +1068,10 @@ export interface ProjectSummary {
   /** @nullable */
   departmentName?: string | null;
   /** @nullable */
+  bucketId?: number | null;
+  /** @nullable */
+  bucketName?: string | null;
+  /** @nullable */
   ownerId?: number | null;
   /** @nullable */
   ownerName?: string | null;
@@ -1087,58 +1091,39 @@ export interface ProjectSummary {
   completedYear?: number | null;
   labels: TaskLabel[];
   priority: TaskPriority;
-  bucketCount: number;
-  taskCount: number;
-  completedTaskCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ProjectBucket {
-  id: number;
-  projectId: number;
-  name: string;
-  position: number;
-  createdAt: string;
-}
-
-export interface ProjectTask {
-  id: number;
-  projectId: number;
-  bucketId: number;
-  title: string;
-  description: string;
-  labels: TaskLabel[];
   checklist: ChecklistItem[];
-  /** @nullable */
-  assigneeId?: number | null;
-  /** @nullable */
-  assigneeName?: string | null;
-  priority: TaskPriority;
-  /** @nullable */
-  dueAt?: string | null;
-  position: number;
-  completed: boolean;
-  /** @nullable */
-  suggestedById?: number | null;
-  /** @nullable */
-  suggestedByName?: string | null;
-  goal: string;
-  implementation: string;
-  rationale: string;
-  impactedDepartmentIds: number[];
-  impactedDepartmentNames: string[];
-  additionalComments: string;
-  /** @nullable */
-  completedYear?: number | null;
+  checklistTotal: number;
+  checklistDone: number;
   commentCount: number;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ProjectTaskComment {
+export type ProjectDetail = ProjectSummary;
+
+export interface DepartmentBucket {
   id: number;
-  taskId: number;
+  departmentId: number;
+  name: string;
+  color: string;
+  position: number;
+  createdAt: string;
+}
+
+export type DepartmentBoardColumn = DepartmentBucket & {
+  projects: ProjectSummary[];
+};
+
+export interface DepartmentBoard {
+  departmentId: number;
+  departmentName: string;
+  columns: DepartmentBoardColumn[];
+  unassigned: ProjectSummary[];
+}
+
+export interface ProjectComment {
+  id: number;
+  projectId: number;
   /** @nullable */
   authorId?: number | null;
   /** @nullable */
@@ -1147,17 +1132,20 @@ export interface ProjectTaskComment {
   createdAt: string;
 }
 
-export interface CreateProjectTaskCommentInput {
+export interface CreateProjectCommentInput {
   body: string;
 }
 
-export type ProjectBucketWithTasks = ProjectBucket & {
-  tasks: ProjectTask[];
-};
+export interface CreateDepartmentBucketInput {
+  name: string;
+  color?: string;
+}
 
-export type ProjectDetail = ProjectSummary & {
-  buckets: ProjectBucketWithTasks[];
-};
+export interface UpdateDepartmentBucketInput {
+  name?: string;
+  color?: string;
+  position?: number;
+}
 
 export interface CreateProjectInput {
   name: string;
@@ -1166,6 +1154,8 @@ export interface CreateProjectInput {
   status?: ProjectStatus;
   /** @nullable */
   departmentId?: number | null;
+  /** @nullable */
+  bucketId?: number | null;
   /** @nullable */
   ownerId?: number | null;
   /** @nullable */
@@ -1177,8 +1167,11 @@ export interface CreateProjectInput {
   rationale?: string;
   impactedDepartmentIds?: number[];
   additionalComments?: string;
+  /** @nullable */
+  completedYear?: number | null;
   labels?: TaskLabel[];
   priority?: TaskPriority;
+  checklist?: ChecklistItem[];
 }
 
 export interface UpdateProjectInput {
@@ -1189,6 +1182,8 @@ export interface UpdateProjectInput {
   /** @nullable */
   departmentId?: number | null;
   /** @nullable */
+  bucketId?: number | null;
+  /** @nullable */
   ownerId?: number | null;
   /** @nullable */
   dueAt?: string | null;
@@ -1203,57 +1198,7 @@ export interface UpdateProjectInput {
   completedYear?: number | null;
   labels?: TaskLabel[];
   priority?: TaskPriority;
-}
-
-export interface CreateBucketInput {
-  name: string;
-}
-
-export interface UpdateBucketInput {
-  name?: string;
-  position?: number;
-}
-
-export interface CreateTaskInput {
-  bucketId: number;
-  title: string;
-  description?: string;
-  labels?: TaskLabel[];
   checklist?: ChecklistItem[];
-  /** @nullable */
-  assigneeId?: number | null;
-  priority?: TaskPriority;
-  /** @nullable */
-  dueAt?: string | null;
-  /** @nullable */
-  suggestedById?: number | null;
-  goal?: string;
-  implementation?: string;
-  rationale?: string;
-  impactedDepartmentIds?: number[];
-  additionalComments?: string;
-}
-
-export interface UpdateTaskInput {
-  bucketId?: number;
-  title?: string;
-  description?: string;
-  labels?: TaskLabel[];
-  checklist?: ChecklistItem[];
-  /** @nullable */
-  assigneeId?: number | null;
-  priority?: TaskPriority;
-  /** @nullable */
-  dueAt?: string | null;
-  position?: number;
-  completed?: boolean;
-  /** @nullable */
-  suggestedById?: number | null;
-  goal?: string;
-  implementation?: string;
-  rationale?: string;
-  impactedDepartmentIds?: number[];
-  additionalComments?: string;
 }
 
 export type ListDepartmentsParams = {

@@ -12,14 +12,25 @@ import type {
 const useListProjectsMock = vi.fn();
 const useListDepartmentsMock = vi.fn();
 const useGetSessionMock = vi.fn();
+const useGetDepartmentBoardMock = vi.fn();
 
 vi.mock("@workspace/api-client-react", () => ({
   useListProjects: (...args: unknown[]) => useListProjectsMock(...args),
   useGetSession: () => useGetSessionMock(),
   useListDepartments: () => useListDepartmentsMock(),
+  useGetDepartmentBoard: (...args: unknown[]) =>
+    useGetDepartmentBoardMock(...args),
   useListAgents: () => ({ data: [] }),
   useCreateProject: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateProject: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteProject: () => ({ mutate: vi.fn(), isPending: false }),
+  useListProjectComments: () => ({ data: [] }),
+  useCreateProjectComment: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteProjectComment: () => ({ mutate: vi.fn(), isPending: false }),
   getListProjectsQueryKey: () => ["projects"],
+  getGetProjectQueryKey: () => ["project"],
+  getGetDepartmentBoardQueryKey: () => ["department-board"],
+  getListProjectCommentsQueryKey: () => ["project-comments"],
 }));
 
 import ProjectsPage from "./projects";
@@ -78,12 +89,26 @@ function makeProject(overrides: Partial<ProjectSummary>): ProjectSummary {
     status: "active",
     departmentId: 1,
     departmentName: "IT",
+    bucketId: null,
+    bucketName: null,
     ownerId: null,
     ownerName: null,
     dueAt: null,
-    bucketCount: 0,
-    taskCount: 0,
-    completedTaskCount: 0,
+    suggestedById: null,
+    suggestedByName: null,
+    goal: "",
+    implementation: "",
+    rationale: "",
+    impactedDepartmentIds: [],
+    impactedDepartmentNames: [],
+    additionalComments: "",
+    completedYear: null,
+    labels: [],
+    priority: "medium",
+    checklist: [],
+    checklistTotal: 0,
+    checklistDone: 0,
+    commentCount: 0,
     createdAt: "2026-04-01T12:00:00.000Z",
     updatedAt: "2026-04-01T12:00:00.000Z",
     ...overrides,
@@ -107,6 +132,13 @@ function renderProjects(path = "/projects") {
 describe("Projects page — role-scoped rendering", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Sane default for the board hook so consumers that don't drive it
+    // (e.g. the create-mode dialog rendered alongside the global list)
+    // don't crash on `data.columns` access.
+    useGetDepartmentBoardMock.mockReturnValue({
+      data: { departmentId: 0, columns: [], unassigned: [] },
+      isLoading: false,
+    });
   });
 
   it("renders projects across all departments for an admin session", () => {
@@ -165,9 +197,11 @@ describe("Projects page — role-scoped rendering", () => {
     expect(
       screen.queryByTestId("button-new-project-empty"),
     ).not.toBeInTheDocument();
-    // Empty-state copy reflects the read-only view
+    // Empty-state copy reflects the read-only global view
     expect(
-      screen.getByText("Projects you have access to will appear here."),
+      screen.getByText(
+        "Pick a department from the sidebar to see its phase board.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -210,19 +244,51 @@ describe("Projects page — role-scoped rendering", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("scopes the request by departmentId when on /projects/dept/:slug", () => {
+  it("renders the department Kanban board when on /projects/dept/:slug", () => {
     useGetSessionMock.mockReturnValue({ data: adminSession });
     useListDepartmentsMock.mockReturnValue({ data: [itDept, hrDept] });
     useListProjectsMock.mockReturnValue({ data: [], isLoading: false });
+    useGetDepartmentBoardMock.mockReturnValue({
+      data: {
+        departmentId: hrDept.id,
+        columns: [
+          {
+            id: 100,
+            departmentId: hrDept.id,
+            name: "Backlog",
+            position: 1,
+            color: "#60A5FA",
+            projects: [
+              makeProject({
+                id: 42,
+                name: "HR pipeline card",
+                departmentId: hrDept.id,
+                departmentName: hrDept.name,
+              }),
+            ],
+          },
+        ],
+        unassigned: [],
+      },
+      isLoading: false,
+    });
 
     renderProjects("/projects/dept/hr");
 
-    expect(useListProjectsMock).toHaveBeenCalled();
-    const callArgs = useListProjectsMock.mock.calls.at(-1)?.[0];
-    expect(callArgs).toMatchObject({ departmentId: hrDept.id });
+    // Board fetched, not the flat list
+    expect(useGetDepartmentBoardMock).toHaveBeenCalled();
+    const boardArgs = useGetDepartmentBoardMock.mock.calls.at(-1)?.[0];
+    expect(boardArgs).toBe(hrDept.id);
 
+    // Department-scoped heading
     expect(
-      screen.getByRole("heading", { level: 1, name: /HR projects/i }),
+      screen.getByRole("heading", { level: 1, name: /HR initiatives/i }),
     ).toBeInTheDocument();
+
+    // Kanban column + card show up
+    expect(screen.getByTestId("department-kanban")).toBeInTheDocument();
+    expect(screen.getByTestId("column-100")).toBeInTheDocument();
+    expect(screen.getByTestId("card-project-42")).toBeInTheDocument();
+    expect(screen.getByText("HR pipeline card")).toBeInTheDocument();
   });
 });

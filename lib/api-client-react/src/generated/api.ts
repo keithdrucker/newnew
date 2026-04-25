@@ -26,19 +26,20 @@ import type {
   CreateAgentInput,
   CreateApplicationInput,
   CreateAssetInput,
-  CreateBucketInput,
+  CreateDepartmentBucketInput,
   CreateDepartmentInput,
   CreateKbArticleInput,
   CreatePersonInput,
+  CreateProjectCommentInput,
   CreateProjectInput,
-  CreateProjectTaskCommentInput,
-  CreateTaskInput,
   CreateTicketInput,
   CreateTicketViewInput,
   CreateVendorInput,
   DashboardOverview,
   DashboardTimeseries,
   Department,
+  DepartmentBoard,
+  DepartmentBucket,
   DepartmentSettings,
   GetBreachedTicketsParams,
   GetDashboardOverviewParams,
@@ -55,11 +56,9 @@ import type {
   ListTicketsParams,
   ListVendorsParams,
   Person,
-  ProjectBucket,
+  ProjectComment,
   ProjectDetail,
   ProjectSummary,
-  ProjectTask,
-  ProjectTaskComment,
   Session,
   SwitchSessionInput,
   Ticket,
@@ -70,13 +69,12 @@ import type {
   UpdateApplicationInput,
   UpdateAssetInput,
   UpdateBoardMemberInput,
-  UpdateBucketInput,
+  UpdateDepartmentBucketInput,
   UpdateDepartmentInput,
   UpdateDepartmentSettingsInput,
   UpdateKbArticleInput,
   UpdatePersonInput,
   UpdateProjectInput,
-  UpdateTaskInput,
   UpdateTicketInput,
   UpdateTicketViewInput,
   UpdateVendorInput,
@@ -4847,512 +4845,35 @@ export const useDeleteProject = <
   return useMutation(getDeleteProjectMutationOptions(options));
 };
 
-export const getCreateProjectBucketUrl = (id: number) => {
-  return `/api/projects/${id}/buckets`;
+/**
+ * @summary Department-level Kanban — phase columns + project cards.
+ */
+export const getGetDepartmentBoardUrl = (id: number) => {
+  return `/api/departments/${id}/board`;
 };
 
-export const createProjectBucket = async (
-  id: number,
-  createBucketInput: CreateBucketInput,
-  options?: RequestInit,
-): Promise<ProjectBucket> => {
-  return customFetch<ProjectBucket>(getCreateProjectBucketUrl(id), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createBucketInput),
-  });
-};
-
-export const getCreateProjectBucketMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createProjectBucket>>,
-    TError,
-    { id: number; data: BodyType<CreateBucketInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof createProjectBucket>>,
-  TError,
-  { id: number; data: BodyType<CreateBucketInput> },
-  TContext
-> => {
-  const mutationKey = ["createProjectBucket"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createProjectBucket>>,
-    { id: number; data: BodyType<CreateBucketInput> }
-  > = (props) => {
-    const { id, data } = props ?? {};
-
-    return createProjectBucket(id, data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type CreateProjectBucketMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createProjectBucket>>
->;
-export type CreateProjectBucketMutationBody = BodyType<CreateBucketInput>;
-export type CreateProjectBucketMutationError = ErrorType<unknown>;
-
-export const useCreateProjectBucket = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createProjectBucket>>,
-    TError,
-    { id: number; data: BodyType<CreateBucketInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof createProjectBucket>>,
-  TError,
-  { id: number; data: BodyType<CreateBucketInput> },
-  TContext
-> => {
-  return useMutation(getCreateProjectBucketMutationOptions(options));
-};
-
-export const getUpdateProjectBucketUrl = (id: number) => {
-  return `/api/project-buckets/${id}`;
-};
-
-export const updateProjectBucket = async (
-  id: number,
-  updateBucketInput: UpdateBucketInput,
-  options?: RequestInit,
-): Promise<ProjectBucket> => {
-  return customFetch<ProjectBucket>(getUpdateProjectBucketUrl(id), {
-    ...options,
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(updateBucketInput),
-  });
-};
-
-export const getUpdateProjectBucketMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updateProjectBucket>>,
-    TError,
-    { id: number; data: BodyType<UpdateBucketInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof updateProjectBucket>>,
-  TError,
-  { id: number; data: BodyType<UpdateBucketInput> },
-  TContext
-> => {
-  const mutationKey = ["updateProjectBucket"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof updateProjectBucket>>,
-    { id: number; data: BodyType<UpdateBucketInput> }
-  > = (props) => {
-    const { id, data } = props ?? {};
-
-    return updateProjectBucket(id, data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type UpdateProjectBucketMutationResult = NonNullable<
-  Awaited<ReturnType<typeof updateProjectBucket>>
->;
-export type UpdateProjectBucketMutationBody = BodyType<UpdateBucketInput>;
-export type UpdateProjectBucketMutationError = ErrorType<unknown>;
-
-export const useUpdateProjectBucket = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updateProjectBucket>>,
-    TError,
-    { id: number; data: BodyType<UpdateBucketInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof updateProjectBucket>>,
-  TError,
-  { id: number; data: BodyType<UpdateBucketInput> },
-  TContext
-> => {
-  return useMutation(getUpdateProjectBucketMutationOptions(options));
-};
-
-export const getDeleteProjectBucketUrl = (id: number) => {
-  return `/api/project-buckets/${id}`;
-};
-
-export const deleteProjectBucket = async (
+export const getDepartmentBoard = async (
   id: number,
   options?: RequestInit,
-): Promise<void> => {
-  return customFetch<void>(getDeleteProjectBucketUrl(id), {
-    ...options,
-    method: "DELETE",
-  });
-};
-
-export const getDeleteProjectBucketMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteProjectBucket>>,
-    TError,
-    { id: number },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteProjectBucket>>,
-  TError,
-  { id: number },
-  TContext
-> => {
-  const mutationKey = ["deleteProjectBucket"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteProjectBucket>>,
-    { id: number }
-  > = (props) => {
-    const { id } = props ?? {};
-
-    return deleteProjectBucket(id, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteProjectBucketMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteProjectBucket>>
->;
-
-export type DeleteProjectBucketMutationError = ErrorType<unknown>;
-
-export const useDeleteProjectBucket = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteProjectBucket>>,
-    TError,
-    { id: number },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof deleteProjectBucket>>,
-  TError,
-  { id: number },
-  TContext
-> => {
-  return useMutation(getDeleteProjectBucketMutationOptions(options));
-};
-
-export const getCreateProjectTaskUrl = (id: number) => {
-  return `/api/projects/${id}/tasks`;
-};
-
-export const createProjectTask = async (
-  id: number,
-  createTaskInput: CreateTaskInput,
-  options?: RequestInit,
-): Promise<ProjectTask> => {
-  return customFetch<ProjectTask>(getCreateProjectTaskUrl(id), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createTaskInput),
-  });
-};
-
-export const getCreateProjectTaskMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createProjectTask>>,
-    TError,
-    { id: number; data: BodyType<CreateTaskInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof createProjectTask>>,
-  TError,
-  { id: number; data: BodyType<CreateTaskInput> },
-  TContext
-> => {
-  const mutationKey = ["createProjectTask"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createProjectTask>>,
-    { id: number; data: BodyType<CreateTaskInput> }
-  > = (props) => {
-    const { id, data } = props ?? {};
-
-    return createProjectTask(id, data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type CreateProjectTaskMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createProjectTask>>
->;
-export type CreateProjectTaskMutationBody = BodyType<CreateTaskInput>;
-export type CreateProjectTaskMutationError = ErrorType<unknown>;
-
-export const useCreateProjectTask = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createProjectTask>>,
-    TError,
-    { id: number; data: BodyType<CreateTaskInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof createProjectTask>>,
-  TError,
-  { id: number; data: BodyType<CreateTaskInput> },
-  TContext
-> => {
-  return useMutation(getCreateProjectTaskMutationOptions(options));
-};
-
-export const getUpdateProjectTaskUrl = (id: number) => {
-  return `/api/project-tasks/${id}`;
-};
-
-export const updateProjectTask = async (
-  id: number,
-  updateTaskInput: UpdateTaskInput,
-  options?: RequestInit,
-): Promise<ProjectTask> => {
-  return customFetch<ProjectTask>(getUpdateProjectTaskUrl(id), {
-    ...options,
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(updateTaskInput),
-  });
-};
-
-export const getUpdateProjectTaskMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updateProjectTask>>,
-    TError,
-    { id: number; data: BodyType<UpdateTaskInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof updateProjectTask>>,
-  TError,
-  { id: number; data: BodyType<UpdateTaskInput> },
-  TContext
-> => {
-  const mutationKey = ["updateProjectTask"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof updateProjectTask>>,
-    { id: number; data: BodyType<UpdateTaskInput> }
-  > = (props) => {
-    const { id, data } = props ?? {};
-
-    return updateProjectTask(id, data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type UpdateProjectTaskMutationResult = NonNullable<
-  Awaited<ReturnType<typeof updateProjectTask>>
->;
-export type UpdateProjectTaskMutationBody = BodyType<UpdateTaskInput>;
-export type UpdateProjectTaskMutationError = ErrorType<unknown>;
-
-export const useUpdateProjectTask = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updateProjectTask>>,
-    TError,
-    { id: number; data: BodyType<UpdateTaskInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof updateProjectTask>>,
-  TError,
-  { id: number; data: BodyType<UpdateTaskInput> },
-  TContext
-> => {
-  return useMutation(getUpdateProjectTaskMutationOptions(options));
-};
-
-export const getDeleteProjectTaskUrl = (id: number) => {
-  return `/api/project-tasks/${id}`;
-};
-
-export const deleteProjectTask = async (
-  id: number,
-  options?: RequestInit,
-): Promise<void> => {
-  return customFetch<void>(getDeleteProjectTaskUrl(id), {
-    ...options,
-    method: "DELETE",
-  });
-};
-
-export const getDeleteProjectTaskMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteProjectTask>>,
-    TError,
-    { id: number },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteProjectTask>>,
-  TError,
-  { id: number },
-  TContext
-> => {
-  const mutationKey = ["deleteProjectTask"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteProjectTask>>,
-    { id: number }
-  > = (props) => {
-    const { id } = props ?? {};
-
-    return deleteProjectTask(id, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteProjectTaskMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteProjectTask>>
->;
-
-export type DeleteProjectTaskMutationError = ErrorType<unknown>;
-
-export const useDeleteProjectTask = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteProjectTask>>,
-    TError,
-    { id: number },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof deleteProjectTask>>,
-  TError,
-  { id: number },
-  TContext
-> => {
-  return useMutation(getDeleteProjectTaskMutationOptions(options));
-};
-
-export const getListProjectTaskCommentsUrl = (id: number) => {
-  return `/api/project-tasks/${id}/comments`;
-};
-
-export const listProjectTaskComments = async (
-  id: number,
-  options?: RequestInit,
-): Promise<ProjectTaskComment[]> => {
-  return customFetch<ProjectTaskComment[]>(getListProjectTaskCommentsUrl(id), {
+): Promise<DepartmentBoard> => {
+  return customFetch<DepartmentBoard>(getGetDepartmentBoardUrl(id), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListProjectTaskCommentsQueryKey = (id: number) => {
-  return [`/api/project-tasks/${id}/comments`] as const;
+export const getGetDepartmentBoardQueryKey = (id: number) => {
+  return [`/api/departments/${id}/board`] as const;
 };
 
-export const getListProjectTaskCommentsQueryOptions = <
-  TData = Awaited<ReturnType<typeof listProjectTaskComments>>,
+export const getGetDepartmentBoardQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDepartmentBoard>>,
   TError = ErrorType<unknown>,
 >(
   id: number,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof listProjectTaskComments>>,
+      Awaited<ReturnType<typeof getDepartmentBoard>>,
       TError,
       TData
     >;
@@ -5361,13 +4882,11 @@ export const getListProjectTaskCommentsQueryOptions = <
 ) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey =
-    queryOptions?.queryKey ?? getListProjectTaskCommentsQueryKey(id);
+  const queryKey = queryOptions?.queryKey ?? getGetDepartmentBoardQueryKey(id);
 
   const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof listProjectTaskComments>>
-  > = ({ signal }) =>
-    listProjectTaskComments(id, { signal, ...requestOptions });
+    Awaited<ReturnType<typeof getDepartmentBoard>>
+  > = ({ signal }) => getDepartmentBoard(id, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -5375,32 +4894,36 @@ export const getListProjectTaskCommentsQueryOptions = <
     enabled: !!id,
     ...queryOptions,
   } as UseQueryOptions<
-    Awaited<ReturnType<typeof listProjectTaskComments>>,
+    Awaited<ReturnType<typeof getDepartmentBoard>>,
     TError,
     TData
   > & { queryKey: QueryKey };
 };
 
-export type ListProjectTaskCommentsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof listProjectTaskComments>>
+export type GetDepartmentBoardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDepartmentBoard>>
 >;
-export type ListProjectTaskCommentsQueryError = ErrorType<unknown>;
+export type GetDepartmentBoardQueryError = ErrorType<unknown>;
 
-export function useListProjectTaskComments<
-  TData = Awaited<ReturnType<typeof listProjectTaskComments>>,
+/**
+ * @summary Department-level Kanban — phase columns + project cards.
+ */
+
+export function useGetDepartmentBoard<
+  TData = Awaited<ReturnType<typeof getDepartmentBoard>>,
   TError = ErrorType<unknown>,
 >(
   id: number,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof listProjectTaskComments>>,
+      Awaited<ReturnType<typeof getDepartmentBoard>>,
       TError,
       TData
     >;
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListProjectTaskCommentsQueryOptions(id, options);
+  const queryOptions = getGetDepartmentBoardQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -5409,41 +4932,41 @@ export function useListProjectTaskComments<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
-export const getCreateProjectTaskCommentUrl = (id: number) => {
-  return `/api/project-tasks/${id}/comments`;
+export const getCreateDepartmentBucketUrl = (id: number) => {
+  return `/api/departments/${id}/buckets`;
 };
 
-export const createProjectTaskComment = async (
+export const createDepartmentBucket = async (
   id: number,
-  createProjectTaskCommentInput: CreateProjectTaskCommentInput,
+  createDepartmentBucketInput: CreateDepartmentBucketInput,
   options?: RequestInit,
-): Promise<ProjectTaskComment> => {
-  return customFetch<ProjectTaskComment>(getCreateProjectTaskCommentUrl(id), {
+): Promise<DepartmentBucket> => {
+  return customFetch<DepartmentBucket>(getCreateDepartmentBucketUrl(id), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createProjectTaskCommentInput),
+    body: JSON.stringify(createDepartmentBucketInput),
   });
 };
 
-export const getCreateProjectTaskCommentMutationOptions = <
+export const getCreateDepartmentBucketMutationOptions = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createProjectTaskComment>>,
+    Awaited<ReturnType<typeof createDepartmentBucket>>,
     TError,
-    { id: number; data: BodyType<CreateProjectTaskCommentInput> },
+    { id: number; data: BodyType<CreateDepartmentBucketInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof createProjectTaskComment>>,
+  Awaited<ReturnType<typeof createDepartmentBucket>>,
   TError,
-  { id: number; data: BodyType<CreateProjectTaskCommentInput> },
+  { id: number; data: BodyType<CreateDepartmentBucketInput> },
   TContext
 > => {
-  const mutationKey = ["createProjectTaskComment"];
+  const mutationKey = ["createDepartmentBucket"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -5453,80 +4976,158 @@ export const getCreateProjectTaskCommentMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createProjectTaskComment>>,
-    { id: number; data: BodyType<CreateProjectTaskCommentInput> }
+    Awaited<ReturnType<typeof createDepartmentBucket>>,
+    { id: number; data: BodyType<CreateDepartmentBucketInput> }
   > = (props) => {
     const { id, data } = props ?? {};
 
-    return createProjectTaskComment(id, data, requestOptions);
+    return createDepartmentBucket(id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type CreateProjectTaskCommentMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createProjectTaskComment>>
+export type CreateDepartmentBucketMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDepartmentBucket>>
 >;
-export type CreateProjectTaskCommentMutationBody =
-  BodyType<CreateProjectTaskCommentInput>;
-export type CreateProjectTaskCommentMutationError = ErrorType<unknown>;
+export type CreateDepartmentBucketMutationBody =
+  BodyType<CreateDepartmentBucketInput>;
+export type CreateDepartmentBucketMutationError = ErrorType<unknown>;
 
-export const useCreateProjectTaskComment = <
+export const useCreateDepartmentBucket = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createProjectTaskComment>>,
+    Awaited<ReturnType<typeof createDepartmentBucket>>,
     TError,
-    { id: number; data: BodyType<CreateProjectTaskCommentInput> },
+    { id: number; data: BodyType<CreateDepartmentBucketInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof createProjectTaskComment>>,
+  Awaited<ReturnType<typeof createDepartmentBucket>>,
   TError,
-  { id: number; data: BodyType<CreateProjectTaskCommentInput> },
+  { id: number; data: BodyType<CreateDepartmentBucketInput> },
   TContext
 > => {
-  return useMutation(getCreateProjectTaskCommentMutationOptions(options));
+  return useMutation(getCreateDepartmentBucketMutationOptions(options));
 };
 
-export const getDeleteProjectTaskCommentUrl = (
-  id: number,
-  commentId: number,
-) => {
-  return `/api/project-tasks/${id}/comments/${commentId}`;
+export const getUpdateDepartmentBucketUrl = (id: number) => {
+  return `/api/department-buckets/${id}`;
 };
 
-export const deleteProjectTaskComment = async (
+export const updateDepartmentBucket = async (
   id: number,
-  commentId: number,
+  updateDepartmentBucketInput: UpdateDepartmentBucketInput,
+  options?: RequestInit,
+): Promise<DepartmentBucket> => {
+  return customFetch<DepartmentBucket>(getUpdateDepartmentBucketUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateDepartmentBucketInput),
+  });
+};
+
+export const getUpdateDepartmentBucketMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDepartmentBucket>>,
+    TError,
+    { id: number; data: BodyType<UpdateDepartmentBucketInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDepartmentBucket>>,
+  TError,
+  { id: number; data: BodyType<UpdateDepartmentBucketInput> },
+  TContext
+> => {
+  const mutationKey = ["updateDepartmentBucket"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDepartmentBucket>>,
+    { id: number; data: BodyType<UpdateDepartmentBucketInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDepartmentBucket(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDepartmentBucketMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDepartmentBucket>>
+>;
+export type UpdateDepartmentBucketMutationBody =
+  BodyType<UpdateDepartmentBucketInput>;
+export type UpdateDepartmentBucketMutationError = ErrorType<unknown>;
+
+export const useUpdateDepartmentBucket = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDepartmentBucket>>,
+    TError,
+    { id: number; data: BodyType<UpdateDepartmentBucketInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDepartmentBucket>>,
+  TError,
+  { id: number; data: BodyType<UpdateDepartmentBucketInput> },
+  TContext
+> => {
+  return useMutation(getUpdateDepartmentBucketMutationOptions(options));
+};
+
+export const getDeleteDepartmentBucketUrl = (id: number) => {
+  return `/api/department-buckets/${id}`;
+};
+
+export const deleteDepartmentBucket = async (
+  id: number,
   options?: RequestInit,
 ): Promise<void> => {
-  return customFetch<void>(getDeleteProjectTaskCommentUrl(id, commentId), {
+  return customFetch<void>(getDeleteDepartmentBucketUrl(id), {
     ...options,
     method: "DELETE",
   });
 };
 
-export const getDeleteProjectTaskCommentMutationOptions = <
+export const getDeleteDepartmentBucketMutationOptions = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+    Awaited<ReturnType<typeof deleteDepartmentBucket>>,
     TError,
-    { id: number; commentId: number },
+    { id: number },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+  Awaited<ReturnType<typeof deleteDepartmentBucket>>,
   TError,
-  { id: number; commentId: number },
+  { id: number },
   TContext
 > => {
-  const mutationKey = ["deleteProjectTaskComment"];
+  const mutationKey = ["deleteDepartmentBucket"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -5536,41 +5137,282 @@ export const getDeleteProjectTaskCommentMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteProjectTaskComment>>,
-    { id: number; commentId: number }
+    Awaited<ReturnType<typeof deleteDepartmentBucket>>,
+    { id: number }
   > = (props) => {
-    const { id, commentId } = props ?? {};
+    const { id } = props ?? {};
 
-    return deleteProjectTaskComment(id, commentId, requestOptions);
+    return deleteDepartmentBucket(id, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type DeleteProjectTaskCommentMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteProjectTaskComment>>
+export type DeleteDepartmentBucketMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDepartmentBucket>>
 >;
 
-export type DeleteProjectTaskCommentMutationError = ErrorType<unknown>;
+export type DeleteDepartmentBucketMutationError = ErrorType<unknown>;
 
-export const useDeleteProjectTaskComment = <
+export const useDeleteDepartmentBucket = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+    Awaited<ReturnType<typeof deleteDepartmentBucket>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDepartmentBucket>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteDepartmentBucketMutationOptions(options));
+};
+
+export const getListProjectCommentsUrl = (id: number) => {
+  return `/api/projects/${id}/comments`;
+};
+
+export const listProjectComments = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ProjectComment[]> => {
+  return customFetch<ProjectComment[]>(getListProjectCommentsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListProjectCommentsQueryKey = (id: number) => {
+  return [`/api/projects/${id}/comments`] as const;
+};
+
+export const getListProjectCommentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProjectComments>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProjectComments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListProjectCommentsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProjectComments>>
+  > = ({ signal }) => listProjectComments(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProjectComments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProjectCommentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProjectComments>>
+>;
+export type ListProjectCommentsQueryError = ErrorType<unknown>;
+
+export function useListProjectComments<
+  TData = Awaited<ReturnType<typeof listProjectComments>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProjectComments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProjectCommentsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getCreateProjectCommentUrl = (id: number) => {
+  return `/api/projects/${id}/comments`;
+};
+
+export const createProjectComment = async (
+  id: number,
+  createProjectCommentInput: CreateProjectCommentInput,
+  options?: RequestInit,
+): Promise<ProjectComment> => {
+  return customFetch<ProjectComment>(getCreateProjectCommentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createProjectCommentInput),
+  });
+};
+
+export const getCreateProjectCommentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProjectComment>>,
+    TError,
+    { id: number; data: BodyType<CreateProjectCommentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createProjectComment>>,
+  TError,
+  { id: number; data: BodyType<CreateProjectCommentInput> },
+  TContext
+> => {
+  const mutationKey = ["createProjectComment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createProjectComment>>,
+    { id: number; data: BodyType<CreateProjectCommentInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createProjectComment(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateProjectCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createProjectComment>>
+>;
+export type CreateProjectCommentMutationBody =
+  BodyType<CreateProjectCommentInput>;
+export type CreateProjectCommentMutationError = ErrorType<unknown>;
+
+export const useCreateProjectComment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProjectComment>>,
+    TError,
+    { id: number; data: BodyType<CreateProjectCommentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createProjectComment>>,
+  TError,
+  { id: number; data: BodyType<CreateProjectCommentInput> },
+  TContext
+> => {
+  return useMutation(getCreateProjectCommentMutationOptions(options));
+};
+
+export const getDeleteProjectCommentUrl = (id: number, commentId: number) => {
+  return `/api/projects/${id}/comments/${commentId}`;
+};
+
+export const deleteProjectComment = async (
+  id: number,
+  commentId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteProjectCommentUrl(id, commentId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteProjectCommentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProjectComment>>,
+    TError,
+    { id: number; commentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProjectComment>>,
+  TError,
+  { id: number; commentId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteProjectComment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProjectComment>>,
+    { id: number; commentId: number }
+  > = (props) => {
+    const { id, commentId } = props ?? {};
+
+    return deleteProjectComment(id, commentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProjectCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteProjectComment>>
+>;
+
+export type DeleteProjectCommentMutationError = ErrorType<unknown>;
+
+export const useDeleteProjectComment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProjectComment>>,
     TError,
     { id: number; commentId: number },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof deleteProjectTaskComment>>,
+  Awaited<ReturnType<typeof deleteProjectComment>>,
   TError,
   { id: number; commentId: number },
   TContext
 > => {
-  return useMutation(getDeleteProjectTaskCommentMutationOptions(options));
+  return useMutation(getDeleteProjectCommentMutationOptions(options));
 };
 
 /**

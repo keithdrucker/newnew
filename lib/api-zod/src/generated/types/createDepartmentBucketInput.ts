@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface CreateProjectTaskCommentInput {
-  body: string;
+export interface CreateDepartmentBucketInput {
+  name: string;
+  color?: string;
 }

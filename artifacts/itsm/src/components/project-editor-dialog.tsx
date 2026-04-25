@@ -7,17 +7,25 @@ import {
   useListAgents,
   useListDepartments,
   useGetSession,
+  useGetDepartmentBoard,
+  useListProjectComments,
+  useCreateProjectComment,
+  useDeleteProjectComment,
   getListProjectsQueryKey,
   getGetProjectQueryKey,
+  getGetDepartmentBoardQueryKey,
+  getListProjectCommentsQueryKey,
   type ProjectSummary,
   type ProjectDetail,
   type TaskLabel,
+  type ChecklistItem,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -37,10 +45,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import {
   Building2,
+  CheckSquare,
+  Columns3,
   Lightbulb,
+  MessageSquare,
+  Plus,
+  Send,
   Target,
   Trash2,
   Wrench,
@@ -141,6 +155,39 @@ export function ProjectEditorDialog(props: Props) {
   const [labels, setLabels] = useState<TaskLabel[]>(existing?.labels ?? []);
   const [newLabelName, setNewLabelName] = useState("");
   const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[0].value);
+  const [bucketId, setBucketId] = useState<string>(
+    existing?.bucketId != null ? String(existing.bucketId) : "none",
+  );
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(
+    existing?.checklist ?? [],
+  );
+  const [newChecklistText, setNewChecklistText] = useState("");
+  const [commentDraft, setCommentDraft] = useState("");
+
+  // Department board → list of phase buckets to show in the Phase select.
+  const effectiveDeptId =
+    departmentId !== "none" ? Number(departmentId) : null;
+  const { data: board } = useGetDepartmentBoard(
+    effectiveDeptId ?? 0,
+    {
+      query: {
+        queryKey: getGetDepartmentBoardQueryKey(effectiveDeptId ?? 0),
+        enabled: open && effectiveDeptId != null,
+      },
+    },
+  );
+  const buckets = board?.columns ?? [];
+
+  // Activity-log thread (only for existing projects).
+  const projectId = existing?.id ?? 0;
+  const { data: comments } = useListProjectComments(projectId, {
+    query: {
+      queryKey: getListProjectCommentsQueryKey(projectId),
+      enabled: open && isEdit && projectId > 0,
+    },
+  });
+  const createComment = useCreateProjectComment();
+  const deleteComment = useDeleteProjectComment();
 
   // Reset form when the dialog reopens (covers create-then-create-again
   // and edit-then-switch-project).
@@ -176,6 +223,12 @@ export function ProjectEditorDialog(props: Props) {
     setAdditionalComments(existing?.additionalComments ?? "");
     setLabels(existing?.labels ?? []);
     setNewLabelName("");
+    setBucketId(
+      existing?.bucketId != null ? String(existing.bucketId) : "none",
+    );
+    setChecklist(existing?.checklist ?? []);
+    setNewChecklistText("");
+    setCommentDraft("");
     // Intentionally re-init each time the dialog opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing?.id]);
@@ -185,6 +238,11 @@ export function ProjectEditorDialog(props: Props) {
     if (existing) {
       queryClient.invalidateQueries({
         queryKey: getGetProjectQueryKey(existing.id),
+      });
+    }
+    if (effectiveDeptId != null) {
+      queryClient.invalidateQueries({
+        queryKey: getGetDepartmentBoardQueryKey(effectiveDeptId),
       });
     }
   };
@@ -202,6 +260,7 @@ export function ProjectEditorDialog(props: Props) {
       description,
       color,
       departmentId: departmentId === "none" ? null : Number(departmentId),
+      bucketId: bucketId === "none" ? null : Number(bucketId),
       ownerId: ownerId === "none" ? null : Number(ownerId),
       dueAt: dueDate ? new Date(dueDate).toISOString() : null,
       suggestedById:
@@ -213,6 +272,7 @@ export function ProjectEditorDialog(props: Props) {
       additionalComments,
       labels,
       priority,
+      checklist,
     };
     if (isEdit && existing) {
       updateMutation.mutate(
@@ -234,12 +294,10 @@ export function ProjectEditorDialog(props: Props) {
       createMutation.mutate(
         { data: { ...sharedFields, status: "active" as const } },
         {
-          onSuccess: (created) => {
+          onSuccess: () => {
             invalidate();
             toast({ title: "Initiative created" });
             onOpenChange(false);
-            // Land the user on their new board.
-            navigate(`/projects/${created.id}`);
           },
           onError: () =>
             toast({
@@ -503,6 +561,35 @@ export function ProjectEditorDialog(props: Props) {
                 </Select>
               </div>
               <div>
+                <Label className="text-[12.5px]">Phase</Label>
+                <Select
+                  value={bucketId}
+                  onValueChange={setBucketId}
+                  disabled={effectiveDeptId == null}
+                >
+                  <SelectTrigger
+                    className="mt-1"
+                    data-testid="select-project-phase"
+                  >
+                    <SelectValue
+                      placeholder={
+                        effectiveDeptId == null
+                          ? "Pick a department first"
+                          : "Unassigned"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {buckets.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label className="text-[12.5px]">Owner</Label>
                 <Select value={ownerId} onValueChange={setOwnerId}>
                   <SelectTrigger
@@ -637,6 +724,119 @@ export function ProjectEditorDialog(props: Props) {
             </div>
           </section>
 
+          {/* CHECKLIST */}
+          <section
+            className="rounded-md border border-border/60 p-3 space-y-2 bg-muted/20"
+            data-testid="section-project-checklist"
+          >
+            <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <CheckSquare className="h-3.5 w-3.5" />
+              Checklist
+              {checklist.length > 0 ? (
+                <span className="ml-1 text-[11px] font-normal normal-case tracking-normal text-muted-foreground/80">
+                  {checklist.filter((c) => c.done).length}/{checklist.length}
+                </span>
+              ) : null}
+            </h4>
+            {checklist.length === 0 ? (
+              <p className="text-[12px] text-muted-foreground italic">
+                No steps yet. Add the work items needed to deliver this
+                initiative.
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {checklist.map((item, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-start gap-2 group"
+                    data-testid={`checklist-row-${idx}`}
+                  >
+                    <Checkbox
+                      checked={item.done}
+                      onCheckedChange={(v) =>
+                        setChecklist((prev) =>
+                          prev.map((c, i) =>
+                            i === idx ? { ...c, done: v === true } : c,
+                          ),
+                        )
+                      }
+                      className="mt-1"
+                      data-testid={`checklist-toggle-${idx}`}
+                    />
+                    <Input
+                      value={item.text}
+                      onChange={(e) =>
+                        setChecklist((prev) =>
+                          prev.map((c, i) =>
+                            i === idx ? { ...c, text: e.target.value } : c,
+                          ),
+                        )
+                      }
+                      className={cn(
+                        "h-7 text-[12.5px] border-transparent hover:border-border focus-visible:border-input bg-transparent",
+                        item.done &&
+                          "line-through text-muted-foreground",
+                      )}
+                      data-testid={`checklist-text-${idx}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChecklist((prev) =>
+                          prev.filter((_, i) => i !== idx),
+                        )
+                      }
+                      aria-label="Remove step"
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1"
+                      data-testid={`checklist-remove-${idx}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex gap-1.5 pt-1">
+              <Input
+                value={newChecklistText}
+                onChange={(e) => setNewChecklistText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const t = newChecklistText.trim();
+                    if (!t) return;
+                    setChecklist((prev) => [
+                      ...prev,
+                      { text: t, done: false, assigneeId: null, assigneeName: null },
+                    ]);
+                    setNewChecklistText("");
+                  }
+                }}
+                placeholder="Add a step…"
+                className="h-8 text-[12.5px]"
+                data-testid="input-new-checklist-item"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const t = newChecklistText.trim();
+                  if (!t) return;
+                  setChecklist((prev) => [
+                    ...prev,
+                    { text: t, done: false, assigneeId: null, assigneeName: null },
+                  ]);
+                  setNewChecklistText("");
+                }}
+                className="h-8"
+                data-testid="button-add-checklist-item"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </section>
+
           {/* ADDITIONAL COMMENTS */}
           <div>
             <Label htmlFor="proj-additional" className="text-[12.5px]">
@@ -651,6 +851,142 @@ export function ProjectEditorDialog(props: Props) {
               data-testid="input-project-additional"
             />
           </div>
+
+          {/* ACTIVITY LOG */}
+          {isEdit && existing ? (
+            <section
+              className="rounded-md border border-border/60 p-3 space-y-2 bg-muted/20"
+              data-testid="section-project-activity"
+            >
+              <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5" />
+                Activity
+              </h4>
+              <div className="flex gap-2 items-start">
+                <Avatar className="h-7 w-7 mt-0.5">
+                  <AvatarFallback className="text-[10px]">
+                    {(session?.name ?? "?")
+                      .split(" ")
+                      .map((s) => s[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <Textarea
+                  value={commentDraft}
+                  onChange={(e) => setCommentDraft(e.target.value)}
+                  placeholder="Write an update…"
+                  className="flex-1 min-h-[44px] text-[12.5px]"
+                  data-testid="input-new-comment"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  disabled={
+                    !commentDraft.trim() || createComment.isPending
+                  }
+                  onClick={() => {
+                    const body = commentDraft.trim();
+                    if (!body) return;
+                    createComment.mutate(
+                      { id: existing.id, data: { body } },
+                      {
+                        onSuccess: () => {
+                          setCommentDraft("");
+                          queryClient.invalidateQueries({
+                            queryKey: getListProjectCommentsQueryKey(
+                              existing.id,
+                            ),
+                          });
+                        },
+                        onError: () =>
+                          toast({
+                            title: "Could not post comment",
+                            variant: "destructive",
+                          }),
+                      },
+                    );
+                  }}
+                  data-testid="button-post-comment"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              {comments && comments.length > 0 ? (
+                <ul className="space-y-2 pt-1">
+                  {comments.map((c) => {
+                    const isOwn = c.authorId === session?.userId;
+                    return (
+                      <li
+                        key={c.id}
+                        className="flex gap-2 items-start group"
+                        data-testid={`comment-${c.id}`}
+                      >
+                        <Avatar className="h-7 w-7 mt-0.5">
+                          <AvatarFallback className="text-[10px]">
+                            {(c.authorName ?? "?")
+                              .split(" ")
+                              .map((s) => s[0])
+                              .slice(0, 2)
+                              .join("")
+                              .toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-2 text-[11.5px]">
+                            <span className="font-medium">
+                              {c.authorName ?? "Unknown"}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {new Date(c.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-[12.5px] whitespace-pre-wrap mt-0.5">
+                            {c.body}
+                          </p>
+                        </div>
+                        {isOwn ? (
+                          <button
+                            type="button"
+                            aria-label="Delete comment"
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1"
+                            onClick={() => {
+                              if (
+                                !window.confirm("Delete this comment?")
+                              )
+                                return;
+                              deleteComment.mutate(
+                                { id: existing.id, commentId: c.id },
+                                {
+                                  onSuccess: () =>
+                                    queryClient.invalidateQueries({
+                                      queryKey:
+                                        getListProjectCommentsQueryKey(
+                                          existing.id,
+                                        ),
+                                    }),
+                                },
+                              );
+                            }}
+                            data-testid={`button-delete-comment-${c.id}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-[12px] text-muted-foreground italic pt-1">
+                  No activity yet.
+                </p>
+              )}
+            </section>
+          ) : null}
         </div>
 
         <DialogFooter className="flex sm:justify-between">

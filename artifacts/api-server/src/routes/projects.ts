@@ -3,9 +3,8 @@ import { and, asc, desc, eq, inArray, isNull, max, or, sql } from "drizzle-orm";
 import {
   db,
   projectsTable,
-  projectBucketsTable,
-  projectTasksTable,
-  projectTaskCommentsTable,
+  departmentBucketsTable,
+  projectCommentsTable,
   departmentsTable,
   usersTable,
   type TaskLabel,
@@ -19,20 +18,16 @@ import {
   UpdateProjectParams,
   UpdateProjectBody,
   DeleteProjectParams,
-  CreateProjectBucketParams,
-  CreateProjectBucketBody,
-  UpdateProjectBucketParams,
-  UpdateProjectBucketBody,
-  DeleteProjectBucketParams,
-  CreateProjectTaskParams,
-  CreateProjectTaskBody,
-  UpdateProjectTaskParams,
-  UpdateProjectTaskBody,
-  DeleteProjectTaskParams,
-  ListProjectTaskCommentsParams,
-  CreateProjectTaskCommentParams,
-  CreateProjectTaskCommentBody,
-  DeleteProjectTaskCommentParams,
+  GetDepartmentBoardParams,
+  CreateDepartmentBucketParams,
+  CreateDepartmentBucketBody,
+  UpdateDepartmentBucketParams,
+  UpdateDepartmentBucketBody,
+  DeleteDepartmentBucketParams,
+  ListProjectCommentsParams,
+  CreateProjectCommentParams,
+  CreateProjectCommentBody,
+  DeleteProjectCommentParams,
 } from "@workspace/api-zod";
 import { getCurrentUser, type SessionUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
@@ -48,19 +43,58 @@ const router: IRouter = Router();
 type ProjectStatus = "active" | "on_hold" | "completed" | "archived";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
+// The seven phase columns every department starts with. Kept in sync with
+// the data migration that bootstrapped existing departments.
+const DEFAULT_PHASES: Array<{ name: string; color: string }> = [
+  { name: "New Suggestions", color: "#94A3B8" },
+  { name: "Future Roadmap", color: "#A78BFA" },
+  { name: "Backlog", color: "#60A5FA" },
+  { name: "Phase 1 - R&D (Go/No-Go)", color: "#F59E0B" },
+  { name: "Phase 2 - Preparation & Planning", color: "#FB923C" },
+  { name: "Phase 3 - Implementation", color: "#F472B6" },
+  { name: "2026 Completed Initiatives", color: "#34D399" },
+];
+
 // ---------- Authorization helpers ----------
 //
-// A project is a board of work. We mirror the ticket board access model:
-//   - end_user → no access (projects are an internal coordination tool).
-//   - admin → full access to every project.
+// Postgres SQLSTATE 23505 = unique_violation. Used to convert the
+// (department_id, name) unique-index conflict on department_buckets into a
+// 409 instead of a 500 when a phase create/rename collides with an existing
+// phase in the same department. The unique index itself is required to make
+// the GET /departments/:id/board default-bucket bootstrap idempotent under
+// concurrent first-reads.
+function isUniqueViolation(err: unknown): boolean {
+  // node-pg sets `code` directly on its error. Drizzle 0.45 wraps that in a
+  // DrizzleQueryError whose underlying pg error is exposed via `.cause`, so
+  // we have to peek through one level of wrapping.
+  for (
+    let cur: unknown = err, depth = 0;
+    cur != null && depth < 4;
+    cur = (cur as { cause?: unknown }).cause, depth++
+  ) {
+    if (
+      typeof cur === "object" &&
+      cur !== null &&
+      "code" in cur &&
+      (cur as { code?: string }).code === "23505"
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// A project is an initiative card on a department board. We mirror the
+// ticket board access model:
+//   - end_user → no access (initiatives are an internal coordination tool).
+//   - admin → full access to every project / department.
 //   - agent →
 //       • If the project has a departmentId, they need at least the
 //         requested role on that board (read => any role, write =>
 //         "modify"). Membership is resolved via getBoardRole.
 //       • If the project has no departmentId (cross-functional work),
 //         any agent may view; writes require that the agent has *some*
-//         "modify" role on at least one board (so end_user-but-promoted
-//         demo seats still can't sneak through).
+//         "modify" role on at least one board.
 async function authorizeProjectAccess(
   user: SessionUser,
   project: { departmentId: number | null },
@@ -81,6 +115,19 @@ async function authorizeProjectAccess(
   return roleAtLeast(role, "modify");
 }
 
+async function authorizeDepartmentAccess(
+  user: SessionUser,
+  departmentId: number,
+  min: "read" | "modify",
+): Promise<boolean> {
+  if (user.role === "end_user") return false;
+  if (user.role === "admin") return true;
+  if (user.role !== "agent") return false;
+  const role = await getBoardRole(user, departmentId);
+  if (min === "read") return role !== null;
+  return roleAtLeast(role, "modify");
+}
+
 // SQL where-clause that limits a project list to those the caller can read.
 async function projectVisibilityWhere(user: SessionUser) {
   if (user.role === "admin") return undefined;
@@ -97,94 +144,22 @@ async function projectVisibilityWhere(user: SessionUser) {
 async function loadProjectForBucket(bucketId: number) {
   const [row] = await db
     .select({
-      id: projectsTable.id,
-      departmentId: projectsTable.departmentId,
-      bucketProjectId: projectBucketsTable.projectId,
+      id: departmentBucketsTable.id,
+      departmentId: departmentBucketsTable.departmentId,
     })
-    .from(projectBucketsTable)
-    .innerJoin(projectsTable, eq(projectBucketsTable.projectId, projectsTable.id))
-    .where(eq(projectBucketsTable.id, bucketId));
+    .from(departmentBucketsTable)
+    .where(eq(departmentBucketsTable.id, bucketId));
   return row ?? null;
-}
-
-async function loadProjectForTask(taskId: number) {
-  const [row] = await db
-    .select({
-      id: projectsTable.id,
-      departmentId: projectsTable.departmentId,
-      taskBucketId: projectTasksTable.bucketId,
-    })
-    .from(projectTasksTable)
-    .innerJoin(projectsTable, eq(projectTasksTable.projectId, projectsTable.id))
-    .where(eq(projectTasksTable.id, taskId));
-  return row ?? null;
-}
-
-// ---------- DTO helpers ----------
-
-function toTaskDto(
-  row: typeof projectTasksTable.$inferSelect,
-  userMap: Map<number, { id: number; name: string }>,
-  deptMap?: Map<number, { id: number; name: string }>,
-  commentCounts?: Map<number, number>,
-) {
-  const impactedIds = (row.impactedDepartmentIds ?? []) as number[];
-  const impactedNames = deptMap
-    ? impactedIds
-        .map((id) => deptMap.get(id)?.name)
-        .filter((n): n is string => typeof n === "string")
-    : [];
-  const rawChecklist = (row.checklist ?? []) as ChecklistItem[];
-  const checklist = rawChecklist.map((item) => ({
-    text: item.text,
-    done: item.done,
-    assigneeId: item.assigneeId ?? null,
-    assigneeName:
-      item.assigneeId != null
-        ? (userMap.get(item.assigneeId)?.name ?? null)
-        : null,
-  }));
-  return {
-    id: row.id,
-    projectId: row.projectId,
-    bucketId: row.bucketId,
-    title: row.title,
-    description: row.description,
-    labels: (row.labels ?? []) as TaskLabel[],
-    checklist,
-    assigneeId: row.assigneeId ?? null,
-    assigneeName: row.assigneeId
-      ? (userMap.get(row.assigneeId)?.name ?? null)
-      : null,
-    priority: row.priority as TaskPriority,
-    dueAt: row.dueAt ? row.dueAt.toISOString() : null,
-    position: row.position,
-    completed: row.completed,
-    suggestedById: row.suggestedById ?? null,
-    suggestedByName: row.suggestedById
-      ? (userMap.get(row.suggestedById)?.name ?? null)
-      : null,
-    goal: row.goal,
-    implementation: row.implementation,
-    rationale: row.rationale,
-    impactedDepartmentIds: impactedIds,
-    impactedDepartmentNames: impactedNames,
-    additionalComments: row.additionalComments,
-    completedYear: row.completedYear ?? null,
-    commentCount: commentCounts?.get(row.id) ?? 0,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
 }
 
 // True when a bucket name corresponds to the "completed" pipeline stage.
-// Matches "Completed", "Year Completed", "Year Completed 2025", etc., case-insensitive.
+// Matches "Completed", "Year Completed", "2026 Completed Initiatives", etc.
 function isCompletedBucketName(name: string): boolean {
   return /\bcompleted\b/i.test(name);
 }
 
 // Strip derived fields (assigneeName) and normalize assigneeId before
-// persisting checklist items. Clients may send the hydrated DTO back; we
+// persisting checklist items. Clients send the hydrated DTO back; we
 // only store text/done/assigneeId.
 function sanitizeChecklist(input: unknown): ChecklistItem[] {
   if (!Array.isArray(input)) return [];
@@ -202,35 +177,51 @@ function sanitizeChecklist(input: unknown): ChecklistItem[] {
   });
 }
 
-async function summarizeProjects(
-  rows: (typeof projectsTable.$inferSelect)[],
-) {
+// ---------- DTO helpers ----------
+
+type ProjectRow = typeof projectsTable.$inferSelect;
+type BucketRow = typeof departmentBucketsTable.$inferSelect;
+
+function bucketToDto(row: BucketRow) {
+  return {
+    id: row.id,
+    departmentId: row.departmentId,
+    name: row.name,
+    color: row.color,
+    position: row.position,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+async function summarizeProjects(rows: ProjectRow[]) {
   if (rows.length === 0) return [];
   const projectIds = rows.map((r) => r.id);
-  // Departments come from both the project's own departmentId and the
-  // initiative's impactedDepartmentIds list.
   const deptIdSet = new Set<number>();
   const userIdSet = new Set<number>();
+  const bucketIdSet = new Set<number>();
   for (const r of rows) {
     if (r.departmentId != null) deptIdSet.add(r.departmentId);
+    if (r.bucketId != null) bucketIdSet.add(r.bucketId);
     if (r.ownerId != null) userIdSet.add(r.ownerId);
     if (r.suggestedById != null) userIdSet.add(r.suggestedById);
     for (const d of (r.impactedDepartmentIds ?? []) as number[]) {
       deptIdSet.add(d);
     }
+    for (const item of (r.checklist ?? []) as ChecklistItem[]) {
+      if (item.assigneeId != null) userIdSet.add(item.assigneeId);
+    }
   }
   const deptIds = Array.from(deptIdSet);
   const userIds = Array.from(userIdSet);
+  const bucketIds = Array.from(bucketIdSet);
 
-  const [buckets, tasks, depts, users] = await Promise.all([
-    db
-      .select()
-      .from(projectBucketsTable)
-      .where(inArray(projectBucketsTable.projectId, projectIds)),
-    db
-      .select()
-      .from(projectTasksTable)
-      .where(inArray(projectTasksTable.projectId, projectIds)),
+  const [buckets, depts, users, commentRows] = await Promise.all([
+    bucketIds.length
+      ? db
+          .select()
+          .from(departmentBucketsTable)
+          .where(inArray(departmentBucketsTable.id, bucketIds))
+      : Promise.resolve([] as BucketRow[]),
     deptIds.length
       ? db
           .select()
@@ -240,31 +231,38 @@ async function summarizeProjects(
     userIds.length
       ? db.select().from(usersTable).where(inArray(usersTable.id, userIds))
       : Promise.resolve([] as (typeof usersTable.$inferSelect)[]),
+    db
+      .select({
+        projectId: projectCommentsTable.projectId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(projectCommentsTable)
+      .where(inArray(projectCommentsTable.projectId, projectIds))
+      .groupBy(projectCommentsTable.projectId),
   ]);
 
-  const bucketCount = new Map<number, number>();
-  for (const b of buckets) {
-    bucketCount.set(b.projectId, (bucketCount.get(b.projectId) ?? 0) + 1);
-  }
-  const taskCount = new Map<number, number>();
-  const completedCount = new Map<number, number>();
-  for (const t of tasks) {
-    taskCount.set(t.projectId, (taskCount.get(t.projectId) ?? 0) + 1);
-    if (t.completed) {
-      completedCount.set(
-        t.projectId,
-        (completedCount.get(t.projectId) ?? 0) + 1,
-      );
-    }
-  }
+  const bucketMap = new Map(buckets.map((b) => [b.id, b]));
   const deptMap = new Map(depts.map((d) => [d.id, d]));
   const userMap = new Map(users.map((u) => [u.id, u]));
+  const commentCounts = new Map(commentRows.map((r) => [r.projectId, r.count]));
 
   return rows.map((r) => {
     const impactedIds = (r.impactedDepartmentIds ?? []) as number[];
     const impactedNames = impactedIds
       .map((id) => deptMap.get(id)?.name)
       .filter((n): n is string => typeof n === "string");
+    const rawChecklist = (r.checklist ?? []) as ChecklistItem[];
+    const checklist = rawChecklist.map((item) => ({
+      text: item.text,
+      done: item.done,
+      assigneeId: item.assigneeId ?? null,
+      assigneeName:
+        item.assigneeId != null
+          ? (userMap.get(item.assigneeId)?.name ?? null)
+          : null,
+    }));
+    const checklistDone = checklist.filter((c) => c.done).length;
+    const bucket = r.bucketId != null ? bucketMap.get(r.bucketId) : null;
     return {
       id: r.id,
       name: r.name,
@@ -275,6 +273,8 @@ async function summarizeProjects(
       departmentName: r.departmentId
         ? (deptMap.get(r.departmentId)?.name ?? null)
         : null,
+      bucketId: r.bucketId ?? null,
+      bucketName: bucket?.name ?? null,
       ownerId: r.ownerId ?? null,
       ownerName: r.ownerId ? (userMap.get(r.ownerId)?.name ?? null) : null,
       dueAt: r.dueAt ? r.dueAt.toISOString() : null,
@@ -291,9 +291,10 @@ async function summarizeProjects(
       completedYear: r.completedYear ?? null,
       labels: (r.labels ?? []) as TaskLabel[],
       priority: r.priority as TaskPriority,
-      bucketCount: bucketCount.get(r.id) ?? 0,
-      taskCount: taskCount.get(r.id) ?? 0,
-      completedTaskCount: completedCount.get(r.id) ?? 0,
+      checklist,
+      checklistTotal: checklist.length,
+      checklistDone,
+      commentCount: commentCounts.get(r.id) ?? 0,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -306,88 +307,11 @@ async function detailProject(id: number) {
     .from(projectsTable)
     .where(eq(projectsTable.id, id));
   if (!project) return null;
-
   const [summary] = await summarizeProjects([project]);
-
-  const [buckets, tasks] = await Promise.all([
-    db
-      .select()
-      .from(projectBucketsTable)
-      .where(eq(projectBucketsTable.projectId, id))
-      .orderBy(asc(projectBucketsTable.position), asc(projectBucketsTable.id)),
-    db
-      .select()
-      .from(projectTasksTable)
-      .where(eq(projectTasksTable.projectId, id))
-      .orderBy(asc(projectTasksTable.position), asc(projectTasksTable.id)),
-  ]);
-
-  // Hydrate names for: assignees, suggesters, impacted departments,
-  // plus comment counts per task.
-  const userIds = new Set<number>();
-  const deptIds = new Set<number>();
-  for (const t of tasks) {
-    if (t.assigneeId) userIds.add(t.assigneeId);
-    if (t.suggestedById) userIds.add(t.suggestedById);
-    for (const d of (t.impactedDepartmentIds ?? []) as number[]) deptIds.add(d);
-    // Per-checklist-item assignees can differ from the task assignee.
-    for (const item of (t.checklist ?? []) as ChecklistItem[]) {
-      if (item.assigneeId != null) userIds.add(item.assigneeId);
-    }
-  }
-  const taskIds = tasks.map((t) => t.id);
-
-  const [users, depts, commentRows] = await Promise.all([
-    userIds.size
-      ? db
-          .select()
-          .from(usersTable)
-          .where(inArray(usersTable.id, Array.from(userIds)))
-      : Promise.resolve([] as (typeof usersTable.$inferSelect)[]),
-    deptIds.size
-      ? db
-          .select()
-          .from(departmentsTable)
-          .where(inArray(departmentsTable.id, Array.from(deptIds)))
-      : Promise.resolve([] as (typeof departmentsTable.$inferSelect)[]),
-    taskIds.length
-      ? db
-          .select({
-            taskId: projectTaskCommentsTable.taskId,
-            count: sql<number>`count(*)::int`,
-          })
-          .from(projectTaskCommentsTable)
-          .where(inArray(projectTaskCommentsTable.taskId, taskIds))
-          .groupBy(projectTaskCommentsTable.taskId)
-      : Promise.resolve([] as { taskId: number; count: number }[]),
-  ]);
-  const userMap = new Map(users.map((u) => [u.id, u]));
-  const deptMap = new Map(depts.map((d) => [d.id, d]));
-  const commentCounts = new Map(commentRows.map((r) => [r.taskId, r.count]));
-
-  const tasksByBucket = new Map<number, typeof tasks>();
-  for (const t of tasks) {
-    const list = tasksByBucket.get(t.bucketId) ?? [];
-    list.push(t);
-    tasksByBucket.set(t.bucketId, list);
-  }
-
-  return {
-    ...summary,
-    buckets: buckets.map((b) => ({
-      id: b.id,
-      projectId: b.projectId,
-      name: b.name,
-      position: b.position,
-      createdAt: b.createdAt.toISOString(),
-      tasks: (tasksByBucket.get(b.id) ?? []).map((t) =>
-        toTaskDto(t, userMap, deptMap, commentCounts),
-      ),
-    })),
-  };
+  return summary;
 }
 
-// ---------- Routes ----------
+// ---------- Routes: Projects ----------
 
 router.get("/projects", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
@@ -453,7 +377,48 @@ router.post("/projects", async (req, res): Promise<void> => {
       return;
     }
   }
+  // If a bucket is supplied, it must belong to the same department.
+  // Cross-functional projects (departmentId == null) cannot live in any
+  // department bucket — buckets are department-scoped, so allowing this
+  // would let an agent pin a global card to any team's board column.
+  let bucketId: number | null = parsed.data.bucketId ?? null;
+  let bucketName: string | null = null;
+  if (bucketId != null) {
+    if (parsed.data.departmentId == null) {
+      res.status(400).json({
+        error: "Cross-functional projects cannot be assigned to a phase bucket",
+      });
+      return;
+    }
+    const bucket = await loadProjectForBucket(bucketId);
+    if (!bucket) {
+      res.status(400).json({ error: "Unknown phase bucket" });
+      return;
+    }
+    if (bucket.departmentId !== parsed.data.departmentId) {
+      res.status(400).json({
+        error: "Phase bucket does not belong to this department",
+      });
+      return;
+    }
+    const [b] = await db
+      .select({ name: departmentBucketsTable.name })
+      .from(departmentBucketsTable)
+      .where(eq(departmentBucketsTable.id, bucketId));
+    bucketName = b?.name ?? null;
+  }
+
   const dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
+  // Auto-stamp completedYear when card is created in a "Completed" bucket.
+  let completedYear = parsed.data.completedYear ?? null;
+  if (
+    completedYear == null &&
+    bucketName != null &&
+    isCompletedBucketName(bucketName)
+  ) {
+    completedYear = new Date().getUTCFullYear();
+  }
+
   const [row] = await db
     .insert(projectsTable)
     .values({
@@ -462,6 +427,7 @@ router.post("/projects", async (req, res): Promise<void> => {
       color: parsed.data.color ?? "#4B9CD3",
       status: parsed.data.status ?? "active",
       departmentId: parsed.data.departmentId ?? null,
+      bucketId,
       ownerId: parsed.data.ownerId ?? user.id,
       dueAt,
       suggestedById: parsed.data.suggestedById ?? user.id,
@@ -470,21 +436,12 @@ router.post("/projects", async (req, res): Promise<void> => {
       rationale: parsed.data.rationale ?? "",
       impactedDepartmentIds: parsed.data.impactedDepartmentIds ?? [],
       additionalComments: parsed.data.additionalComments ?? "",
+      completedYear,
       labels: parsed.data.labels ?? [],
       priority: parsed.data.priority ?? "medium",
+      checklist: sanitizeChecklist(parsed.data.checklist),
     })
     .returning();
-
-  // Seed default buckets to mirror the EW Howell initiative pipeline.
-  await db.insert(projectBucketsTable).values([
-    { projectId: row.id, name: "New Suggestions", position: 0 },
-    { projectId: row.id, name: "Future Roadmap", position: 1 },
-    { projectId: row.id, name: "Backlog", position: 2 },
-    { projectId: row.id, name: "Phase 1 - R&D (Go/No-Go)", position: 3 },
-    { projectId: row.id, name: "Phase 2 - Preparation & Planning", position: 4 },
-    { projectId: row.id, name: "Phase 3 - Implementation", position: 5 },
-    { projectId: row.id, name: "Completed", position: 6 },
-  ]);
 
   const detail = await detailProject(row.id);
   res.status(201).json(detail);
@@ -537,10 +494,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     return;
   }
   const [existing] = await db
-    .select({
-      id: projectsTable.id,
-      departmentId: projectsTable.departmentId,
-    })
+    .select()
     .from(projectsTable)
     .where(eq(projectsTable.id, params.data.id));
   if (!existing) {
@@ -567,6 +521,62 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     }
   }
 
+  // Resolve the (post-update) department + bucket as a single invariant:
+  //   bucketId == null  ||  (departmentId != null && bucket.departmentId === departmentId)
+  // This catches every cross-edit:
+  //   * caller supplies a bucket from a different dept
+  //   * caller flips departmentId without touching bucketId (the existing
+  //     bucket would now point at the wrong dept) — we auto-clear bucketId
+  //     so the project re-lands in "Unassigned" instead of silently leaking
+  //     across boards
+  //   * caller pins a bucket on a cross-functional (deptId == null) project
+  const departmentChanged =
+    parsed.data.departmentId !== undefined &&
+    parsed.data.departmentId !== existing.departmentId;
+  const targetDeptId =
+    parsed.data.departmentId !== undefined
+      ? (parsed.data.departmentId ?? null)
+      : existing.departmentId;
+
+  let resolvedBucketId: number | null | undefined =
+    parsed.data.bucketId !== undefined
+      ? parsed.data.bucketId
+      : departmentChanged
+        ? null // dept moved → drop the now-stale bucket
+        : undefined;
+
+  let newBucketName: string | null = null;
+  let bucketChanged = false;
+  if (resolvedBucketId !== undefined) {
+    bucketChanged = resolvedBucketId !== existing.bucketId;
+    if (resolvedBucketId == null) {
+      newBucketName = null;
+    } else {
+      if (targetDeptId == null) {
+        res.status(400).json({
+          error:
+            "Cross-functional projects cannot be assigned to a phase bucket",
+        });
+        return;
+      }
+      const [bucket] = await db
+        .select()
+        .from(departmentBucketsTable)
+        .where(eq(departmentBucketsTable.id, resolvedBucketId));
+      if (!bucket) {
+        res.status(400).json({ error: "Unknown phase bucket" });
+        return;
+      }
+      if (bucket.departmentId !== targetDeptId) {
+        res.status(400).json({
+          error: "Phase bucket does not belong to this department",
+        });
+        return;
+      }
+      newBucketName = bucket.name;
+    }
+  }
+
   const updates: Partial<typeof projectsTable.$inferInsert> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.description !== undefined)
@@ -575,6 +585,10 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
   if (parsed.data.departmentId !== undefined)
     updates.departmentId = parsed.data.departmentId;
+  // Use the resolved (possibly auto-cleared) bucketId, NOT the raw input,
+  // so a department change without an explicit bucket reset does not leave
+  // the project pinned to a bucket from its old department.
+  if (resolvedBucketId !== undefined) updates.bucketId = resolvedBucketId;
   if (parsed.data.ownerId !== undefined) updates.ownerId = parsed.data.ownerId;
   if (parsed.data.dueAt !== undefined)
     updates.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
@@ -593,6 +607,21 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     updates.completedYear = parsed.data.completedYear;
   if (parsed.data.labels !== undefined) updates.labels = parsed.data.labels;
   if (parsed.data.priority !== undefined) updates.priority = parsed.data.priority;
+  if (parsed.data.checklist !== undefined)
+    updates.checklist = sanitizeChecklist(parsed.data.checklist);
+
+  // Auto-stamp completedYear when card moves into a "Completed" bucket and
+  // clear it when moving out — but only if the caller didn't explicitly set
+  // completedYear in this same request.
+  if (bucketChanged && parsed.data.completedYear === undefined) {
+    if (newBucketName != null && isCompletedBucketName(newBucketName)) {
+      if (!existing.completedYear) {
+        updates.completedYear = new Date().getUTCFullYear();
+      }
+    } else {
+      updates.completedYear = null;
+    }
+  }
 
   const [row] = await db
     .update(projectsTable)
@@ -618,7 +647,7 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  // FK ON DELETE CASCADE will tear down buckets and tasks.
+  // FK ON DELETE CASCADE on project_comments will tear those down too.
   const [row] = await db
     .delete(projectsTable)
     .where(eq(projectsTable.id, params.data.id))
@@ -630,99 +659,214 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-router.post("/projects/:id/buckets", async (req, res): Promise<void> => {
+// ---------- Routes: Department board (Kanban) ----------
+
+router.get("/departments/:id/board", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
   if (user.role === "end_user") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const params = CreateProjectBucketParams.safeParse(req.params);
+  const params = GetDepartmentBoardParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const parsed = CreateProjectBucketBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const [dept] = await db
+    .select()
+    .from(departmentsTable)
+    .where(eq(departmentsTable.id, params.data.id));
+  if (!dept) {
+    res.status(404).json({ error: "Department not found" });
     return;
   }
-  const [project] = await db
-    .select({
-      id: projectsTable.id,
-      departmentId: projectsTable.departmentId,
-    })
+  if (!(await authorizeDepartmentAccess(user, dept.id, "read"))) {
+    res.status(403).json({ error: "Forbidden on this board" });
+    return;
+  }
+
+  // Bootstrap default phases on first read so brand-new departments get the
+  // standard pipeline without an extra admin step.
+  let buckets = await db
+    .select()
+    .from(departmentBucketsTable)
+    .where(eq(departmentBucketsTable.departmentId, dept.id))
+    .orderBy(asc(departmentBucketsTable.position), asc(departmentBucketsTable.id));
+  if (buckets.length === 0) {
+    // Two concurrent first-reads can both hit the empty-buckets branch and
+    // race to insert the default phases, producing duplicate columns. The
+    // (department_id, name) unique index plus onConflictDoNothing makes the
+    // seed idempotent so the loser of the race becomes a no-op.
+    await db
+      .insert(departmentBucketsTable)
+      .values(
+        DEFAULT_PHASES.map((p, idx) => ({
+          departmentId: dept.id,
+          name: p.name,
+          color: p.color,
+          position: idx,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [
+          departmentBucketsTable.departmentId,
+          departmentBucketsTable.name,
+        ],
+      });
+    buckets = await db
+      .select()
+      .from(departmentBucketsTable)
+      .where(eq(departmentBucketsTable.departmentId, dept.id))
+      .orderBy(asc(departmentBucketsTable.position), asc(departmentBucketsTable.id));
+  }
+
+  const projects = await db
+    .select()
     .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
-  if (!project) {
-    res.status(404).json({ error: "Project not found" });
-    return;
+    .where(eq(projectsTable.departmentId, dept.id))
+    .orderBy(desc(projectsTable.updatedAt));
+
+  const summaries = await summarizeProjects(projects);
+  const byBucket = new Map<number, typeof summaries>();
+  const unassigned: typeof summaries = [];
+  for (const p of summaries) {
+    if (p.bucketId == null) {
+      unassigned.push(p);
+    } else {
+      const list = byBucket.get(p.bucketId) ?? [];
+      list.push(p);
+      byBucket.set(p.bucketId, list);
+    }
   }
-  if (!(await authorizeProjectAccess(user, project, "modify"))) {
-    res.status(403).json({ error: "Forbidden on this project" });
-    return;
-  }
-  const [{ value: maxPos }] = await db
-    .select({ value: max(projectBucketsTable.position) })
-    .from(projectBucketsTable)
-    .where(eq(projectBucketsTable.projectId, params.data.id));
-  const [row] = await db
-    .insert(projectBucketsTable)
-    .values({
-      projectId: params.data.id,
-      name: parsed.data.name,
-      position: (maxPos ?? -1) + 1,
-    })
-    .returning();
-  res.status(201).json({
-    id: row.id,
-    projectId: row.projectId,
-    name: row.name,
-    position: row.position,
-    createdAt: row.createdAt.toISOString(),
+
+  res.json({
+    departmentId: dept.id,
+    departmentName: dept.name,
+    columns: buckets.map((b) => ({
+      ...bucketToDto(b),
+      projects: byBucket.get(b.id) ?? [],
+    })),
+    unassigned,
   });
 });
 
-router.patch("/project-buckets/:id", async (req, res): Promise<void> => {
+// ---------- Routes: Department-bucket CRUD ----------
+
+router.post("/departments/:id/buckets", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
   if (user.role === "end_user") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const params = UpdateProjectBucketParams.safeParse(req.params);
+  const params = CreateDepartmentBucketParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const parsed = UpdateProjectBucketBody.safeParse(req.body);
+  const parsed = CreateDepartmentBucketBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const project = await loadProjectForBucket(params.data.id);
-  if (!project) {
+  const [dept] = await db
+    .select({ id: departmentsTable.id })
+    .from(departmentsTable)
+    .where(eq(departmentsTable.id, params.data.id));
+  if (!dept) {
+    res.status(404).json({ error: "Department not found" });
+    return;
+  }
+  if (!(await authorizeDepartmentAccess(user, dept.id, "modify"))) {
+    res.status(403).json({ error: "Forbidden on this board" });
+    return;
+  }
+  const [{ value: maxPos }] = await db
+    .select({ value: max(departmentBucketsTable.position) })
+    .from(departmentBucketsTable)
+    .where(eq(departmentBucketsTable.departmentId, dept.id));
+  // Translate the (department_id, name) unique-index violation that
+  // backstops the bootstrap race into a clean 409 instead of a 500 when
+  // an admin manually creates a bucket with a duplicate name.
+  let row: BucketRow;
+  try {
+    [row] = await db
+      .insert(departmentBucketsTable)
+      .values({
+        departmentId: dept.id,
+        name: parsed.data.name,
+        color: parsed.data.color ?? "#4B9CD3",
+        position: (maxPos ?? -1) + 1,
+      })
+      .returning();
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      res.status(409).json({
+        error: "A phase with this name already exists for this department",
+      });
+      return;
+    }
+    throw err;
+  }
+  res.status(201).json(bucketToDto(row));
+});
+
+router.patch("/department-buckets/:id", async (req, res): Promise<void> => {
+  const user = await getCurrentUser(req);
+  if (user.role === "end_user") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const params = UpdateDepartmentBucketParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = UpdateDepartmentBucketBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const bucket = await loadProjectForBucket(params.data.id);
+  if (!bucket) {
     res.status(404).json({ error: "Bucket not found" });
     return;
   }
-  if (!(await authorizeProjectAccess(user, project, "modify"))) {
-    res.status(403).json({ error: "Forbidden on this project" });
+  if (!(await authorizeDepartmentAccess(user, bucket.departmentId, "modify"))) {
+    res.status(403).json({ error: "Forbidden on this board" });
     return;
   }
-  const updates: Partial<typeof projectBucketsTable.$inferInsert> = {};
+
+  // Capture the current name to detect transitions across the "completed"
+  // boundary so we can reconcile completedYear on every project sitting
+  // in this bucket.
+  const [existingBucket] = await db
+    .select({ name: departmentBucketsTable.name })
+    .from(departmentBucketsTable)
+    .where(eq(departmentBucketsTable.id, params.data.id));
+
+  const updates: Partial<typeof departmentBucketsTable.$inferInsert> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
+  if (parsed.data.color !== undefined) updates.color = parsed.data.color;
   if (parsed.data.position !== undefined) updates.position = parsed.data.position;
 
-  // Capture pre-update name so we can detect a transition across the
-  // "completed" boundary and reconcile completedYear on tasks in this bucket.
-  const [existingBucket] = await db
-    .select({ name: projectBucketsTable.name })
-    .from(projectBucketsTable)
-    .where(eq(projectBucketsTable.id, params.data.id));
-
-  const [row] = await db
-    .update(projectBucketsTable)
-    .set(updates)
-    .where(eq(projectBucketsTable.id, params.data.id))
-    .returning();
+  // Same unique-violation translation as the create path: a rename that
+  // collides with another phase in the same department becomes 409, not 500.
+  let row: BucketRow | undefined;
+  try {
+    [row] = await db
+      .update(departmentBucketsTable)
+      .set(updates)
+      .where(eq(departmentBucketsTable.id, params.data.id))
+      .returning();
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      res.status(409).json({
+        error: "A phase with this name already exists for this department",
+      });
+      return;
+    }
+    throw err;
+  }
   if (!row) {
     res.status(404).json({ error: "Bucket not found" });
     return;
@@ -732,58 +876,51 @@ router.patch("/project-buckets/:id", async (req, res): Promise<void> => {
     const wasCompleted = isCompletedBucketName(existingBucket.name);
     const isCompleted = isCompletedBucketName(row.name);
     if (!wasCompleted && isCompleted) {
-      // Stamp current year on every task in this bucket that's missing one.
       await db
-        .update(projectTasksTable)
+        .update(projectsTable)
         .set({ completedYear: new Date().getUTCFullYear() })
         .where(
           and(
-            eq(projectTasksTable.bucketId, row.id),
-            isNull(projectTasksTable.completedYear),
+            eq(projectsTable.bucketId, row.id),
+            isNull(projectsTable.completedYear),
           ),
         );
     } else if (wasCompleted && !isCompleted) {
-      // Clear completedYear on tasks now back in an in-flight phase.
       await db
-        .update(projectTasksTable)
+        .update(projectsTable)
         .set({ completedYear: null })
-        .where(eq(projectTasksTable.bucketId, row.id));
+        .where(eq(projectsTable.bucketId, row.id));
     }
   }
 
-  res.json({
-    id: row.id,
-    projectId: row.projectId,
-    name: row.name,
-    position: row.position,
-    createdAt: row.createdAt.toISOString(),
-  });
+  res.json(bucketToDto(row));
 });
 
-router.delete("/project-buckets/:id", async (req, res): Promise<void> => {
+router.delete("/department-buckets/:id", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
   if (user.role === "end_user") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const params = DeleteProjectBucketParams.safeParse(req.params);
+  const params = DeleteDepartmentBucketParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const project = await loadProjectForBucket(params.data.id);
-  if (!project) {
+  const bucket = await loadProjectForBucket(params.data.id);
+  if (!bucket) {
     res.status(404).json({ error: "Bucket not found" });
     return;
   }
-  if (!(await authorizeProjectAccess(user, project, "modify"))) {
-    res.status(403).json({ error: "Forbidden on this project" });
+  if (!(await authorizeDepartmentAccess(user, bucket.departmentId, "modify"))) {
+    res.status(403).json({ error: "Forbidden on this board" });
     return;
   }
-  // FK ON DELETE CASCADE handles tasks.
+  // FK is set null, so projects that lived in this bucket simply move to
+  // the "Unassigned" lane on the board.
   const [row] = await db
-    .delete(projectBucketsTable)
-    .where(eq(projectBucketsTable.id, params.data.id))
+    .delete(departmentBucketsTable)
+    .where(eq(departmentBucketsTable.id, params.data.id))
     .returning();
   if (!row) {
     res.status(404).json({ error: "Bucket not found" });
@@ -792,283 +929,15 @@ router.delete("/project-buckets/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-router.post("/projects/:id/tasks", async (req, res): Promise<void> => {
-  const user = await getCurrentUser(req);
-  if (user.role === "end_user") {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-  const params = CreateProjectTaskParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const parsed = CreateProjectTaskBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const [project] = await db
-    .select({
-      id: projectsTable.id,
-      departmentId: projectsTable.departmentId,
-    })
-    .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
-  if (!project) {
-    res.status(404).json({ error: "Project not found" });
-    return;
-  }
-  if (!(await authorizeProjectAccess(user, project, "modify"))) {
-    res.status(403).json({ error: "Forbidden on this project" });
-    return;
-  }
-
-  // Verify the bucket belongs to this project so we don't end up with
-  // orphaned cards floating across boards.
-  const [bucket] = await db
-    .select()
-    .from(projectBucketsTable)
-    .where(eq(projectBucketsTable.id, parsed.data.bucketId));
-  if (!bucket || bucket.projectId !== params.data.id) {
-    res.status(400).json({ error: "Bucket does not belong to this project" });
-    return;
-  }
-
-  const [{ value: maxPos }] = await db
-    .select({ value: max(projectTasksTable.position) })
-    .from(projectTasksTable)
-    .where(eq(projectTasksTable.bucketId, parsed.data.bucketId));
-
-  const initialCompletedYear = isCompletedBucketName(bucket.name)
-    ? new Date().getUTCFullYear()
-    : null;
-
-  const [row] = await db
-    .insert(projectTasksTable)
-    .values({
-      projectId: params.data.id,
-      bucketId: parsed.data.bucketId,
-      title: parsed.data.title,
-      description: parsed.data.description ?? "",
-      labels: parsed.data.labels ?? [],
-      checklist: sanitizeChecklist(parsed.data.checklist),
-      assigneeId: parsed.data.assigneeId ?? null,
-      priority: parsed.data.priority ?? "medium",
-      dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
-      position: (maxPos ?? -1) + 1,
-      completed: false,
-      suggestedById: parsed.data.suggestedById ?? null,
-      goal: parsed.data.goal ?? "",
-      implementation: parsed.data.implementation ?? "",
-      rationale: parsed.data.rationale ?? "",
-      impactedDepartmentIds: parsed.data.impactedDepartmentIds ?? [],
-      additionalComments: parsed.data.additionalComments ?? "",
-      completedYear: initialCompletedYear,
-    })
-    .returning();
-
-  const userMap = new Map<number, { id: number; name: string }>();
-  const userIdSet = new Set<number>();
-  if (row.assigneeId != null) userIdSet.add(row.assigneeId);
-  if (row.suggestedById != null) userIdSet.add(row.suggestedById);
-  for (const item of (row.checklist ?? []) as ChecklistItem[]) {
-    if (item.assigneeId != null) userIdSet.add(item.assigneeId);
-  }
-  const userIdsToFetch = Array.from(userIdSet);
-  if (userIdsToFetch.length) {
-    const us = await db
-      .select()
-      .from(usersTable)
-      .where(inArray(usersTable.id, userIdsToFetch));
-    for (const u of us) userMap.set(u.id, u);
-  }
-  const deptMap = new Map<number, { id: number; name: string }>();
-  const impacted = (row.impactedDepartmentIds ?? []) as number[];
-  if (impacted.length) {
-    const ds = await db
-      .select()
-      .from(departmentsTable)
-      .where(inArray(departmentsTable.id, impacted));
-    for (const d of ds) deptMap.set(d.id, d);
-  }
-  res.status(201).json(toTaskDto(row, userMap, deptMap, new Map()));
-});
-
-router.patch("/project-tasks/:id", async (req, res): Promise<void> => {
-  const user = await getCurrentUser(req);
-  if (user.role === "end_user") {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-  const params = UpdateProjectTaskParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const parsed = UpdateProjectTaskBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const project = await loadProjectForTask(params.data.id);
-  if (!project) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
-  if (!(await authorizeProjectAccess(user, project, "modify"))) {
-    res.status(403).json({ error: "Forbidden on this project" });
-    return;
-  }
-
-  const [existing] = await db
-    .select()
-    .from(projectTasksTable)
-    .where(eq(projectTasksTable.id, params.data.id));
-  if (!existing) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
-
-  // If the bucket changed, validate it and remember its new name so we can
-  // auto-stamp / clear completedYear when entering or leaving a "Completed"
-  // pipeline stage.
-  let newBucketName: string | null = null;
-  if (
-    parsed.data.bucketId !== undefined &&
-    parsed.data.bucketId !== existing.bucketId
-  ) {
-    const [bucket] = await db
-      .select()
-      .from(projectBucketsTable)
-      .where(eq(projectBucketsTable.id, parsed.data.bucketId));
-    if (!bucket || bucket.projectId !== existing.projectId) {
-      res.status(400).json({ error: "Bucket does not belong to this project" });
-      return;
-    }
-    newBucketName = bucket.name;
-  }
-
-  const updates: Partial<typeof projectTasksTable.$inferInsert> = {};
-  if (parsed.data.bucketId !== undefined) updates.bucketId = parsed.data.bucketId;
-  if (parsed.data.title !== undefined) updates.title = parsed.data.title;
-  if (parsed.data.description !== undefined)
-    updates.description = parsed.data.description;
-  if (parsed.data.labels !== undefined) updates.labels = parsed.data.labels;
-  if (parsed.data.checklist !== undefined)
-    updates.checklist = sanitizeChecklist(parsed.data.checklist);
-  if (parsed.data.assigneeId !== undefined)
-    updates.assigneeId = parsed.data.assigneeId;
-  if (parsed.data.priority !== undefined) updates.priority = parsed.data.priority;
-  if (parsed.data.dueAt !== undefined)
-    updates.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
-  if (parsed.data.position !== undefined) updates.position = parsed.data.position;
-  if (parsed.data.completed !== undefined)
-    updates.completed = parsed.data.completed;
-  if (parsed.data.suggestedById !== undefined)
-    updates.suggestedById = parsed.data.suggestedById;
-  if (parsed.data.goal !== undefined) updates.goal = parsed.data.goal;
-  if (parsed.data.implementation !== undefined)
-    updates.implementation = parsed.data.implementation;
-  if (parsed.data.rationale !== undefined)
-    updates.rationale = parsed.data.rationale;
-  if (parsed.data.impactedDepartmentIds !== undefined)
-    updates.impactedDepartmentIds = parsed.data.impactedDepartmentIds;
-  if (parsed.data.additionalComments !== undefined)
-    updates.additionalComments = parsed.data.additionalComments;
-
-  // Auto-stamp completedYear when card moves into a "Completed" bucket,
-  // and clear it when moving out. Only triggered on bucket changes so we
-  // don't clobber a manually-set year on other edits.
-  if (newBucketName !== null) {
-    if (isCompletedBucketName(newBucketName) && !existing.completedYear) {
-      updates.completedYear = new Date().getUTCFullYear();
-    } else if (!isCompletedBucketName(newBucketName)) {
-      updates.completedYear = null;
-    }
-  }
-
-  const [row] = await db
-    .update(projectTasksTable)
-    .set(updates)
-    .where(eq(projectTasksTable.id, params.data.id))
-    .returning();
-
-  const userMap = new Map<number, { id: number; name: string }>();
-  const userIdSet = new Set<number>();
-  if (row.assigneeId != null) userIdSet.add(row.assigneeId);
-  if (row.suggestedById != null) userIdSet.add(row.suggestedById);
-  for (const item of (row.checklist ?? []) as ChecklistItem[]) {
-    if (item.assigneeId != null) userIdSet.add(item.assigneeId);
-  }
-  const userIdsToFetch = Array.from(userIdSet);
-  if (userIdsToFetch.length) {
-    const us = await db
-      .select()
-      .from(usersTable)
-      .where(inArray(usersTable.id, userIdsToFetch));
-    for (const u of us) userMap.set(u.id, u);
-  }
-  const deptMap = new Map<number, { id: number; name: string }>();
-  const impacted = (row.impactedDepartmentIds ?? []) as number[];
-  if (impacted.length) {
-    const ds = await db
-      .select()
-      .from(departmentsTable)
-      .where(inArray(departmentsTable.id, impacted));
-    for (const d of ds) deptMap.set(d.id, d);
-  }
-  const [{ count: cc } = { count: 0 }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(projectTaskCommentsTable)
-    .where(eq(projectTaskCommentsTable.taskId, row.id));
-  res.json(
-    toTaskDto(row, userMap, deptMap, new Map([[row.id, cc ?? 0]])),
-  );
-});
-
-router.delete("/project-tasks/:id", async (req, res): Promise<void> => {
-  const user = await getCurrentUser(req);
-  if (user.role === "end_user") {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-  const params = DeleteProjectTaskParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const project = await loadProjectForTask(params.data.id);
-  if (!project) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
-  if (!(await authorizeProjectAccess(user, project, "modify"))) {
-    res.status(403).json({ error: "Forbidden on this project" });
-    return;
-  }
-  const [row] = await db
-    .delete(projectTasksTable)
-    .where(eq(projectTasksTable.id, params.data.id))
-    .returning();
-  if (!row) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
-  res.sendStatus(204);
-});
-
-// ---------- Task comments (activity log) ----------
+// ---------- Routes: Project comments (activity log) ----------
 
 function commentToDto(
-  row: typeof projectTaskCommentsTable.$inferSelect,
+  row: typeof projectCommentsTable.$inferSelect,
   authorMap: Map<number, { id: number; name: string }>,
 ) {
   return {
     id: row.id,
-    taskId: row.taskId,
+    projectId: row.projectId,
     authorId: row.authorId ?? null,
     authorName: row.authorId
       ? (authorMap.get(row.authorId)?.name ?? null)
@@ -1078,20 +947,31 @@ function commentToDto(
   };
 }
 
-router.get("/project-tasks/:id/comments", async (req, res): Promise<void> => {
+async function loadProjectForRoute(id: number) {
+  const [row] = await db
+    .select({
+      id: projectsTable.id,
+      departmentId: projectsTable.departmentId,
+    })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, id));
+  return row ?? null;
+}
+
+router.get("/projects/:id/comments", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
   if (user.role === "end_user") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const params = ListProjectTaskCommentsParams.safeParse(req.params);
+  const params = ListProjectCommentsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const project = await loadProjectForTask(params.data.id);
+  const project = await loadProjectForRoute(params.data.id);
   if (!project) {
-    res.status(404).json({ error: "Task not found" });
+    res.status(404).json({ error: "Project not found" });
     return;
   }
   if (!(await authorizeProjectAccess(user, project, "read"))) {
@@ -1100,9 +980,9 @@ router.get("/project-tasks/:id/comments", async (req, res): Promise<void> => {
   }
   const rows = await db
     .select()
-    .from(projectTaskCommentsTable)
-    .where(eq(projectTaskCommentsTable.taskId, params.data.id))
-    .orderBy(asc(projectTaskCommentsTable.createdAt), asc(projectTaskCommentsTable.id));
+    .from(projectCommentsTable)
+    .where(eq(projectCommentsTable.projectId, params.data.id))
+    .orderBy(asc(projectCommentsTable.createdAt), asc(projectCommentsTable.id));
 
   const authorIds = Array.from(
     new Set(rows.map((r) => r.authorId).filter((d): d is number => d != null)),
@@ -1111,22 +991,21 @@ router.get("/project-tasks/:id/comments", async (req, res): Promise<void> => {
     ? await db.select().from(usersTable).where(inArray(usersTable.id, authorIds))
     : [];
   const authorMap = new Map(authors.map((u) => [u.id, u]));
-
   res.json(rows.map((r) => commentToDto(r, authorMap)));
 });
 
-router.post("/project-tasks/:id/comments", async (req, res): Promise<void> => {
+router.post("/projects/:id/comments", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
   if (user.role === "end_user") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const params = CreateProjectTaskCommentParams.safeParse(req.params);
+  const params = CreateProjectCommentParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const parsed = CreateProjectTaskCommentBody.safeParse(req.body);
+  const parsed = CreateProjectCommentBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -1136,9 +1015,9 @@ router.post("/project-tasks/:id/comments", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Comment body is required" });
     return;
   }
-  const project = await loadProjectForTask(params.data.id);
+  const project = await loadProjectForRoute(params.data.id);
   if (!project) {
-    res.status(404).json({ error: "Task not found" });
+    res.status(404).json({ error: "Project not found" });
     return;
   }
   if (!(await authorizeProjectAccess(user, project, "modify"))) {
@@ -1146,9 +1025,9 @@ router.post("/project-tasks/:id/comments", async (req, res): Promise<void> => {
     return;
   }
   const [row] = await db
-    .insert(projectTaskCommentsTable)
+    .insert(projectCommentsTable)
     .values({
-      taskId: params.data.id,
+      projectId: params.data.id,
       authorId: user.id,
       body,
     })
@@ -1160,32 +1039,41 @@ router.post("/project-tasks/:id/comments", async (req, res): Promise<void> => {
 });
 
 router.delete(
-  "/project-tasks/:id/comments/:commentId",
+  "/projects/:id/comments/:commentId",
   async (req, res): Promise<void> => {
     const user = await getCurrentUser(req);
     if (user.role === "end_user") {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
-    const params = DeleteProjectTaskCommentParams.safeParse(req.params);
+    const params = DeleteProjectCommentParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const project = await loadProjectForTask(params.data.id);
+    const project = await loadProjectForRoute(params.data.id);
     if (!project) {
-      res.status(404).json({ error: "Task not found" });
+      res.status(404).json({ error: "Project not found" });
       return;
     }
     const [comment] = await db
       .select()
-      .from(projectTaskCommentsTable)
-      .where(eq(projectTaskCommentsTable.id, params.data.commentId));
-    if (!comment || comment.taskId !== params.data.id) {
+      .from(projectCommentsTable)
+      .where(eq(projectCommentsTable.id, params.data.commentId));
+    if (!comment || comment.projectId !== params.data.id) {
       res.status(404).json({ error: "Comment not found" });
       return;
     }
-    // Author can always delete their own; otherwise need modify access.
+    // Authorization model: every caller — including the comment's own
+    // author — must at minimum be able to READ the project (so an end-user
+    // who lost board access can no longer reach back to scrub their old
+    // comments, and a stranger can never delete other people's). On top of
+    // read access, deleting someone else's comment additionally requires
+    // modify access on the project.
+    if (!(await authorizeProjectAccess(user, project, "read"))) {
+      res.status(403).json({ error: "Forbidden on this project" });
+      return;
+    }
     const isAuthor = comment.authorId === user.id;
     if (!isAuthor) {
       if (!(await authorizeProjectAccess(user, project, "modify"))) {
@@ -1194,8 +1082,8 @@ router.delete(
       }
     }
     await db
-      .delete(projectTaskCommentsTable)
-      .where(eq(projectTaskCommentsTable.id, params.data.commentId));
+      .delete(projectCommentsTable)
+      .where(eq(projectCommentsTable.id, params.data.commentId));
     res.sendStatus(204);
   },
 );

@@ -5,6 +5,7 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { ChecklistItem } from "./checklistItem";
 import type { ProjectStatus } from "./projectStatus";
 import type { TaskLabel } from "./taskLabel";
 import type { TaskPriority } from "./taskPriority";
@@ -17,6 +18,8 @@ export interface CreateProjectInput {
   /** @nullable */
   departmentId?: number | null;
   /** @nullable */
+  bucketId?: number | null;
+  /** @nullable */
   ownerId?: number | null;
   /** @nullable */
   dueAt?: Date | null;
@@ -27,6 +30,9 @@ export interface CreateProjectInput {
   rationale?: string;
   impactedDepartmentIds?: number[];
   additionalComments?: string;
+  /** @nullable */
+  completedYear?: number | null;
   labels?: TaskLabel[];
   priority?: TaskPriority;
+  checklist?: ChecklistItem[];
 }
