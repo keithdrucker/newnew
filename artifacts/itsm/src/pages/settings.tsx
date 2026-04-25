@@ -26,16 +26,7 @@ import { AddBoardDialog } from "@/components/settings/add-board-dialog";
 import { EditBoardDialog } from "@/components/settings/edit-board-dialog";
 import { DeleteBoardDialog } from "@/components/settings/delete-board-dialog";
 import { DEPT_ICON_MAP } from "@/lib/dept-icons";
-
-interface BoardRowData {
-  id: number;
-  name: string;
-  slug: string;
-  color: string;
-  icon: string;
-  description: string | null;
-  ticketCount: number;
-}
+import { toBoardViewModel, type BoardViewModel } from "@/lib/board";
 
 export default function Settings() {
   return (
@@ -93,8 +84,8 @@ function TeamCard() {
 function TicketBoardsCard() {
   const { session } = useSession();
   const { data: departments } = useListDepartments();
-  const [editing, setEditing] = useState<BoardRowData | null>(null);
-  const [deleting, setDeleting] = useState<BoardRowData | null>(null);
+  const [editing, setEditing] = useState<BoardViewModel | null>(null);
+  const [deleting, setDeleting] = useState<BoardViewModel | null>(null);
 
   if (session?.role !== "admin") return null;
 
@@ -120,15 +111,7 @@ function TicketBoardsCard() {
             data-testid="list-boards"
           >
             {departments.map((d) => {
-              const board: BoardRowData = {
-                id: d.id,
-                name: d.name,
-                slug: d.slug,
-                color: d.color,
-                icon: d.icon,
-                description: d.description ?? null,
-                ticketCount: d.ticketCount,
-              };
+              const board = toBoardViewModel(d);
               return (
                 <BoardRow
                   key={d.id}
@@ -150,9 +133,7 @@ function TicketBoardsCard() {
       )}
       {deleting && (
         <DeleteBoardDialog
-          boardId={deleting.id}
-          boardName={deleting.name}
-          ticketCount={deleting.ticketCount}
+          board={deleting}
           open={deleting != null}
           onOpenChange={(o) => !o && setDeleting(null)}
         />
@@ -166,7 +147,7 @@ function BoardRow({
   onEdit,
   onDelete,
 }: {
-  board: BoardRowData;
+  board: BoardViewModel;
   onEdit: () => void;
   onDelete: () => void;
 }) {

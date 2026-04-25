@@ -13,18 +13,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import type { BoardViewModel } from "@/lib/board";
 
 export function DeleteBoardDialog({
-  boardId,
-  boardName,
-  ticketCount,
+  board,
   open,
   onOpenChange,
   onDeleted,
 }: {
-  boardId: number;
-  boardName: string;
-  ticketCount: number;
+  board: Pick<BoardViewModel, "id" | "name" | "ticketCount">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDeleted?: () => void;
@@ -32,6 +29,7 @@ export function DeleteBoardDialog({
   const del = useDeleteDepartment();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { id: boardId, name: boardName, ticketCount } = board;
 
   const onConfirm = () => {
     del.mutate(

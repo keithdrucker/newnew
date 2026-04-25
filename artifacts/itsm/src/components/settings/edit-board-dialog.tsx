@@ -33,15 +33,7 @@ import {
   slugify,
 } from "@/lib/dept-icons";
 import { cn } from "@/lib/utils";
-
-interface BoardForEdit {
-  id: number;
-  name: string;
-  slug: string;
-  color: string;
-  icon: string;
-  description: string | null;
-}
+import type { BoardViewModel } from "@/lib/board";
 
 interface FormState {
   name: string;
@@ -57,7 +49,7 @@ export function EditBoardDialog({
   onOpenChange,
   onSlugChanged,
 }: {
-  board: BoardForEdit;
+  board: BoardViewModel;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSlugChanged?: (newSlug: string) => void;

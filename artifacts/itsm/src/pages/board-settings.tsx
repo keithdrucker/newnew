@@ -31,6 +31,7 @@ import { DEPT_ICON_MAP } from "@/lib/dept-icons";
 import { EditBoardDialog } from "@/components/settings/edit-board-dialog";
 import { DeleteBoardDialog } from "@/components/settings/delete-board-dialog";
 import { BoardMembersCard } from "@/components/settings/board-members-card";
+import { toBoardViewModel, type BoardViewModel } from "@/lib/board";
 
 type Priority = "low" | "medium" | "high" | "urgent";
 
@@ -129,15 +130,7 @@ export default function BoardSettings({
           </div>
         </div>
         <BoardActions
-          department={{
-            id: department.id,
-            name: department.name,
-            slug: department.slug,
-            color: department.color,
-            icon: department.icon,
-            description: department.description ?? null,
-            ticketCount: department.ticketCount,
-          }}
+          board={toBoardViewModel(department)}
           onAfterDelete={() => setLocation("/settings")}
           onAfterRename={(newSlug) =>
             setLocation(`/settings/boards/${newSlug}`)
@@ -172,19 +165,11 @@ function Breadcrumb({ name }: { name: string }) {
 }
 
 function BoardActions({
-  department,
+  board,
   onAfterDelete,
   onAfterRename,
 }: {
-  department: {
-    id: number;
-    name: string;
-    slug: string;
-    color: string;
-    icon: string;
-    description: string | null;
-    ticketCount: number;
-  };
+  board: BoardViewModel;
   onAfterDelete: () => void;
   onAfterRename: (newSlug: string) => void;
 }) {
@@ -213,15 +198,13 @@ function BoardActions({
         Delete
       </Button>
       <EditBoardDialog
-        board={department}
+        board={board}
         open={editOpen}
         onOpenChange={setEditOpen}
         onSlugChanged={onAfterRename}
       />
       <DeleteBoardDialog
-        boardId={department.id}
-        boardName={department.name}
-        ticketCount={department.ticketCount}
+        board={board}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onDeleted={onAfterDelete}
