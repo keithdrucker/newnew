@@ -1399,6 +1399,8 @@ export const GetProjectResponse = zod
                     zod.object({
                       text: zod.string(),
                       done: zod.boolean(),
+                      assigneeId: zod.number().nullish(),
+                      assigneeName: zod.string().nullish(),
                     }),
                   ),
                   assigneeId: zod.number().nullish(),
@@ -1489,6 +1491,8 @@ export const UpdateProjectResponse = zod
                     zod.object({
                       text: zod.string(),
                       done: zod.boolean(),
+                      assigneeId: zod.number().nullish(),
+                      assigneeName: zod.string().nullish(),
                     }),
                   ),
                   assigneeId: zod.number().nullish(),
@@ -1571,6 +1575,8 @@ export const CreateProjectTaskBody = zod.object({
       zod.object({
         text: zod.string(),
         done: zod.boolean(),
+        assigneeId: zod.number().nullish(),
+        assigneeName: zod.string().nullish(),
       }),
     )
     .optional(),
@@ -1606,6 +1612,8 @@ export const UpdateProjectTaskBody = zod.object({
       zod.object({
         text: zod.string(),
         done: zod.boolean(),
+        assigneeId: zod.number().nullish(),
+        assigneeName: zod.string().nullish(),
       }),
     )
     .optional(),
@@ -1638,6 +1646,8 @@ export const UpdateProjectTaskResponse = zod.object({
     zod.object({
       text: zod.string(),
       done: zod.boolean(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
     }),
   ),
   assigneeId: zod.number().nullish(),

@@ -64,7 +64,11 @@ export const projectBucketsTable = pgTable(
 );
 
 export type TaskLabel = { name: string; color: string };
-export type ChecklistItem = { text: string; done: boolean };
+export type ChecklistItem = {
+  text: string;
+  done: boolean;
+  assigneeId?: number | null;
+};
 
 export const projectTasksTable = pgTable(
   "project_tasks",

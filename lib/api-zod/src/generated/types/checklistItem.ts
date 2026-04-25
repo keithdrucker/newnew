@@ -9,4 +9,8 @@
 export interface ChecklistItem {
   text: string;
   done: boolean;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
 }

@@ -134,6 +134,16 @@ function toTaskDto(
         .map((id) => deptMap.get(id)?.name)
         .filter((n): n is string => typeof n === "string")
     : [];
+  const rawChecklist = (row.checklist ?? []) as ChecklistItem[];
+  const checklist = rawChecklist.map((item) => ({
+    text: item.text,
+    done: item.done,
+    assigneeId: item.assigneeId ?? null,
+    assigneeName:
+      item.assigneeId != null
+        ? (userMap.get(item.assigneeId)?.name ?? null)
+        : null,
+  }));
   return {
     id: row.id,
     projectId: row.projectId,
@@ -141,7 +151,7 @@ function toTaskDto(
     title: row.title,
     description: row.description,
     labels: (row.labels ?? []) as TaskLabel[],
-    checklist: (row.checklist ?? []) as ChecklistItem[],
+    checklist,
     assigneeId: row.assigneeId ?? null,
     assigneeName: row.assigneeId
       ? (userMap.get(row.assigneeId)?.name ?? null)
@@ -171,6 +181,25 @@ function toTaskDto(
 // Matches "Completed", "Year Completed", "Year Completed 2025", etc., case-insensitive.
 function isCompletedBucketName(name: string): boolean {
   return /\bcompleted\b/i.test(name);
+}
+
+// Strip derived fields (assigneeName) and normalize assigneeId before
+// persisting checklist items. Clients may send the hydrated DTO back; we
+// only store text/done/assigneeId.
+function sanitizeChecklist(input: unknown): ChecklistItem[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((raw): ChecklistItem[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const r = raw as Record<string, unknown>;
+    const text = typeof r.text === "string" ? r.text : "";
+    const done = typeof r.done === "boolean" ? r.done : false;
+    const rawAssignee = r.assigneeId;
+    let assigneeId: number | null = null;
+    if (typeof rawAssignee === "number" && Number.isFinite(rawAssignee)) {
+      assigneeId = rawAssignee;
+    }
+    return [{ text, done, assigneeId }];
+  });
 }
 
 async function summarizeProjects(
@@ -276,6 +305,10 @@ async function detailProject(id: number) {
     if (t.assigneeId) userIds.add(t.assigneeId);
     if (t.suggestedById) userIds.add(t.suggestedById);
     for (const d of (t.impactedDepartmentIds ?? []) as number[]) deptIds.add(d);
+    // Per-checklist-item assignees can differ from the task assignee.
+    for (const item of (t.checklist ?? []) as ChecklistItem[]) {
+      if (item.assigneeId != null) userIds.add(item.assigneeId);
+    }
   }
   const taskIds = tasks.map((t) => t.id);
 
@@ -772,7 +805,7 @@ router.post("/projects/:id/tasks", async (req, res): Promise<void> => {
       title: parsed.data.title,
       description: parsed.data.description ?? "",
       labels: parsed.data.labels ?? [],
-      checklist: parsed.data.checklist ?? [],
+      checklist: sanitizeChecklist(parsed.data.checklist),
       assigneeId: parsed.data.assigneeId ?? null,
       priority: parsed.data.priority ?? "medium",
       dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
@@ -789,9 +822,13 @@ router.post("/projects/:id/tasks", async (req, res): Promise<void> => {
     .returning();
 
   const userMap = new Map<number, { id: number; name: string }>();
-  const userIdsToFetch = [row.assigneeId, row.suggestedById].filter(
-    (id): id is number => id != null,
-  );
+  const userIdSet = new Set<number>();
+  if (row.assigneeId != null) userIdSet.add(row.assigneeId);
+  if (row.suggestedById != null) userIdSet.add(row.suggestedById);
+  for (const item of (row.checklist ?? []) as ChecklistItem[]) {
+    if (item.assigneeId != null) userIdSet.add(item.assigneeId);
+  }
+  const userIdsToFetch = Array.from(userIdSet);
   if (userIdsToFetch.length) {
     const us = await db
       .select()
@@ -873,7 +910,7 @@ router.patch("/project-tasks/:id", async (req, res): Promise<void> => {
     updates.description = parsed.data.description;
   if (parsed.data.labels !== undefined) updates.labels = parsed.data.labels;
   if (parsed.data.checklist !== undefined)
-    updates.checklist = parsed.data.checklist;
+    updates.checklist = sanitizeChecklist(parsed.data.checklist);
   if (parsed.data.assigneeId !== undefined)
     updates.assigneeId = parsed.data.assigneeId;
   if (parsed.data.priority !== undefined) updates.priority = parsed.data.priority;
@@ -912,9 +949,13 @@ router.patch("/project-tasks/:id", async (req, res): Promise<void> => {
     .returning();
 
   const userMap = new Map<number, { id: number; name: string }>();
-  const userIdsToFetch = [row.assigneeId, row.suggestedById].filter(
-    (id): id is number => id != null,
-  );
+  const userIdSet = new Set<number>();
+  if (row.assigneeId != null) userIdSet.add(row.assigneeId);
+  if (row.suggestedById != null) userIdSet.add(row.suggestedById);
+  for (const item of (row.checklist ?? []) as ChecklistItem[]) {
+    if (item.assigneeId != null) userIdSet.add(item.assigneeId);
+  }
+  const userIdsToFetch = Array.from(userIdSet);
   if (userIdsToFetch.length) {
     const us = await db
       .select()

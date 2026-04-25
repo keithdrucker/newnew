@@ -1256,42 +1256,138 @@ function TaskEditorDialog({
               )}
             </div>
             <div className="space-y-1">
-              {checklist.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-2 group"
-                  data-testid={`checklist-item-${idx}`}
-                >
-                  <Checkbox
-                    checked={item.done}
-                    onCheckedChange={(v) => {
-                      setChecklist(
-                        checklist.map((c, i) =>
-                          i === idx ? { ...c, done: !!v } : c,
-                        ),
-                      );
-                    }}
-                  />
-                  <span
-                    className={cn(
-                      "flex-1 text-[13px]",
-                      item.done && "line-through text-muted-foreground",
-                    )}
+              {checklist.map((item, idx) => {
+                const assigned =
+                  item.assigneeId != null
+                    ? (agents?.find((a) => a.id === item.assigneeId) ?? null)
+                    : null;
+                const assignedName = item.assigneeName ?? assigned?.name ?? null;
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 group"
+                    data-testid={`checklist-item-${idx}`}
                   >
-                    {item.text}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setChecklist(checklist.filter((_, i) => i !== idx))
-                    }
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                    aria-label="Remove item"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
+                    <Checkbox
+                      checked={item.done}
+                      onCheckedChange={(v) => {
+                        setChecklist(
+                          checklist.map((c, i) =>
+                            i === idx ? { ...c, done: !!v } : c,
+                          ),
+                        );
+                      }}
+                    />
+                    <span
+                      className={cn(
+                        "flex-1 text-[13px]",
+                        item.done && "line-through text-muted-foreground",
+                      )}
+                    >
+                      {item.text}
+                    </span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            "shrink-0 inline-flex items-center gap-1.5 h-6 px-1.5 rounded-full border text-[11px] transition-colors",
+                            assignedName
+                              ? "border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-200 hover:bg-blue-500/25"
+                              : "border-border text-muted-foreground hover:bg-muted",
+                          )}
+                          aria-label={
+                            assignedName
+                              ? `Assigned to ${assignedName}, change owner`
+                              : "Assign owner"
+                          }
+                          data-testid={`checklist-assignee-${idx}`}
+                        >
+                          {assignedName ? (
+                            <>
+                              <Avatar className="h-4 w-4">
+                                <AvatarFallback className="bg-blue-500/30 text-[8px] font-semibold">
+                                  {initials(assignedName)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="truncate max-w-[80px]">
+                                {assignedName.split(" ")[0]}
+                              </span>
+                            </>
+                          ) : (
+                            <span>Assign</span>
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-56 p-1" align="end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setChecklist(
+                              checklist.map((c, i) =>
+                                i === idx
+                                  ? {
+                                      ...c,
+                                      assigneeId: null,
+                                      assigneeName: null,
+                                    }
+                                  : c,
+                              ),
+                            );
+                          }}
+                          className="w-full text-left text-[12.5px] px-2 py-1.5 rounded hover:bg-muted text-muted-foreground"
+                          data-testid={`checklist-assignee-clear-${idx}`}
+                        >
+                          Unassigned
+                        </button>
+                        <div className="max-h-56 overflow-y-auto">
+                          {agents?.map((a) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => {
+                                setChecklist(
+                                  checklist.map((c, i) =>
+                                    i === idx
+                                      ? {
+                                          ...c,
+                                          assigneeId: a.id,
+                                          assigneeName: a.name,
+                                        }
+                                      : c,
+                                  ),
+                                );
+                              }}
+                              className={cn(
+                                "w-full text-left text-[12.5px] px-2 py-1.5 rounded hover:bg-muted inline-flex items-center gap-2",
+                                item.assigneeId === a.id && "bg-muted",
+                              )}
+                              data-testid={`checklist-assignee-pick-${idx}-${a.id}`}
+                            >
+                              <Avatar className="h-5 w-5">
+                                <AvatarFallback className="bg-foreground/10 text-[9px] font-semibold">
+                                  {initials(a.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="truncate">{a.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChecklist(checklist.filter((_, i) => i !== idx))
+                      }
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                      aria-label="Remove item"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
             <div className="flex gap-1.5">
               <Input

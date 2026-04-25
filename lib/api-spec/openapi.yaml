@@ -2114,6 +2114,8 @@ components:
       properties:
         text: { type: string }
         done: { type: boolean }
+        assigneeId: { type: ["integer", "null"] }
+        assigneeName: { type: ["string", "null"] }
       required: [text, done]
 
     ProjectStatus:
