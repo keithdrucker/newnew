@@ -257,6 +257,22 @@ const RISK_RANK: Record<string, number> = {
   low: 1,
 };
 
+// Sort weight for the Status column. Higher = appears first in the
+// default (descending) sort, so the workflow reads top-to-bottom in the
+// natural lifecycle order: New → In Progress → Scheduled → With User →
+// With Vendor → On Hold → Resolved → Closed. Toggling the column
+// reverses that, which is why we use ranks rather than alpha.
+const STATUS_RANK: Record<string, number> = {
+  new: 8,
+  in_progress: 7,
+  scheduled: 6,
+  with_user: 5,
+  with_vendor: 4,
+  on_hold: 3,
+  resolved: 2,
+  closed: 1,
+};
+
 function rangeToAfter(range: DateRange): string | undefined {
   const now = new Date();
   if (range === "today") {
@@ -662,7 +678,10 @@ export default function Tickets() {
             (a.assigneeName ?? "~").localeCompare(b.assigneeName ?? "~") * dir
           );
         case "status":
-          return a.status.localeCompare(b.status) * dir;
+          // Lifecycle order, not alphabetical: see STATUS_RANK above.
+          return (
+            ((STATUS_RANK[a.status] ?? 0) - (STATUS_RANK[b.status] ?? 0)) * dir
+          );
         case "updated":
           return (
             (new Date(a.updatedAt).getTime() -
