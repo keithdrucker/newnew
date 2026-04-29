@@ -184,6 +184,7 @@ const ACTIVE_STATUSES: readonly string[] = [
   "with_vendor",
   "on_hold",
   "scheduled",
+  "resolved",
 ];
 
 type Filters = {
@@ -1090,13 +1091,12 @@ export default function Tickets() {
             )}
           </div>
 
-          {/* Quick toggle: Resolved+Closed are hidden by default. Clicking
-              this swaps the status filter between "active only" (the
-              default 6) and "include resolved + closed" (all 8). */}
+          {/* Quick toggle: Closed tickets are hidden by default. One
+              click adds "closed" to whatever's currently selected;
+              another click removes it. Resolved is part of the default
+              filter set, so it stays visible regardless. */}
           {(() => {
-            const showingClosed =
-              filters.status.includes("resolved") &&
-              filters.status.includes("closed");
+            const showingClosed = filters.status.includes("closed");
             return (
               <Button
                 variant={showingClosed ? "secondary" : "outline"}
@@ -1104,22 +1104,15 @@ export default function Tickets() {
                 className="h-9 gap-2"
                 onClick={() => {
                   if (showingClosed) {
-                    // Snap back to the active-only default.
                     setFilter(
                       "status",
-                      DEFAULT_FILTERS.status as never,
+                      filters.status.filter((s) => s !== "closed") as never,
                     );
                   } else {
-                    // Add resolved + closed to whatever's currently
-                    // selected, deduped.
                     setFilter(
                       "status",
                       Array.from(
-                        new Set([
-                          ...filters.status,
-                          "resolved",
-                          "closed",
-                        ]),
+                        new Set([...filters.status, "closed"]),
                       ) as never,
                     );
                   }
