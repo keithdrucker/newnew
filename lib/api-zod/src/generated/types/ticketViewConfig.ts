@@ -21,5 +21,7 @@ export interface TicketViewConfig {
   /** @nullable */
   assigneeId?: number | null;
   /** @nullable */
+  unassigned?: boolean | null;
+  /** @nullable */
   departmentId?: number | null;
 }

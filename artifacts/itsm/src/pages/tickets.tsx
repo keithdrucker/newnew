@@ -182,8 +182,11 @@ export default function Tickets() {
         c.supportLevel === 1 || c.supportLevel === 2 || c.supportLevel === 3
           ? String(c.supportLevel)
           : "all",
-      assigneeId:
-        c.assigneeId == null ? "all" : String(c.assigneeId),
+      assigneeId: c.unassigned
+        ? "unassigned"
+        : c.assigneeId == null
+          ? "all"
+          : String(c.assigneeId),
     });
     setActiveViewId(viewId);
   }
@@ -277,6 +280,7 @@ export default function Tickets() {
         filters.assigneeId === "all" || filters.assigneeId === "unassigned"
           ? null
           : Number(filters.assigneeId),
+      unassigned: filters.assigneeId === "unassigned" ? true : null,
       departmentId: dept?.id ?? null,
     };
   }

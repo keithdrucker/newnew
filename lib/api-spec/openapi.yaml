@@ -1582,6 +1582,8 @@ components:
           enum: [1, 2, 3, null]
         assigneeId:
           type: ["integer", "null"]
+        unassigned:
+          type: ["boolean", "null"]
         departmentId:
           type: ["integer", "null"]
 

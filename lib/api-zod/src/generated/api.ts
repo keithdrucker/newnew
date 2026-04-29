@@ -533,6 +533,7 @@ export const ListTicketViewsResponseItem = zod.object({
       ])
       .nullish(),
     assigneeId: zod.number().nullish(),
+    unassigned: zod.boolean().nullish(),
     departmentId: zod.number().nullish(),
   }),
   createdAt: zod.coerce.date(),
@@ -574,6 +575,7 @@ export const CreateTicketViewBody = zod.object({
       ])
       .nullish(),
     assigneeId: zod.number().nullish(),
+    unassigned: zod.boolean().nullish(),
     departmentId: zod.number().nullish(),
   }),
   isDefault: zod.boolean().optional(),
@@ -618,6 +620,7 @@ export const UpdateTicketViewBody = zod.object({
         ])
         .nullish(),
       assigneeId: zod.number().nullish(),
+      unassigned: zod.boolean().nullish(),
       departmentId: zod.number().nullish(),
     })
     .optional(),
@@ -658,6 +661,7 @@ export const UpdateTicketViewResponse = zod.object({
       ])
       .nullish(),
     assigneeId: zod.number().nullish(),
+    unassigned: zod.boolean().nullish(),
     departmentId: zod.number().nullish(),
   }),
   createdAt: zod.coerce.date(),
