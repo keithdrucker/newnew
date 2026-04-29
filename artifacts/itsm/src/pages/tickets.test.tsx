@@ -27,7 +27,17 @@ vi.mock("@workspace/api-client-react", () => ({
     mutateAsync: vi.fn(),
     isPending: false,
   }),
+  useUpdateMePreferences: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useCreateTicket: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
   getListTicketViewsQueryKey: () => ["ticket-views"],
+  getGetSessionQueryKey: () => ["session"],
+  getListTicketsQueryKey: () => ["/api/tickets"],
 }));
 
 import Tickets from "./tickets";

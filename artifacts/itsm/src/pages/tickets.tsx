@@ -29,14 +29,21 @@ import {
   AlertCircle,
   ArrowDown,
   ArrowUp,
+  Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
   Clock,
+  Filter as FilterIcon,
   Inbox,
   MoreHorizontal,
+  Plus,
+  RefreshCw,
   Search,
-  Settings2,
   Star,
   Trash2,
+  X,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useEffect, useMemo, useState } from "react";
@@ -62,7 +69,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { useQueryClient } from "@tanstack/react-query";
+import { CreateTicketDialog } from "@/components/create-ticket-dialog";
 
 type SortField = "created" | "priority" | "level" | "assignee" | "status";
 type SortDir = "asc" | "desc";
@@ -151,6 +166,18 @@ export default function Tickets() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveAsDefault, setSaveAsDefault] = useState(false);
+
+  // Filters popover state
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<
+    "status" | "priority" | "supportLevel" | "assigneeId" | null
+  >("status");
+  const [optionSearch, setOptionSearch] = useState("");
+
+  // Board / Views menus
+  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
+  const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
+  const [createTicketOpen, setCreateTicketOpen] = useState(false);
 
   const setFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -267,6 +294,79 @@ export default function Tickets() {
     filters.supportLevel !== DEFAULT_FILTERS.supportLevel ||
     filters.assigneeId !== DEFAULT_FILTERS.assigneeId;
 
+  // ────────────────────────────────────────────────────────────────────
+  // Filter metadata (categories shown in the Filters panel)
+  // ────────────────────────────────────────────────────────────────────
+  type FilterKey = Exclude<keyof Filters, "search">;
+  const FILTER_CATEGORIES: { key: FilterKey; label: string }[] = [
+    { key: "status", label: "Status" },
+    { key: "priority", label: "Priority" },
+    { key: "supportLevel", label: "Support Level" },
+    { key: "assigneeId", label: "Assignee" },
+  ];
+
+  function agentNameById(id: number): string {
+    const a = agents?.find((x) => x.id === id);
+    return a?.name ?? `Agent #${id}`;
+  }
+
+  function optionsForCategory(
+    key: FilterKey,
+  ): { value: string; label: string }[] {
+    switch (key) {
+      case "status":
+        return [
+          { value: "open", label: "Open" },
+          { value: "pending", label: "Pending" },
+          { value: "resolved", label: "Resolved" },
+          { value: "closed", label: "Closed" },
+        ];
+      case "priority":
+        return [
+          { value: "urgent", label: "Urgent" },
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ];
+      case "supportLevel":
+        return [
+          { value: "1", label: "L1" },
+          { value: "2", label: "L2" },
+          { value: "3", label: "L3" },
+        ];
+      case "assigneeId":
+        return [
+          { value: "unassigned", label: "Unassigned" },
+          ...(agents ?? []).map((a) => ({
+            value: String(a.id),
+            label: a.name,
+          })),
+        ];
+    }
+  }
+
+  function labelForFilterValue(key: FilterKey, value: string): string {
+    if (key === "assigneeId" && value !== "unassigned" && value !== "all") {
+      return agentNameById(Number(value));
+    }
+    const opt = optionsForCategory(key).find((o) => o.value === value);
+    return opt?.label ?? value;
+  }
+
+  const activeFilterChips = FILTER_CATEGORIES.filter(
+    (c) => filters[c.key] !== DEFAULT_FILTERS[c.key],
+  ).map((c) => ({
+    key: c.key,
+    categoryLabel: c.label,
+    valueLabel: labelForFilterValue(c.key, filters[c.key]),
+  }));
+
+  const activeFilterCount = activeFilterChips.length;
+
+  function clearFilter(key: FilterKey) {
+    setFilter(key, DEFAULT_FILTERS[key]);
+  }
+
   function buildConfigFromFilters() {
     return {
       search: filters.search ? filters.search : null,
@@ -318,289 +418,380 @@ export default function Tickets() {
     });
   }
 
+  const boardLabel = dept ? dept.name : "All Tickets";
+  const viewLabel = activeView ? activeView.name : "Default view";
+  const currentBoardIsDefault =
+    (session?.defaultTicketBoard ?? null) === (deptSlug ?? null);
+
   return (
-    <div className="space-y-5 h-full flex flex-col">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <span>Ticket Board</span>
-            <span>›</span>
-            <span>{dept ? dept.name : "All Tickets"}</span>
-            {activeView && (
-              <>
-                <span>›</span>
-                <span className="text-foreground font-medium">
-                  {activeView.name}
-                </span>
-              </>
-            )}
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            {dept ? dept.name : "All Tickets"}
-            <Badge variant="secondary" className="text-[11px]">
-              {summary.total}
-            </Badge>
-          </h1>
-          {dept?.description && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {dept.description}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="px-2 py-1 rounded bg-blue-50 text-blue-700">
-            {summary.open} open
-          </span>
-          <span className="px-2 py-1 rounded bg-orange-50 text-orange-700">
-            {summary.pending} pending
-          </span>
-          {summary.breached > 0 && (
-            <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">
-              {summary.breached} breached
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Toolbar: Board + Views + Filters + Sort */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Board switcher */}
-        <Select value={currentBoardSlug} onValueChange={handleChangeBoard}>
-          <SelectTrigger
-            className="w-[180px] h-9"
-            data-testid="select-board"
-          >
-            <SelectValue placeholder="Board" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Tickets</SelectItem>
-            {(departments ?? []).map((d) => (
-              <SelectItem key={d.id} value={d.slug}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* View Settings: choose default ticket board */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 gap-2"
-              data-testid="button-view-settings"
-              title="View settings"
-            >
-              <Settings2 className="h-4 w-4" />
-              <span className="font-medium">View Settings</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-72">
-            <DropdownMenuLabel>Default Ticket Board</DropdownMenuLabel>
-            <div className="px-2 pb-2 pt-1 text-[11px] text-muted-foreground">
-              Opening{" "}
-              <span className="font-medium text-foreground">Tickets</span> from
-              the sidebar will load this board.
-            </div>
-            <div className="px-2 pb-2">
-              <Select
-                value={defaultBoardSlug}
-                onValueChange={handleSetDefaultBoard}
+    <div className="space-y-4 h-full flex flex-col">
+      {/* Header: Board > View dropdown */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="flex items-center gap-1 text-xl font-semibold tracking-tight m-0">
+          {/* Board picker */}
+          <DropdownMenu open={boardMenuOpen} onOpenChange={setBoardMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-muted/60 -ml-1"
+                data-testid="button-board-picker"
               >
-                <SelectTrigger
-                  className="w-full h-9"
-                  data-testid="select-default-board"
+                <span>{boardLabel}</span>
+                <ChevronDown className="h-4 w-4 opacity-60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Boards
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setBoardMenuOpen(false);
+                  handleChangeBoard("all");
+                }}
+                className="flex items-center justify-between"
+                data-testid="board-option-all"
+              >
+                <span>All Tickets</span>
+                {!deptSlug && (
+                  <Check className="h-4 w-4 text-emerald-500" />
+                )}
+              </DropdownMenuItem>
+              {(departments ?? []).map((d) => (
+                <DropdownMenuItem
+                  key={d.id}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setBoardMenuOpen(false);
+                    handleChangeBoard(d.slug);
+                  }}
+                  className="flex items-center justify-between"
+                  data-testid={`board-option-${d.slug}`}
                 >
-                  <SelectValue placeholder="Default board" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Tickets</SelectItem>
-                  {(departments ?? []).map((d) => (
-                    <SelectItem key={d.id} value={d.slug}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-              Saved as a personal preference. You can still switch boards
-              manually any time.
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                  <span>{d.name}</span>
+                  {deptSlug === d.slug && (
+                    <Check className="h-4 w-4 text-emerald-500" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  handleSetDefaultBoard(deptSlug ?? "all");
+                }}
+                disabled={currentBoardIsDefault}
+                data-testid="button-set-default-board"
+              >
+                <Star className="h-3.5 w-3.5 mr-2 text-amber-500" />
+                {currentBoardIsDefault
+                  ? `${boardLabel} is your default board`
+                  : `Set ${boardLabel} as default board`}
+              </DropdownMenuItem>
+              <div className="px-2 pb-2 pt-1 text-[11px] text-muted-foreground">
+                Opening Tickets from the sidebar lands here.
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        {/* Views menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 gap-2"
-              data-testid="button-views"
-            >
-              <Star className="h-4 w-4" />
-              <span className="font-medium">
-                {activeView ? activeView.name : "Views"}
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            <DropdownMenuLabel>Saved views</DropdownMenuLabel>
-            {views && views.length > 0 ? (
-              views.map((v) => (
+          <ChevronRight className="h-4 w-4 opacity-50" />
+
+          {/* Views picker */}
+          <DropdownMenu open={viewsMenuOpen} onOpenChange={setViewsMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-muted/60"
+                data-testid="button-views"
+              >
+                <span>{viewLabel}</span>
+                <ChevronsUpDown className="h-4 w-4 opacity-60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Views
+              </DropdownMenuLabel>
+              {/* Default (no view applied) */}
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setViewsMenuOpen(false);
+                  setActiveViewId(null);
+                  setFilters(DEFAULT_FILTERS);
+                }}
+                className="flex items-center justify-between"
+                data-testid="view-option-default"
+              >
+                <span>Default view</span>
+                {!activeView && (
+                  <Check className="h-4 w-4 text-emerald-500" />
+                )}
+              </DropdownMenuItem>
+              {(views ?? []).map((v) => (
                 <DropdownMenuItem
                   key={v.id}
                   onSelect={(e) => {
                     e.preventDefault();
+                    setViewsMenuOpen(false);
                     applyView(v.id);
                   }}
                   className="flex items-center justify-between gap-2"
                   data-testid={`menu-view-${v.id}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    {v.isDefault && (
-                      <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                    )}
                     <span className="truncate">{v.name}</span>
                   </div>
-                  {activeViewId === v.id && (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {v.isDefault && (
+                      <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                    )}
+                    {activeViewId === v.id && (
+                      <Check className="h-4 w-4 text-emerald-500" />
+                    )}
+                  </div>
                 </DropdownMenuItem>
-              ))
-            ) : (
-              <div className="px-2 py-2 text-xs text-muted-foreground">
-                No saved views yet.
-              </div>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                setSaveName(
-                  activeView ? `${activeView.name} (copy)` : "My view",
-                );
-                setSaveAsDefault(false);
-                setSaveOpen(true);
-              }}
-              data-testid="menu-save-view"
-            >
-              Save current filters as view…
-            </DropdownMenuItem>
-            {activeView && (
-              <>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    handleSetDefault(activeView.id, !activeView.isDefault);
-                  }}
-                  data-testid="menu-toggle-default"
-                >
-                  {activeView.isDefault
-                    ? "Unset as default"
-                    : "Set as default view"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    handleDeleteView(activeView.id);
-                  }}
-                  className="text-red-600 focus:text-red-700"
-                  data-testid="menu-delete-view"
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-2" />
-                  Delete this view
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setViewsMenuOpen(false);
+                  setSaveName(
+                    activeView ? `${activeView.name} (copy)` : "My view",
+                  );
+                  setSaveAsDefault(false);
+                  setSaveOpen(true);
+                }}
+                disabled={!filtersDirty && !activeView}
+                data-testid="menu-save-view"
+              >
+                <Plus className="h-3.5 w-3.5 mr-2" />
+                Save current view
+              </DropdownMenuItem>
+              {activeView && (
+                <>
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleSetDefault(activeView.id, !activeView.isDefault);
+                    }}
+                    data-testid="menu-toggle-default"
+                  >
+                    <Star className="h-3.5 w-3.5 mr-2" />
+                    {activeView.isDefault
+                      ? "Unset as default view"
+                      : "Set as default view"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleDeleteView(activeView.id);
+                    }}
+                    className="text-red-600 focus:text-red-700"
+                    data-testid="menu-delete-view"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-2" />
+                    Delete this view
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </h1>
 
-        <div className="relative w-[260px]">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="px-2 py-1 rounded bg-blue-50 text-blue-700">
+              {summary.open} open
+            </span>
+            <span className="px-2 py-1 rounded bg-orange-50 text-orange-700">
+              {summary.pending} pending
+            </span>
+            {summary.breached > 0 && (
+              <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">
+                {summary.breached} breached
+              </span>
+            )}
+          </div>
+
+          <Button
+            onClick={() => setCreateTicketOpen(true)}
+            data-testid="button-create-ticket"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Create ticket
+          </Button>
+        </div>
+      </div>
+
+      <CreateTicketDialog
+        open={createTicketOpen}
+        onOpenChange={setCreateTicketOpen}
+        defaultDepartmentSlug={deptSlug ?? null}
+      />
+
+      {dept?.description && (
+        <p className="text-sm text-muted-foreground -mt-2">
+          {dept.description}
+        </p>
+      )}
+
+      {/* Toolbar: Filters | Search | (right) Sort | Refresh */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Filters popover */}
+        <Popover
+          open={filtersOpen}
+          onOpenChange={(o) => {
+            setFiltersOpen(o);
+            if (o) setOptionSearch("");
+          }}
+        >
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2"
+              data-testid="button-filters"
+            >
+              <FilterIcon className="h-4 w-4" />
+              <span className="font-medium">Filters</span>
+              {activeFilterCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="h-5 min-w-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px]"
+                  data-testid="badge-filter-count"
+                >
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="p-0 w-[520px]"
+            data-testid="popover-filters"
+          >
+            <div className="flex h-[340px]">
+              {/* Left: categories */}
+              <div className="w-[180px] border-r bg-muted/30 py-2 overflow-y-auto">
+                {FILTER_CATEGORIES.map((cat) => {
+                  const isActive = activeCategory === cat.key;
+                  const isSet = filters[cat.key] !== DEFAULT_FILTERS[cat.key];
+                  return (
+                    <button
+                      key={cat.key}
+                      onClick={() => {
+                        setActiveCategory(cat.key);
+                        setOptionSearch("");
+                      }}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors ${
+                        isActive
+                          ? "bg-background text-foreground font-medium"
+                          : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                      }`}
+                      data-testid={`filter-category-${cat.key}`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{cat.label}</span>
+                        {isSet && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                        )}
+                      </span>
+                      <ChevronRight className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right: options for selected category */}
+              <div className="flex-1 flex flex-col">
+                {activeCategory && (
+                  <>
+                    <div className="p-2 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/70" />
+                        <Input
+                          placeholder="Search…"
+                          value={optionSearch}
+                          onChange={(e) => setOptionSearch(e.target.value)}
+                          className="pl-8 h-9"
+                          data-testid="input-filter-options-search"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto py-1">
+                      {optionsForCategory(activeCategory)
+                        .filter((o) =>
+                          o.label
+                            .toLowerCase()
+                            .includes(optionSearch.toLowerCase()),
+                        )
+                        .map((opt) => {
+                          const checked = filters[activeCategory] === opt.value;
+                          return (
+                            <label
+                              key={opt.value}
+                              className="flex items-center gap-3 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50"
+                              data-testid={`filter-option-${activeCategory}-${opt.value}`}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  setFilter(
+                                    activeCategory,
+                                    v
+                                      ? opt.value
+                                      : DEFAULT_FILTERS[activeCategory],
+                                  );
+                                }}
+                                className="h-4 w-4"
+                              />
+                              <span className="truncate">{opt.label}</span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between p-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8"
+                onClick={clearAll}
+                disabled={!filtersDirty}
+                data-testid="button-clear-filters"
+              >
+                Clear all
+              </Button>
+              <Button
+                size="sm"
+                className="h-8"
+                onClick={() => setFiltersOpen(false)}
+                data-testid="button-filters-done"
+              >
+                Done
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Search */}
+        <div className="relative flex-1 min-w-[220px] max-w-[420px]">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/70" />
           <Input
-            placeholder="Search tickets…"
+            placeholder="Search"
             value={filters.search}
             onChange={(e) => setFilter("search", e.target.value)}
             className="pl-8 h-9"
             data-testid="input-search"
           />
         </div>
-        <Select
-          value={filters.status}
-          onValueChange={(v) => setFilter("status", v)}
-        >
-          <SelectTrigger className="w-[130px] h-9" data-testid="select-status">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={filters.priority}
-          onValueChange={(v) => setFilter("priority", v)}
-        >
-          <SelectTrigger className="w-[130px] h-9" data-testid="select-priority">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All priorities</SelectItem>
-            <SelectItem value="urgent">Urgent</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-          </SelectContent>
-        </Select>
 
-        {/* Support level chips: All / L1 / L2 / L3 */}
-        <div className="inline-flex h-9 items-center rounded-md border bg-background p-0.5">
-          {[
-            { v: "all", label: "All levels" },
-            { v: "1", label: "L1" },
-            { v: "2", label: "L2" },
-            { v: "3", label: "L3" },
-          ].map((opt) => (
-            <button
-              key={opt.v}
-              onClick={() => setFilter("supportLevel", opt.v)}
-              className={`px-2.5 h-8 rounded-[5px] text-xs font-medium transition-colors ${
-                filters.supportLevel === opt.v
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              data-testid={`chip-level-${opt.v}`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Assignee filter */}
-        <Select
-          value={filters.assigneeId}
-          onValueChange={(v) => setFilter("assigneeId", v)}
-        >
-          <SelectTrigger className="w-[180px] h-9" data-testid="select-assignee">
-            <SelectValue placeholder="Assignee" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All assignees</SelectItem>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
-            {(agents ?? []).map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>
-                {a.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex-1" />
 
         {/* Sort */}
         <div className="inline-flex h-9 items-center gap-1">
@@ -639,18 +830,62 @@ export default function Tickets() {
           </Button>
         </div>
 
-        {filtersDirty && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-9 w-9"
+          onClick={() =>
+            queryClient.invalidateQueries({
+              predicate: (q) =>
+                Array.isArray(q.queryKey) &&
+                typeof q.queryKey[0] === "string" &&
+                q.queryKey[0].includes("/tickets"),
+            })
+          }
+          title="Refresh tickets"
+          data-testid="button-refresh-tickets"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Active filter chip strip */}
+      {activeFilterChips.length > 0 && (
+        <div
+          className="flex items-center gap-2 flex-wrap -mt-2"
+          data-testid="active-filter-chips"
+        >
+          {activeFilterChips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-full bg-muted text-xs font-medium"
+              data-testid={`chip-${chip.key}`}
+            >
+              <span className="text-muted-foreground">
+                {chip.categoryLabel}:
+              </span>
+              <span className="text-foreground">{chip.valueLabel}</span>
+              <button
+                onClick={() => clearFilter(chip.key)}
+                className="ml-0.5 h-5 w-5 rounded-full hover:bg-background/80 flex items-center justify-center"
+                aria-label={`Clear ${chip.categoryLabel} filter`}
+                data-testid={`chip-${chip.key}-clear`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
           <Button
             variant="ghost"
             size="sm"
-            className="h-9"
+            className="h-7 px-2 text-xs"
             onClick={clearAll}
-            data-testid="button-clear-filters"
+            data-testid="button-clear-all-chips"
           >
-            Clear
+            Clear all
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="bg-card rounded-lg border shadow-sm flex-1 overflow-hidden flex flex-col">
         <div className="overflow-auto flex-1">

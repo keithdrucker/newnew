@@ -168,6 +168,10 @@ router.post("/tickets", async (req, res): Promise<void> => {
       return;
     }
   }
+  // Always bind reporter to the authenticated user. The schema accepts a
+  // `reporterId` field for spec compatibility, but we never trust the client
+  // value here — that would allow creating tickets on behalf of other users.
+  const reporterId = user.id;
   const settings = await db
     .select()
     .from(departmentSettingsTable)
@@ -191,7 +195,7 @@ router.post("/tickets", async (req, res): Promise<void> => {
       status: "open",
       source: parsed.data.source,
       departmentId: parsed.data.departmentId,
-      reporterId: parsed.data.reporterId,
+      reporterId,
       assigneeId: parsed.data.assigneeId ?? null,
       supportLevel: parsed.data.supportLevel ?? 1,
       location: parsed.data.location ?? null,
