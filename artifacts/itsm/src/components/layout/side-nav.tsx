@@ -14,6 +14,7 @@ import {
   Layers,
   KanbanSquare,
 } from "lucide-react";
+import sidekickLogo from "@assets/sidekick_logo.png";
 import {
   Session,
   useListAgents,
@@ -116,20 +117,19 @@ export function SideNav({ session }: { session: Session | null }) {
       <div className="px-4 pt-5 pb-4 border-b border-white/5">
         <Link
           href="/"
-          className="flex items-center gap-2.5"
+          className="flex flex-col items-start gap-2"
           data-testid="brand-mark"
         >
-          <div className="h-10 w-10 rounded-xl bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center font-display font-bold text-[14px] shadow-md ring-1 ring-white/10">
-            EW
+          <div className="w-full rounded-lg bg-white px-3 py-2 shadow-md ring-1 ring-white/10">
+            <img
+              src={sidekickLogo}
+              alt="Sidekick"
+              className="block w-full h-auto object-contain max-h-9"
+            />
           </div>
-          <div className="leading-tight min-w-0">
-            <p className="font-display font-semibold text-[15px] tracking-tight text-white truncate">
-              Service Hub
-            </p>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-sidebar-foreground/55">
-              EW Howell
-            </p>
-          </div>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-sidebar-foreground/65 px-0.5">
+            E.W. Howell
+          </p>
         </Link>
       </div>
 
