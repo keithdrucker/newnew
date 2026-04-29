@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import {
   db,
   departmentsTable,
@@ -19,6 +19,14 @@ import {
 import { getCurrentUser } from "../lib/session";
 import { visibleDepartmentIds } from "../lib/board-access";
 
+// Sidebar/board badges count "active" tickets only — every status
+// except `closed`. That includes new, in_progress, with_user,
+// with_vendor, on_hold, scheduled, and resolved (resolved is still
+// considered active because it's awaiting either auto-close or end-user
+// reopen). Keeping this as a single predicate makes it easy to keep all
+// three department endpoints aligned.
+const ACTIVE_TICKET = ne(ticketsTable.status, "closed");
+
 const router: IRouter = Router();
 
 async function loadDepartmentsWithCounts(allowedIds?: Set<number>) {
@@ -28,6 +36,7 @@ async function loadDepartmentsWithCounts(allowedIds?: Set<number>) {
       count: sql<number>`count(*)::int`,
     })
     .from(ticketsTable)
+    .where(ACTIVE_TICKET)
     .groupBy(ticketsTable.departmentId);
   const countMap = new Map(counts.map((c) => [c.departmentId, c.count]));
 
@@ -120,7 +129,7 @@ router.get("/departments/:id", async (req, res): Promise<void> => {
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(ticketsTable)
-    .where(eq(ticketsTable.departmentId, dept.id));
+    .where(and(eq(ticketsTable.departmentId, dept.id), ACTIVE_TICKET));
   res.json(
     GetDepartmentResponse.parse({
       id: dept.id,
@@ -162,7 +171,7 @@ router.patch("/departments/:id", async (req, res): Promise<void> => {
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(ticketsTable)
-    .where(eq(ticketsTable.departmentId, dept.id));
+    .where(and(eq(ticketsTable.departmentId, dept.id), ACTIVE_TICKET));
   res.json(
     UpdateDepartmentResponse.parse({
       id: dept.id,
