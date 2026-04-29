@@ -79,6 +79,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreateTicketDialog } from "@/components/create-ticket-dialog";
+import { SlaCountdown } from "@/components/sla-countdown";
 
 type SortField =
   | "created"
@@ -1174,19 +1175,11 @@ export default function Tickets() {
                       {format(new Date(ticket.updatedAt), "MMM d")}
                     </TableCell>
                     <TableCell>
-                      {ticket.slaStatus === "breached" ? (
-                        <Badge
-                          variant="secondary"
-                          className="bg-amber-100 text-amber-800"
-                        >
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Breached
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/70">
-                          On track
-                        </span>
-                      )}
+                      <SlaCountdown
+                        slaStatus={ticket.slaStatus}
+                        resolutionDueAt={ticket.resolutionDueAt}
+                        resolvedAt={ticket.resolvedAt}
+                      />
                     </TableCell>
                   </TableRow>
                 ))

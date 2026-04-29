@@ -21,6 +21,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { AlertCircle, CheckCircle2, ShieldAlert } from "lucide-react";
+import { SlaCountdown } from "@/components/sla-countdown";
 
 const STATUS_LABEL = {
   open: "Open",
@@ -397,17 +398,12 @@ export default function TicketDetail() {
                 className="h-8 px-3 flex items-center bg-muted/40 rounded border text-sm"
                 data-testid="text-ticket-sla"
               >
-                {ticket.slaStatus === "breached" ? (
-                  <Badge
-                    variant="secondary"
-                    className="bg-amber-100 text-amber-800"
-                  >
-                    <AlertCircle className="h-3 w-3 mr-1" />
-                    Breached
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground">On track</span>
-                )}
+                <SlaCountdown
+                  slaStatus={ticket.slaStatus}
+                  resolutionDueAt={ticket.resolutionDueAt}
+                  resolvedAt={ticket.resolvedAt}
+                  size="md"
+                />
               </div>
             </div>
 
