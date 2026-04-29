@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import ProjectsDashboard from "@/pages/projects-dashboard";
 
 function fmtDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "—";
@@ -54,6 +55,50 @@ function fmtDuration(seconds: number): string {
 }
 
 export default function Dashboard() {
+  const { data: session } = useGetSession();
+  const showProjects = session?.role !== "end_user";
+  const [view, setView] = useState<"tickets" | "projects">("tickets");
+
+  // If the role changes (e.g. switching session) and projects are no longer
+  // visible, snap back to the tickets view so we don't render a hidden state.
+  useEffect(() => {
+    if (!showProjects && view === "projects") {
+      setView("tickets");
+    }
+  }, [showProjects, view]);
+
+  return (
+    <div className="space-y-6" data-testid="dashboard-page">
+      <div className="flex items-center">
+        <Select
+          value={view}
+          onValueChange={(v) => setView(v as "tickets" | "projects")}
+        >
+          <SelectTrigger
+            className="w-[180px]"
+            data-testid="select-dashboard-view"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tickets">Tickets</SelectItem>
+            {showProjects && (
+              <SelectItem value="projects">Projects</SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {view === "tickets" ? (
+        <TicketsDashboardContent />
+      ) : (
+        <ProjectsDashboard />
+      )}
+    </div>
+  );
+}
+
+function TicketsDashboardContent() {
   const { data: session } = useGetSession();
   const [rangeDays, setRangeDays] = useState<"30" | "180" | "365">("30");
   const [departmentId, setDepartmentId] = useState<string>("all");

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import {
   AppWindow,
@@ -50,10 +50,11 @@ type NavItem = {
   matchPrefix?: string;
   adminOnly?: boolean;
   endUserHidden?: boolean;
+  testId?: string;
 };
 
 const WORKSPACE: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
   {
     href: "/tickets",
     label: "Tickets",
@@ -106,10 +107,6 @@ export function SideNav({ session }: { session: Session | null }) {
     location === "/tickets" || location.startsWith("/tickets/");
   const showProjectsTree =
     location === "/projects" || location.startsWith("/projects");
-  const showDashboardTree =
-    location === "/" ||
-    location === "/tickets/dashboard" ||
-    location === "/projects/dashboard";
 
   return (
     <aside
@@ -140,17 +137,6 @@ export function SideNav({ session }: { session: Session | null }) {
         <NavSection title="Workspace">
           {WORKSPACE.map((item) => {
             if (item.endUserHidden && session?.role === "end_user") return null;
-            if (item.href === "/") {
-              return (
-                <DashboardNavItem
-                  key={item.href}
-                  item={item}
-                  location={location}
-                  expanded={showDashboardTree}
-                  session={session}
-                />
-              );
-            }
             if (item.href === "/tickets") {
               return (
                 <TicketsNavItem
@@ -236,7 +222,7 @@ function NavRow({
   return (
     <Link
       href={item.href}
-      data-testid={`nav-${item.href.replace("/", "") || "home"}`}
+      data-testid={item.testId ?? `nav-${item.href.replace("/", "") || "home"}`}
       className={cn(
         "relative group flex items-center gap-2.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors",
         active
@@ -250,112 +236,6 @@ function NavRow({
       <Icon className="h-4 w-4 shrink-0" />
       <span className="truncate">{item.label}</span>
     </Link>
-  );
-}
-
-function DashboardNavItem({
-  item,
-  location,
-  expanded: defaultExpanded,
-  session,
-}: {
-  item: NavItem;
-  location: string;
-  expanded: boolean;
-  session: Session | null;
-}) {
-  const [open, setOpen] = useState(defaultExpanded);
-  const Icon = item.icon;
-  const sectionActive =
-    location === "/" ||
-    location === "/tickets/dashboard" ||
-    location === "/projects/dashboard";
-  const overviewActive = location === "/";
-  const ticketsActive = location === "/tickets/dashboard";
-  const projectsActive = location === "/projects/dashboard";
-  const showProjects = session?.role !== "end_user";
-
-  useEffect(() => {
-    if (sectionActive) setOpen(true);
-  }, [sectionActive]);
-
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="relative">
-        <Link
-          href={item.href}
-          data-testid="nav-dashboard"
-          className={cn(
-            "relative flex items-center gap-2.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors pr-8",
-            sectionActive
-              ? "bg-white/10 text-white"
-              : "text-sidebar-foreground/75 hover:text-white hover:bg-white/5",
-          )}
-        >
-          {sectionActive && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sidebar-primary" />
-          )}
-          <Icon className="h-4 w-4 shrink-0" />
-          <span className="truncate">{item.label}</span>
-        </Link>
-        <CollapsibleTrigger
-          className={cn(
-            "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md flex items-center justify-center transition-colors",
-            "text-sidebar-foreground/55 hover:bg-white/5 hover:text-white",
-          )}
-          aria-label={open ? "Collapse dashboards" : "Expand dashboards"}
-          data-testid="trigger-dashboard-tree"
-        >
-          <ChevronRight
-            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
-          />
-        </CollapsibleTrigger>
-      </div>
-
-      <CollapsibleContent className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
-        <Link
-          href="/"
-          data-testid="nav-dashboard-overview"
-          className={cn(
-            "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
-            overviewActive
-              ? "bg-white/10 text-white font-medium"
-              : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
-          )}
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-          <span>Overview</span>
-        </Link>
-        <Link
-          href="/tickets/dashboard"
-          data-testid="nav-dashboard-tickets"
-          className={cn(
-            "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
-            ticketsActive
-              ? "bg-white/10 text-white font-medium"
-              : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
-          )}
-        >
-          <Ticket className="h-3.5 w-3.5 text-sidebar-foreground/70" />
-          <span>Tickets</span>
-        </Link>
-        {showProjects && (
-          <Link
-            href="/projects/dashboard"
-            data-testid="nav-dashboard-projects"
-            className={cn(
-              "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
-              projectsActive
-                ? "bg-white/10 text-white font-medium"
-                : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
-            )}
-          >
-            <KanbanSquare className="h-3.5 w-3.5 text-sidebar-foreground/70" />
-            <span>Projects</span>
-          </Link>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
   );
 }
 

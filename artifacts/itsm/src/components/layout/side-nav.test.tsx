@@ -72,44 +72,34 @@ describe("SideNav active state and auto-expansion", () => {
     vi.clearAllMocks();
   });
 
-  describe("Dashboard dropdown", () => {
-    it("auto-expands and highlights Overview when on '/'", () => {
+  describe("Dashboard link", () => {
+    it("renders Dashboard as a flat link (no dropdown) and highlights it on '/'", () => {
       renderAt("/", adminSession);
 
       const dashboardRow = screen.getByTestId("nav-dashboard");
+      expect(dashboardRow).toBeVisible();
       expect(dashboardRow).toHaveClass(ACTIVE_CLASS);
 
-      const overview = screen.getByTestId("nav-dashboard-overview");
-      expect(overview).toBeVisible();
-      expect(overview).toHaveClass(ACTIVE_CLASS);
-
-      const ticketsChild = screen.getByTestId("nav-dashboard-tickets");
-      expect(ticketsChild).not.toHaveClass(ACTIVE_CLASS);
+      // The old child entries should no longer exist.
+      expect(
+        screen.queryByTestId("nav-dashboard-overview"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("nav-dashboard-tickets"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("nav-dashboard-projects"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("trigger-dashboard-tree"),
+      ).not.toBeInTheDocument();
     });
 
-    it("auto-expands and highlights Tickets child when on '/tickets/dashboard'", () => {
-      renderAt("/tickets/dashboard", adminSession);
+    it("does not highlight Dashboard when on a different route", () => {
+      renderAt("/tickets", adminSession);
 
       const dashboardRow = screen.getByTestId("nav-dashboard");
-      expect(dashboardRow).toHaveClass(ACTIVE_CLASS);
-
-      const ticketsChild = screen.getByTestId("nav-dashboard-tickets");
-      expect(ticketsChild).toBeVisible();
-      expect(ticketsChild).toHaveClass(ACTIVE_CLASS);
-
-      const overview = screen.getByTestId("nav-dashboard-overview");
-      expect(overview).not.toHaveClass(ACTIVE_CLASS);
-    });
-
-    it("auto-expands and highlights Projects child when on '/projects/dashboard'", () => {
-      renderAt("/projects/dashboard", adminSession);
-
-      const dashboardRow = screen.getByTestId("nav-dashboard");
-      expect(dashboardRow).toHaveClass(ACTIVE_CLASS);
-
-      const projectsChild = screen.getByTestId("nav-dashboard-projects");
-      expect(projectsChild).toBeVisible();
-      expect(projectsChild).toHaveClass(ACTIVE_CLASS);
+      expect(dashboardRow).not.toHaveClass(ACTIVE_CLASS);
     });
   });
 
@@ -175,23 +165,19 @@ describe("SideNav active state and auto-expansion", () => {
 });
 
 describe("SideNav role-based visibility", () => {
-  it("hides the Projects workspace entry and the Projects dashboard child for end users", () => {
+  it("hides the Projects workspace entry for end users", () => {
     renderAt("/", endUserSession);
 
     expect(screen.queryByTestId("nav-projects")).not.toBeInTheDocument();
-    expect(
-      screen.queryByTestId("nav-dashboard-projects"),
-    ).not.toBeInTheDocument();
 
     expect(screen.getByTestId("nav-dashboard")).toBeInTheDocument();
     expect(screen.getByTestId("nav-tickets")).toBeInTheDocument();
   });
 
-  it("shows the Projects entries for agents", () => {
+  it("shows the Projects entry for agents", () => {
     renderAt("/", agentSession);
 
     expect(screen.getByTestId("nav-projects")).toBeInTheDocument();
-    expect(screen.getByTestId("nav-dashboard-projects")).toBeInTheDocument();
   });
 
   it("shows the Administration section only for admins", () => {
