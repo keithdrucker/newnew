@@ -8,9 +8,10 @@
 import type { InitiativeStatus } from "./initiativeStatus";
 
 /**
- * All fields optional. To approve, set status="approved" (a project
-is created automatically). To reject/defer, set
-status="rejected_deferred" and supply decisionReason.
+ * Patch the initiative and/or transition its status. Allowed
+transitions are validated server-side; illegal ones return 409.
+Reopen / move-back transitions require `transitionReason`.
+Approve / Defer / Reject require `decisionReason`.
 
  */
 export interface UpdateInitiativeInput {
@@ -22,9 +23,31 @@ export interface UpdateInitiativeInput {
   departmentId?: number | null;
   /** @nullable */
   assigneeId?: number | null;
+  problemOpportunity?: string;
+  impactScope?: string;
+  additionalNotes?: string;
+  category?: string;
+  initialPriority?: string;
+  initialEffort?: string;
+  businessAlignment?: string;
+  investigationDecision?: string;
+  backlogNotes?: string;
+  benefits?: string;
+  tradeoffs?: string;
+  businessValueLevel?: string;
+  businessValueSummary?: string;
+  costLevel?: string;
+  estimatedCost?: string;
+  riskLevel?: string;
+  validationStatus?: string;
+  impactedTeams?: string;
   prosCons?: string;
   roughCost?: string;
   expectedBenefit?: string;
   riskNotes?: string;
+  finalDecision?: string;
   decisionReason?: string;
+  /** @nullable */
+  revisitDate?: Date | null;
+  transitionReason?: string;
 }

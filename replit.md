@@ -114,6 +114,20 @@ The project utilizes a pnpm workspace monorepo with each package managing its ow
     - Comment delete (`DELETE /api/projects/:id/comments/:commentId`): every caller — including the comment's author — must have at minimum READ access to the parent project. Non-authors additionally need MODIFY access. Prevents an end-user who lost board access from scrubbing their old comments.
     - Phase create/rename routes return 409 (not 500) on duplicate name within a department; the underlying SQLSTATE 23505 is detected via the `isUniqueViolation()` helper which walks `err.cause` for Drizzle's wrapper.
     - RBAC: Admins can delete projects, agents can edit buckets/cards on boards they have `modify` on, end-users have no access to projects.
+- **Initiatives (decision pipeline)** — Apr 2026 redesign:
+    - Four lanes: `backlog` → `under_review` → `approved` | `rejected_deferred`. Approving auto-creates a Project (`createdProjectId`) inside the same transaction; the link survives reopens.
+    - Schema (`lib/db/src/schema/initiatives.ts`): intake fields (`problemOpportunity`, `impactScope`, `additionalNotes`), backlog-triage fields (`category`, `initialPriority`, `initialEffort`, `businessAlignment`, `investigationDecision`, `backlogNotes`, `backlogReviewedById`, `backlogReviewedAt`), under-review analysis (`benefits`, `tradeoffs`, `businessValueLevel`, `businessValueSummary`, `costLevel`, `estimatedCost`, `riskLevel`, `riskNotes`, `validationStatus`, `impactedTeams`), final decision (`finalDecision`, `decisionReason`, `revisitDate`, `decidedAt`, `decidedById`). Legacy `prosCons`/`expectedBenefit`/`roughCost` are preserved as read-only fallbacks.
+    - **Audit log** (`initiative_audit_events`): every status change inserts a row inside the same tx with `oldStatus`, `newStatus`, `action` (`transition` | `approve` | `move_back` | `reopen`), `reason`, `changedById`, `changedAt`. Hydrated as `auditEvents[]` on every initiative response.
+    - **Allowed transitions** (`artifacts/api-server/src/routes/initiatives.ts` `TRANSITIONS` table) — illegal transitions return 409:
+        - `backlog → under_review` (requires `investigationDecision === "investigate_further"`)
+        - `backlog → rejected_deferred` (close / do-not-pursue; requires `backlogNotes`)
+        - `under_review → backlog` (move-back; requires `transitionReason`)
+        - `under_review → approved` (requires `decisionReason`; auto-creates project)
+        - `under_review → rejected_deferred` (defer or reject; requires `decisionReason`)
+        - `approved → under_review` (reopen; requires `transitionReason`; preserves `createdProjectId`, clears `decidedAt`/`decidedById`/`finalDecision`)
+        - `rejected_deferred → backlog | under_review` (reopen; requires `transitionReason`)
+    - `revisitDate` is a Drizzle `date()` column (`YYYY-MM-DD`); the route coerces the zod-parsed `Date` back to ISO date before write.
+    - Frontend (`artifacts/itsm/src/pages/initiatives.tsx`): four-column board with phase hints + per-card project link badge; create dialog captures Problem/Opportunity, Expected Benefit, Impact Scope (required) plus optional Department / Notes; detail dialog shows a Backlog → Under Review → Approved/Rejected `PhaseProgress` indicator, collapsible `Section`s (Intake, Backlog Triage, Under Review, Final Decision, Move Back/Reopen, Previous Review History), phase-specific editors/views, and an `AuditTimeline`. Action buttons are phase-scoped: `Save Triage` / `Close — Do Not Pursue` / `Move to Under Review` (Backlog), `Save Review` / `Reject` / `Defer` / `Approve & Create Project` (Under Review), `Reopen to Backlog`/`Reopen to Under Review` (terminal lanes).
 - **API Server Conventions**:
     - Query strings are processed by `src/lib/queryCoerce.ts` for numeric parameters.
     - Drizzle's `inArray()` is used for list filters.

@@ -1,0 +1,203 @@
+Update the Initiatives module so each initiative has phase-specific questions, clear phase highlighting, phase movement controls, and a review history.
+
+Current statuses:
+- Backlog
+- Under Review
+- Approved
+- Rejected / Deferred
+
+Goal:
+Each status should have its own required fields and approval actions. When opening an initiative, the modal should clearly show which phase the initiative is currently in and allow the user to review prior phase decisions.
+
+1. Add a phase/status header inside the initiative detail modal
+
+At the top of the modal, show:
+- Current Status badge
+- Department badge
+- Created by
+- Created date
+- Current phase progress indicator
+
+Progress indicator:
+Backlog → Under Review → Approved / Rejected / Deferred
+
+Highlight the current phase visually.
+Example:
+If status = Under Review, the “Under Review” step should be highlighted.
+Completed prior phases should show as completed.
+Future phases should look inactive.
+
+2. Add phase action controls
+
+If initiative is in Under Review, show:
+- Move back to Backlog
+- Save Review
+- Approve & Create Project
+- Defer
+- Reject
+
+If initiative is in Backlog, show:
+- Save Triage
+- Move to Under Review
+- Close / Do Not Pursue
+
+If initiative is Approved, show:
+- View Project
+- Reopen to Under Review
+
+If initiative is Rejected / Deferred, show:
+- Reopen to Backlog
+- Reopen to Under Review
+
+3. Update New Initiative form
+
+Keep this simple.
+
+Required fields:
+- Title
+- Problem / Opportunity
+  Placeholder: “What problem are we solving or opportunity are we addressing?”
+- Expected Benefit
+  Placeholder: “What value could this create? Example: time savings, cost reduction, efficiency, risk reduction, compliance, or user experience.”
+- Impact Scope
+  Options: Individual, Team, Department, Company-wide
+
+Optional:
+- Department
+- Additional Notes
+
+New initiatives should be created in Backlog by default.
+
+4. Backlog phase fields
+
+Add a Backlog Triage section.
+
+Fields:
+- Category
+  Options: IT, Security, HR, Finance, Operations, Compliance, Customer Experience, Other
+- Initial Priority
+  Options: Low, Medium, High
+- Initial Effort
+  Options: Low, Medium, High
+- Business Alignment
+  Options: Yes, No, Unsure
+- Investigation Decision
+  Options:
+  - Investigate Further
+  - Do Not Investigate
+- Backlog Notes
+  Placeholder: “Why should this move forward for deeper review, or why should it stop here?”
+
+Rules:
+- If Investigation Decision = Investigate Further, allow Move to Under Review.
+- If Investigation Decision = Do Not Investigate, require Backlog Notes and move to Rejected / Deferred.
+- Auto-capture Backlog Reviewed By and Backlog Reviewed Date.
+
+5. Under Review phase fields
+
+Replace “Pros / Cons” with two separate fields:
+- Benefits
+  Placeholder: “What are the key advantages or expected outcomes?”
+- Tradeoffs / Considerations
+  Placeholder: “What are the downsides, risks, dependencies, or concerns?”
+
+Add these Under Review fields:
+- Business Value Level
+  Options: Low, Medium, High
+- Business Value Summary
+  Placeholder: “Summarize the expected business value in 1–2 sentences.”
+- Cost Level
+  Options: Low, Medium, High, Unknown
+- Estimated Cost ($)
+  Optional
+- Risk Level
+  Options: Low, Medium, High
+- Risk Notes
+  Optional
+- Validation Status
+  Options: Not Reviewed, Discussed, Demoed, Piloted
+- Impacted Teams / Departments
+  Optional
+
+6. Final Decision section
+
+At the bottom of Under Review, add:
+
+- Final Decision
+  Options:
+  - Approve & Create Project
+  - Defer
+  - Reject
+
+- Decision Rationale
+  Placeholder: “Briefly explain why this was approved, deferred, or rejected. Consider business value, cost, risk, validation, timing, and missing information.”
+
+Rules:
+- Decision Rationale is required for Approve, Defer, and Reject.
+- If Approve & Create Project:
+  - Create a project automatically.
+  - Carry over title, description, business value, cost, risk, validation, benefits, tradeoffs, and decision rationale.
+  - Set project status to Not Started.
+  - Move initiative status to Approved.
+- If Defer:
+  - Move initiative status to Rejected / Deferred.
+  - Allow optional Revisit Date.
+- If Reject:
+  - Move initiative status to Rejected / Deferred.
+- Auto-capture Decision By and Decision Date.
+
+7. Add Previous Phase Review section
+
+Inside the initiative modal, add a collapsible section called “Previous Review History”.
+
+Show:
+- Backlog triage answers
+- Backlog decision
+- Backlog notes
+- Reviewed by
+- Reviewed date
+- Under Review answers, if completed
+- Final decision
+- Decision rationale
+- Decision by
+- Decision date
+
+This section should be visible from any phase so users can see how the initiative got to its current status.
+
+8. Add Move Back logic
+
+When moving from Under Review back to Backlog:
+- Do not delete Under Review data.
+- Keep all entered review fields saved.
+- Add a history entry:
+  “Moved from Under Review back to Backlog”
+- Require a reason:
+  Placeholder: “Why is this being moved back to Backlog?”
+
+When reopening Approved or Rejected / Deferred:
+- Preserve all prior history.
+- Add a new history entry with user, date, old status, new status, and reason.
+
+9. Add an Audit Trail
+
+Every status change should record:
+- Old status
+- New status
+- Changed by
+- Changed date/time
+- Reason or notes
+- Action taken
+
+10. UI requirements
+
+- Keep sections collapsible to avoid overwhelming users.
+- Current phase should be visually highlighted.
+- Completed phases should show a checkmark.
+- Use badges for Low / Medium / High / Unknown.
+- Decision Rationale should appear clearly at the bottom.
+- Do not remove existing initiative records.
+- Preserve existing data by mapping:
+  - Existing Pros / Cons → Tradeoffs / Considerations
+  - Existing Rough Cost → Estimated Cost / Cost Notes
+  - Existing Expected Benefit → Business Value Summary
+  - Existing Risks → Risk Notes

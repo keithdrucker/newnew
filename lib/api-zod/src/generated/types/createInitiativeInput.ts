@@ -9,6 +9,13 @@
 export interface CreateInitiativeInput {
   /** @minLength 1 */
   title: string;
+  /** @minLength 1 */
+  problemOpportunity: string;
+  /** @minLength 1 */
+  expectedBenefit: string;
+  /** @minLength 1 */
+  impactScope: string;
+  additionalNotes?: string;
   description?: string;
   /** @nullable */
   departmentId?: number | null;

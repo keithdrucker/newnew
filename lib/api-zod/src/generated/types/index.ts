@@ -66,6 +66,7 @@ export * from "./getDashboardTimeseriesParams";
 export * from "./getDashboardTimeseriesRangeDays";
 export * from "./healthStatus";
 export * from "./initiative";
+export * from "./initiativeAuditEvent";
 export * from "./initiativeStatus";
 export * from "./kbArticle";
 export * from "./kbArticleSource";

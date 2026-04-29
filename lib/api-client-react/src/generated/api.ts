@@ -6064,10 +6064,16 @@ export function useGetInitiative<
 }
 
 /**
- * @summary Update fields and/or transition status. Approving an initiative
-atomically creates a Project and stamps createdProjectId on the
-returned record. Terminal states (approved, rejected_deferred)
-cannot be left — the server returns 409 if you try.
+ * @summary Update fields and/or transition status. Status changes are
+validated against an explicit allowed-transitions table:
+backlog ↔ under_review, under_review → approved | rejected_deferred,
+approved → under_review (reopen, preserves createdProjectId), and
+rejected_deferred → backlog | under_review (reopen). Disallowed
+transitions return 409. Approving atomically creates a Project
+and stamps createdProjectId on the returned record. Reopen and
+move-back transitions require a fresh `transitionReason`;
+approve / defer / reject require a fresh `decisionReason`;
+close-from-backlog requires `backlogNotes`.
 
  */
 export const getUpdateInitiativeUrl = (id: number) => {
@@ -6132,10 +6138,16 @@ export type UpdateInitiativeMutationBody = BodyType<UpdateInitiativeInput>;
 export type UpdateInitiativeMutationError = ErrorType<void>;
 
 /**
- * @summary Update fields and/or transition status. Approving an initiative
-atomically creates a Project and stamps createdProjectId on the
-returned record. Terminal states (approved, rejected_deferred)
-cannot be left — the server returns 409 if you try.
+ * @summary Update fields and/or transition status. Status changes are
+validated against an explicit allowed-transitions table:
+backlog ↔ under_review, under_review → approved | rejected_deferred,
+approved → under_review (reopen, preserves createdProjectId), and
+rejected_deferred → backlog | under_review (reopen). Disallowed
+transitions return 409. Approving atomically creates a Project
+and stamps createdProjectId on the returned record. Reopen and
+move-back transitions require a fresh `transitionReason`;
+approve / defer / reject require a fresh `decisionReason`;
+close-from-backlog requires `backlogNotes`.
 
  */
 export const useUpdateInitiative = <

@@ -1333,10 +1333,16 @@ paths:
       operationId: updateInitiative
       tags: [initiatives]
       summary: |
-        Update fields and/or transition status. Approving an initiative
-        atomically creates a Project and stamps createdProjectId on the
-        returned record. Terminal states (approved, rejected_deferred)
-        cannot be left — the server returns 409 if you try.
+        Update fields and/or transition status. Status changes are
+        validated against an explicit allowed-transitions table:
+        backlog ↔ under_review, under_review → approved | rejected_deferred,
+        approved → under_review (reopen, preserves createdProjectId), and
+        rejected_deferred → backlog | under_review (reopen). Disallowed
+        transitions return 409. Approving atomically creates a Project
+        and stamps createdProjectId on the returned record. Reopen and
+        move-back transitions require a fresh `transitionReason`;
+        approve / defer / reject require a fresh `decisionReason`;
+        close-from-backlog requires `backlogNotes`.
       parameters:
         - in: path
           name: id
@@ -1353,8 +1359,15 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Initiative" }
-        "400": { description: Validation error (e.g. missing decisionReason on rejection) }
-        "409": { description: Cannot leave a terminal state }
+        "400":
+          description: |
+            Validation error — for example, missing decisionReason on
+            approve/defer/reject, missing transitionReason on reopen or
+            move-back, or missing backlogNotes on close-from-backlog.
+        "409":
+          description: |
+            Disallowed status transition — the requested old → new
+            status pair is not in the allowed-transitions table.
     delete:
       operationId: deleteInitiative
       tags: [initiatives]
@@ -2943,6 +2956,25 @@ components:
       type: string
       enum: [backlog, under_review, approved, rejected_deferred]
 
+    InitiativeAuditEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        oldStatus: { $ref: "#/components/schemas/InitiativeStatus" }
+        newStatus: { $ref: "#/components/schemas/InitiativeStatus" }
+        action: { type: string }
+        reason: { type: string }
+        changedById: { type: ["integer", "null"] }
+        changedByName: { type: ["string", "null"] }
+        changedAt: { type: string, format: date-time }
+      required:
+        - id
+        - oldStatus
+        - newStatus
+        - action
+        - reason
+        - changedAt
+
     Initiative:
       type: object
       properties:
@@ -2956,27 +2988,78 @@ components:
         reporterName: { type: ["string", "null"] }
         assigneeId: { type: ["integer", "null"] }
         assigneeName: { type: ["string", "null"] }
+        # New intake
+        problemOpportunity: { type: string }
+        impactScope: { type: string }
+        additionalNotes: { type: string }
+        # Backlog triage
+        category: { type: string }
+        initialPriority: { type: string }
+        initialEffort: { type: string }
+        businessAlignment: { type: string }
+        investigationDecision: { type: string }
+        backlogNotes: { type: string }
+        backlogReviewedById: { type: ["integer", "null"] }
+        backlogReviewedByName: { type: ["string", "null"] }
+        backlogReviewedAt: { type: ["string", "null"], format: date-time }
+        # Under review (structured)
+        benefits: { type: string }
+        tradeoffs: { type: string }
+        businessValueLevel: { type: string }
+        businessValueSummary: { type: string }
+        costLevel: { type: string }
+        estimatedCost: { type: string }
+        riskLevel: { type: string }
+        validationStatus: { type: string }
+        impactedTeams: { type: string }
+        # Legacy analysis (read-only fallbacks)
         prosCons: { type: string }
         roughCost: { type: string }
         expectedBenefit: { type: string }
         riskNotes: { type: string }
+        # Decision
+        finalDecision: { type: string }
         decisionReason: { type: string }
         decidedAt: { type: ["string", "null"], format: date-time }
         decidedById: { type: ["integer", "null"] }
         decidedByName: { type: ["string", "null"] }
+        revisitDate: { type: ["string", "null"], format: date }
         createdProjectId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        auditEvents:
+          type: array
+          items: { $ref: "#/components/schemas/InitiativeAuditEvent" }
       required:
         - id
         - title
         - description
         - status
+        - problemOpportunity
+        - impactScope
+        - additionalNotes
+        - category
+        - initialPriority
+        - initialEffort
+        - businessAlignment
+        - investigationDecision
+        - backlogNotes
+        - benefits
+        - tradeoffs
+        - businessValueLevel
+        - businessValueSummary
+        - costLevel
+        - estimatedCost
+        - riskLevel
+        - validationStatus
+        - impactedTeams
         - prosCons
         - roughCost
         - expectedBenefit
         - riskNotes
+        - finalDecision
         - decisionReason
+        - auditEvents
         - createdAt
         - updatedAt
 
@@ -2984,26 +3067,61 @@ components:
       type: object
       properties:
         title: { type: string, minLength: 1 }
+        problemOpportunity: { type: string, minLength: 1 }
+        # Initial value for businessValueSummary
+        expectedBenefit: { type: string, minLength: 1 }
+        impactScope: { type: string, minLength: 1 }
+        additionalNotes: { type: string }
+        # Legacy free-form description still accepted
         description: { type: string }
         departmentId: { type: ["integer", "null"] }
         reporterId: { type: ["integer", "null"] }
         assigneeId: { type: ["integer", "null"] }
-      required: [title]
+      required: [title, problemOpportunity, expectedBenefit, impactScope]
 
     UpdateInitiativeInput:
       type: object
       description: |
-        All fields optional. To approve, set status="approved" (a project
-        is created automatically). To reject/defer, set
-        status="rejected_deferred" and supply decisionReason.
+        Patch the initiative and/or transition its status. Allowed
+        transitions are validated server-side; illegal ones return 409.
+        Reopen / move-back transitions require `transitionReason`.
+        Approve / Defer / Reject require `decisionReason`.
       properties:
         title: { type: string, minLength: 1 }
         description: { type: string }
         status: { $ref: "#/components/schemas/InitiativeStatus" }
         departmentId: { type: ["integer", "null"] }
         assigneeId: { type: ["integer", "null"] }
+        # Intake
+        problemOpportunity: { type: string }
+        impactScope: { type: string }
+        additionalNotes: { type: string }
+        # Backlog triage
+        category: { type: string }
+        initialPriority: { type: string }
+        initialEffort: { type: string }
+        businessAlignment: { type: string }
+        investigationDecision: { type: string }
+        backlogNotes: { type: string }
+        # Under review (structured)
+        benefits: { type: string }
+        tradeoffs: { type: string }
+        businessValueLevel: { type: string }
+        businessValueSummary: { type: string }
+        costLevel: { type: string }
+        estimatedCost: { type: string }
+        riskLevel: { type: string }
+        validationStatus: { type: string }
+        impactedTeams: { type: string }
+        # Legacy fields (still patchable for back-compat)
         prosCons: { type: string }
         roughCost: { type: string }
         expectedBenefit: { type: string }
         riskNotes: { type: string }
+        # Decision
+        finalDecision: { type: string }
         decisionReason: { type: string }
+        revisitDate: { type: ["string", "null"], format: date }
+        # Reason captured on the audit event for reopen / move-back /
+        # close transitions. Required for those status changes.
+        transitionReason: { type: string }

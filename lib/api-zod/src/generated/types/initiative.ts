@@ -5,6 +5,7 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { InitiativeAuditEvent } from "./initiativeAuditEvent";
 import type { InitiativeStatus } from "./initiativeStatus";
 
 export interface Initiative {
@@ -24,10 +25,35 @@ export interface Initiative {
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
+  problemOpportunity: string;
+  impactScope: string;
+  additionalNotes: string;
+  category: string;
+  initialPriority: string;
+  initialEffort: string;
+  businessAlignment: string;
+  investigationDecision: string;
+  backlogNotes: string;
+  /** @nullable */
+  backlogReviewedById?: number | null;
+  /** @nullable */
+  backlogReviewedByName?: string | null;
+  /** @nullable */
+  backlogReviewedAt?: Date | null;
+  benefits: string;
+  tradeoffs: string;
+  businessValueLevel: string;
+  businessValueSummary: string;
+  costLevel: string;
+  estimatedCost: string;
+  riskLevel: string;
+  validationStatus: string;
+  impactedTeams: string;
   prosCons: string;
   roughCost: string;
   expectedBenefit: string;
   riskNotes: string;
+  finalDecision: string;
   decisionReason: string;
   /** @nullable */
   decidedAt?: Date | null;
@@ -36,7 +62,10 @@ export interface Initiative {
   /** @nullable */
   decidedByName?: string | null;
   /** @nullable */
+  revisitDate?: Date | null;
+  /** @nullable */
   createdProjectId?: number | null;
   createdAt: Date;
   updatedAt: Date;
+  auditEvents: InitiativeAuditEvent[];
 }

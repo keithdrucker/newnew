@@ -1584,6 +1584,19 @@ export const InitiativeStatus = {
   rejected_deferred: "rejected_deferred",
 } as const;
 
+export interface InitiativeAuditEvent {
+  id: number;
+  oldStatus: InitiativeStatus;
+  newStatus: InitiativeStatus;
+  action: string;
+  reason: string;
+  /** @nullable */
+  changedById?: number | null;
+  /** @nullable */
+  changedByName?: string | null;
+  changedAt: string;
+}
+
 export interface Initiative {
   id: number;
   title: string;
@@ -1601,10 +1614,35 @@ export interface Initiative {
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
+  problemOpportunity: string;
+  impactScope: string;
+  additionalNotes: string;
+  category: string;
+  initialPriority: string;
+  initialEffort: string;
+  businessAlignment: string;
+  investigationDecision: string;
+  backlogNotes: string;
+  /** @nullable */
+  backlogReviewedById?: number | null;
+  /** @nullable */
+  backlogReviewedByName?: string | null;
+  /** @nullable */
+  backlogReviewedAt?: string | null;
+  benefits: string;
+  tradeoffs: string;
+  businessValueLevel: string;
+  businessValueSummary: string;
+  costLevel: string;
+  estimatedCost: string;
+  riskLevel: string;
+  validationStatus: string;
+  impactedTeams: string;
   prosCons: string;
   roughCost: string;
   expectedBenefit: string;
   riskNotes: string;
+  finalDecision: string;
   decisionReason: string;
   /** @nullable */
   decidedAt?: string | null;
@@ -1613,14 +1651,24 @@ export interface Initiative {
   /** @nullable */
   decidedByName?: string | null;
   /** @nullable */
+  revisitDate?: string | null;
+  /** @nullable */
   createdProjectId?: number | null;
   createdAt: string;
   updatedAt: string;
+  auditEvents: InitiativeAuditEvent[];
 }
 
 export interface CreateInitiativeInput {
   /** @minLength 1 */
   title: string;
+  /** @minLength 1 */
+  problemOpportunity: string;
+  /** @minLength 1 */
+  expectedBenefit: string;
+  /** @minLength 1 */
+  impactScope: string;
+  additionalNotes?: string;
   description?: string;
   /** @nullable */
   departmentId?: number | null;
@@ -1631,9 +1679,10 @@ export interface CreateInitiativeInput {
 }
 
 /**
- * All fields optional. To approve, set status="approved" (a project
-is created automatically). To reject/defer, set
-status="rejected_deferred" and supply decisionReason.
+ * Patch the initiative and/or transition its status. Allowed
+transitions are validated server-side; illegal ones return 409.
+Reopen / move-back transitions require `transitionReason`.
+Approve / Defer / Reject require `decisionReason`.
 
  */
 export interface UpdateInitiativeInput {
@@ -1645,11 +1694,33 @@ export interface UpdateInitiativeInput {
   departmentId?: number | null;
   /** @nullable */
   assigneeId?: number | null;
+  problemOpportunity?: string;
+  impactScope?: string;
+  additionalNotes?: string;
+  category?: string;
+  initialPriority?: string;
+  initialEffort?: string;
+  businessAlignment?: string;
+  investigationDecision?: string;
+  backlogNotes?: string;
+  benefits?: string;
+  tradeoffs?: string;
+  businessValueLevel?: string;
+  businessValueSummary?: string;
+  costLevel?: string;
+  estimatedCost?: string;
+  riskLevel?: string;
+  validationStatus?: string;
+  impactedTeams?: string;
   prosCons?: string;
   roughCost?: string;
   expectedBenefit?: string;
   riskNotes?: string;
+  finalDecision?: string;
   decisionReason?: string;
+  /** @nullable */
+  revisitDate?: string | null;
+  transitionReason?: string;
 }
 
 export type ListDepartmentsParams = {
