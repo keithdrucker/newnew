@@ -82,6 +82,11 @@ export const ticketCommentsTable = pgTable("ticket_comments", {
   ticketId: integer("ticket_id").notNull(),
   authorId: integer("author_id").notNull(),
   body: text("body").notNull(),
+  // `reply` is part of the customer-facing conversation (agent ↔ user,
+  // and eventually the AI assistant). `internal_note` is a private
+  // technical note visible only to agents/admins. End users must never
+  // see or be able to author `internal_note` comments.
+  kind: text("kind").notNull().default("reply"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

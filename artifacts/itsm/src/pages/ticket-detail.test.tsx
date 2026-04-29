@@ -200,6 +200,7 @@ describe("TicketDetail page — role-scoped rendering", () => {
             authorName: "Aaron Agent",
             authorRole: "agent",
             body: "We're investigating.",
+            kind: "reply",
             createdAt: "2026-04-02T09:00:00.000Z",
           },
         ],

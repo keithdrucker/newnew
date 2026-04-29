@@ -146,9 +146,12 @@ async function applyAutomations(rows: TicketRow[]): Promise<TicketRow[]> {
       if (claimed.length > 0) {
         const authorId = await pickSystemAuthorId(r);
         if (authorId != null) {
+          // System reminder is part of the customer conversation —
+          // the user must see it, so it's a `reply`.
           await db.insert(ticketCommentsTable).values({
             ticketId: r.id,
             authorId,
+            kind: "reply",
             body: "[Automated reminder] This ticket has been waiting on your reply for 3 days. It will close automatically in 24 hours if we don't hear back.",
           });
         }
@@ -525,11 +528,17 @@ router.get("/tickets/:id", async (req, res): Promise<void> => {
   const [automated] = await applyAutomations([row]);
   const [hydrated] = await hydrate([automated]);
 
-  const commentRows = await db
+  const allCommentRows = await db
     .select()
     .from(ticketCommentsTable)
     .where(eq(ticketCommentsTable.ticketId, row.id))
     .orderBy(asc(ticketCommentsTable.createdAt));
+  // End users must never see internal notes — strip them server-side
+  // before they leave the API. Agents/admins see everything.
+  const commentRows =
+    user.role === "end_user"
+      ? allCommentRows.filter((c) => c.kind !== "internal_note")
+      : allCommentRows;
   const authorIds = Array.from(new Set(commentRows.map((c) => c.authorId)));
   const authors = authorIds.length
     ? await db
@@ -547,6 +556,9 @@ router.get("/tickets/:id", async (req, res): Promise<void> => {
       | "agent"
       | "end_user",
     body: c.body,
+    kind: (c.kind === "internal_note" ? "internal_note" : "reply") as
+      | "reply"
+      | "internal_note",
     createdAt: c.createdAt.toISOString(),
   }));
   res.json(GetTicketResponse.parse({ ...hydrated, comments }));
@@ -744,12 +756,24 @@ router.post("/tickets/:id/comments", async (req, res): Promise<void> => {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
+
+  // Internal notes are agent/admin only — end users cannot post them
+  // and can never see them. Default to `reply` if the client omits it
+  // (keeps the API backward compatible).
+  const requestedKind = parsed.data.kind ?? "reply";
+  if (requestedKind === "internal_note" && user.role === "end_user") {
+    res.status(403).json({ error: "End users cannot post internal notes" });
+    return;
+  }
+  const kind: "reply" | "internal_note" = requestedKind;
+
   const [row] = await db
     .insert(ticketCommentsTable)
     .values({
       ticketId: ticket.id,
       authorId: user.id,
       body: parsed.data.body,
+      kind,
     })
     .returning();
 
@@ -758,9 +782,12 @@ router.post("/tickets/:id/comments", async (req, res): Promise<void> => {
   const ticketUpdates: Partial<typeof ticketsTable.$inferInsert> = {};
 
   // First agent response stamps firstResponseAt (kicks the resolution
-  // clock off).
+  // clock off). Internal notes are private to the team and don't count
+  // as a response to the requester, so they must NOT satisfy the
+  // first-response SLA.
   if (
     !ticket.firstResponseAt &&
+    kind === "reply" &&
     (user.role === "admin" || user.role === "agent")
   ) {
     ticketUpdates.firstResponseAt = now;
@@ -816,6 +843,7 @@ router.post("/tickets/:id/comments", async (req, res): Promise<void> => {
     authorRole: user.role as "admin" | "agent" | "end_user",
     body: row.body,
     createdAt: row.createdAt.toISOString(),
+    kind: row.kind as "reply" | "internal_note",
   });
 });
 

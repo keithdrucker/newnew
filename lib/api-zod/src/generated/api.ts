@@ -562,6 +562,7 @@ export const GetTicketResponse = zod
           authorName: zod.string(),
           authorRole: zod.enum(["admin", "agent", "end_user"]),
           body: zod.string(),
+          kind: zod.enum(["reply", "internal_note"]),
           createdAt: zod.coerce.date(),
         }),
       ),
@@ -755,6 +756,7 @@ export const AddTicketCommentParams = zod.object({
 
 export const AddTicketCommentBody = zod.object({
   body: zod.string(),
+  kind: zod.enum(["reply", "internal_note"]).optional(),
 });
 
 /**

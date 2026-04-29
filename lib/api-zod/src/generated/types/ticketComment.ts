@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Role } from "./role";
+import type { TicketCommentKind } from "./ticketCommentKind";
 
 export interface TicketComment {
   id: number;
@@ -13,5 +14,6 @@ export interface TicketComment {
   authorName: string;
   authorRole: Role;
   body: string;
+  kind: TicketCommentKind;
   createdAt: Date;
 }

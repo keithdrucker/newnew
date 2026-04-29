@@ -8,6 +8,7 @@
 
 export * from "./addBoardMemberInput";
 export * from "./addTicketCommentInput";
+export * from "./addTicketCommentInputKind";
 export * from "./agent";
 export * from "./agentLeaderboardItem";
 export * from "./application";
@@ -105,6 +106,7 @@ export * from "./taskLabel";
 export * from "./taskPriority";
 export * from "./ticket";
 export * from "./ticketComment";
+export * from "./ticketCommentKind";
 export * from "./ticketDetail";
 export * from "./ticketPriority";
 export * from "./ticketRiskLevel";

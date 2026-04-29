@@ -64,6 +64,12 @@ export default function TicketDetail() {
   const [, params] = useRoute("/tickets/:id");
   const ticketId = Number(params?.id);
   const [commentBody, setCommentBody] = useState("");
+  // Agents/admins choose whether the next entry is a customer-facing
+  // reply or a private internal note. End users have no toggle (the
+  // reply box is always a `reply`).
+  const [commentKind, setCommentKind] = useState<"reply" | "internal_note">(
+    "reply",
+  );
 
   const { data: ticket, isLoading } = useGetTicket(ticketId);
   const { data: session } = useGetSession();
@@ -213,36 +219,43 @@ export default function TicketDetail() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/*
+          Activity is split into two streams:
+            • Conversation — what the user sees (agent ↔ user replies,
+              and eventually AI assistant turns).
+            • Technical Notes — internal-only chatter between agents.
+              End users never see this column; the API also strips it
+              server-side as a defense-in-depth measure.
+        */}
+        <div className="flex-1 overflow-auto p-6 space-y-4">
           <h3 className="font-medium text-sm">Activity</h3>
-          <div className="space-y-4">
-            {ticket.comments?.map((comment) => (
-              <div key={comment.id} className="flex gap-4">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>
-                    {comment.authorName.substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">
-                        {comment.authorName}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {comment.authorRole}
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground/70">
-                      {format(new Date(comment.createdAt), "MMM d, h:mm a")}
-                    </span>
-                  </div>
-                  <div className="text-sm bg-muted/60 p-3 rounded-md border text-foreground">
-                    {comment.body}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div
+            className={
+              canTriage
+                ? "grid grid-cols-1 lg:grid-cols-2 gap-4"
+                : "grid grid-cols-1 gap-4"
+            }
+          >
+            <ActivityColumn
+              title="Conversation"
+              subtitle="Visible to the requester"
+              tone="conversation"
+              comments={(ticket.comments ?? []).filter(
+                (c) => c.kind !== "internal_note",
+              )}
+              emptyText="No replies yet."
+            />
+            {canTriage && (
+              <ActivityColumn
+                title="Technical Notes"
+                subtitle="Internal — hidden from the requester"
+                tone="internal"
+                comments={(ticket.comments ?? []).filter(
+                  (c) => c.kind === "internal_note",
+                )}
+                emptyText="No internal notes yet."
+              />
+            )}
           </div>
         </div>
 
@@ -258,11 +271,55 @@ export default function TicketDetail() {
 
         <div className="p-4 border-t bg-muted/40">
           <div className="space-y-3">
+            {canTriage && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCommentKind("reply")}
+                  className={
+                    "px-3 py-1 text-xs font-medium rounded-full border transition-colors " +
+                    (commentKind === "reply"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-card text-muted-foreground hover:text-foreground")
+                  }
+                  data-testid="toggle-reply-kind-reply"
+                >
+                  Reply to user
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCommentKind("internal_note")}
+                  className={
+                    "px-3 py-1 text-xs font-medium rounded-full border transition-colors " +
+                    (commentKind === "internal_note"
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-card text-muted-foreground hover:text-foreground")
+                  }
+                  data-testid="toggle-reply-kind-internal"
+                >
+                  Internal note
+                </button>
+                {commentKind === "internal_note" && (
+                  <span className="text-xs text-amber-700">
+                    Only your team will see this.
+                  </span>
+                )}
+              </div>
+            )}
             <Textarea
-              placeholder="Type your reply here..."
+              placeholder={
+                commentKind === "internal_note"
+                  ? "Add an internal note (only your team will see this)…"
+                  : "Type your reply to the requester…"
+              }
               value={commentBody}
               onChange={(e) => setCommentBody(e.target.value)}
-              className="min-h-[100px] bg-card"
+              className={
+                "min-h-[100px] " +
+                (commentKind === "internal_note"
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-card")
+              }
               data-testid="input-ticket-reply"
             />
             <div className="flex justify-end">
@@ -272,7 +329,7 @@ export default function TicketDetail() {
                   addComment.mutate(
                     {
                       id: ticketId,
-                      data: { body: commentBody },
+                      data: { body: commentBody, kind: commentKind },
                     },
                     {
                       // Clear the textarea, then refresh both the
@@ -297,7 +354,7 @@ export default function TicketDetail() {
                 }}
                 disabled={!commentBody.trim() || addComment.isPending}
               >
-                Send Reply
+                {commentKind === "internal_note" ? "Save Note" : "Send Reply"}
               </Button>
             </div>
           </div>
@@ -554,5 +611,88 @@ export function RiskLevelBadge({ level }: { level: string | null | undefined }) 
     >
       {label} risk
     </Badge>
+  );
+}
+
+// Renders one stream of the split Activity panel. Reused for both the
+// customer-facing Conversation and the internal Technical Notes column
+// so the two stay visually consistent.
+type ActivityComment = {
+  id: number;
+  authorName: string;
+  authorRole: string;
+  body: string;
+  createdAt: string;
+  kind: "reply" | "internal_note";
+};
+
+function ActivityColumn({
+  title,
+  subtitle,
+  tone,
+  comments,
+  emptyText,
+}: {
+  title: string;
+  subtitle: string;
+  tone: "conversation" | "internal";
+  comments: ActivityComment[];
+  emptyText: string;
+}) {
+  const headerTone =
+    tone === "internal"
+      ? "bg-amber-50 text-amber-900 border-amber-200"
+      : "bg-blue-50 text-blue-900 border-blue-200";
+  const bubbleTone =
+    tone === "internal"
+      ? "bg-amber-50 border-amber-200 text-amber-950"
+      : "bg-muted/60 border";
+  return (
+    <div
+      className="bg-muted/30 rounded-lg border overflow-hidden"
+      data-testid={`activity-column-${tone}`}
+    >
+      <div
+        className={`px-4 py-2 border-b ${headerTone} flex items-baseline justify-between`}
+      >
+        <span className="font-medium text-sm">{title}</span>
+        <span className="text-[11px] opacity-80">{subtitle}</span>
+      </div>
+      <div className="p-4 space-y-4 min-h-[80px]">
+        {comments.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{emptyText}</p>
+        ) : (
+          comments.map((comment) => (
+            <div key={comment.id} className="flex gap-3">
+              <Avatar className="h-7 w-7">
+                <AvatarFallback className="text-[10px]">
+                  {comment.authorName.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 space-y-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-sm truncate">
+                      {comment.authorName}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground shrink-0">
+                      {comment.authorRole}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground/70 shrink-0">
+                    {format(new Date(comment.createdAt), "MMM d, h:mm a")}
+                  </span>
+                </div>
+                <div
+                  className={`text-sm p-2.5 rounded-md whitespace-pre-wrap ${bubbleTone}`}
+                >
+                  {comment.body}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }

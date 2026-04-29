@@ -5,7 +5,9 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { AddTicketCommentInputKind } from "./addTicketCommentInputKind";
 
 export interface AddTicketCommentInput {
   body: string;
+  kind?: AddTicketCommentInputKind;
 }

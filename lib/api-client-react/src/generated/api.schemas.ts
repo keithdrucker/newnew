@@ -315,12 +315,21 @@ accumulated pause time into account. Null when slaPhase is
   updatedAt: string;
 }
 
+export type TicketCommentKind =
+  (typeof TicketCommentKind)[keyof typeof TicketCommentKind];
+
+export const TicketCommentKind = {
+  reply: "reply",
+  internal_note: "internal_note",
+} as const;
+
 export interface TicketComment {
   id: number;
   ticketId: number;
   authorName: string;
   authorRole: Role;
   body: string;
+  kind: TicketCommentKind;
   createdAt: string;
 }
 
@@ -964,8 +973,17 @@ export interface UpdateVendorInput {
   notes?: string;
 }
 
+export type AddTicketCommentInputKind =
+  (typeof AddTicketCommentInputKind)[keyof typeof AddTicketCommentInputKind];
+
+export const AddTicketCommentInputKind = {
+  reply: "reply",
+  internal_note: "internal_note",
+} as const;
+
 export interface AddTicketCommentInput {
   body: string;
+  kind?: AddTicketCommentInputKind;
 }
 
 export interface TimeEntry {

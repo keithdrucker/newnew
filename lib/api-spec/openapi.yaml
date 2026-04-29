@@ -1736,10 +1736,13 @@ components:
         authorName: { type: string }
         authorRole: { $ref: "#/components/schemas/Role" }
         body: { type: string }
+        kind:
+          type: string
+          enum: [reply, internal_note]
         createdAt:
           type: string
           format: date-time
-      required: [id, ticketId, authorName, authorRole, body, createdAt]
+      required: [id, ticketId, authorName, authorRole, body, kind, createdAt]
 
     TicketDetail:
       allOf:
@@ -2152,6 +2155,11 @@ components:
       type: object
       properties:
         body: { type: string }
+        # Optional. Defaults server-side to "reply". End users posting
+        # `internal_note` is rejected.
+        kind:
+          type: string
+          enum: [reply, internal_note]
       required: [body]
 
     TimeEntry:
