@@ -14,6 +14,12 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetSession: () => useGetSessionMock(),
   useListDepartments: () => useListDepartmentsMock(),
   useListAgents: () => ({ data: [] }),
+  useListPeople: () => ({ data: [] }),
+  useUpdateTicket: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
   useListTicketViews: () => ({ data: [] }),
   useCreateTicketView: () => ({
     mutateAsync: vi.fn(),

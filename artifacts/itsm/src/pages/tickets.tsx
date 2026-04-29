@@ -5,11 +5,13 @@ import {
   useGetSession,
   useListDepartments,
   useListAgents,
+  useListPeople,
   useListTicketViews,
   useCreateTicketView,
   useUpdateTicketView,
   useDeleteTicketView,
   useUpdateMePreferences,
+  useUpdateTicket,
   useListRiskRules,
   getListTicketViewsQueryKey,
   getGetSessionQueryKey,
@@ -287,10 +289,57 @@ export default function Tickets() {
     : null;
 
   const { data: agents } = useListAgents();
+  const { data: people } = useListPeople();
   const { data: views } = useListTicketViews();
   const { data: riskRules } = useListRiskRules();
   const createView = useCreateTicketView();
   const updateView = useUpdateTicketView();
+  const updateTicket = useUpdateTicket();
+  const canTriage =
+    session?.role === "admin" || session?.role === "agent";
+
+  // Bulk-select state. Keyed by ticket id; cleared whenever the user
+  // changes filters/department, and pruned whenever the visible result
+  // set changes so we never carry stale ids into a different working
+  // set or patch tickets the user can no longer see.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  // Tracks an in-flight bulk apply so we can disable the action bar and
+  // prevent overlapping fan-outs.
+  const [bulkApplying, setBulkApplying] = useState(false);
+
+  // Helper that mutates a single ticket field and returns the promise so
+  // bulk operations can await each one. The mutation hook's onSuccess
+  // already refreshes the tickets list so the UI updates automatically.
+  function patchTicket(id: number, data: Record<string, unknown>) {
+    return updateTicket.mutateAsync({ id, data: data as never });
+  }
+
+  // Run a bulk PATCH across the current selection. Uses allSettled so a
+  // single failure doesn't abandon the rest, surfaces failures via
+  // alert(), and clears the selection once everything settles so the
+  // user starts from a clean slate after the working set refreshes.
+  async function runBulkPatch(data: Record<string, unknown>) {
+    if (bulkApplying || selectedIds.size === 0) return;
+    setBulkApplying(true);
+    const ids = [...selectedIds];
+    try {
+      const results = await Promise.allSettled(
+        ids.map((id) => patchTicket(id, data)),
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed > 0) {
+        // eslint-disable-next-line no-alert
+        alert(
+          `Bulk update: ${failed} of ${ids.length} ticket(s) failed to update.`,
+        );
+      }
+    } finally {
+      setSelectedIds(new Set());
+      setBulkApplying(false);
+    }
+  }
   const deleteView = useDeleteTicketView();
   const updatePreferences = useUpdateMePreferences();
 
@@ -412,6 +461,12 @@ export default function Tickets() {
     setDefaultApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [views, defaultApplied, dept]);
+
+  // Clear selection on department change — the working set is a totally
+  // different scope and we don't want to carry ids across.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [dept?.id]);
 
   function applyView(viewId: number) {
     const v = views?.find((x) => x.id === viewId);
@@ -643,6 +698,23 @@ export default function Tickets() {
     });
     return list;
   }, [tickets, sort]);
+
+  // Prune the selection down to ids that are currently visible. Whenever
+  // the working set changes (filters, search, status toggles, refetch
+  // after a bulk update, automation re-classifying tickets, etc.) any
+  // selected id that drops out of view is removed so subsequent bulk
+  // actions can never patch a hidden ticket.
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const visibleIds = new Set(sortedTickets.map((t) => t.id));
+    let changed = false;
+    const next = new Set<number>();
+    selectedIds.forEach((id) => {
+      if (visibleIds.has(id)) next.add(id);
+      else changed = true;
+    });
+    if (changed) setSelectedIds(next);
+  }, [sortedTickets, selectedIds]);
 
   const summary = useMemo(() => {
     const t = tickets ?? [];
@@ -1600,11 +1672,149 @@ export default function Tickets() {
         </div>
       )}
 
+      {/* Bulk action bar — appears whenever the user has selected one or
+          more tickets via the per-row checkboxes. Lets triagers update
+          priority, risk, status, level, agent, or category for every
+          selected ticket in one shot. */}
+      {canTriage && selectedIds.size > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 mb-2"
+          data-testid="bulk-action-bar"
+          aria-busy={bulkApplying}
+        >
+          <span className="text-sm font-medium">
+            {selectedIds.size} selected
+            {bulkApplying ? " — applying…" : ""}
+          </span>
+          <Separator orientation="vertical" className="h-5" />
+          <BulkSelect
+            label="Priority"
+            disabled={bulkApplying}
+            options={[
+              { value: "low", label: "Low" },
+              { value: "medium", label: "Medium" },
+              { value: "high", label: "High" },
+              { value: "urgent", label: "Urgent" },
+            ]}
+            onApply={(v) => void runBulkPatch({ priority: v })}
+            testId="bulk-priority"
+          />
+          <BulkSelect
+            label="Risk"
+            disabled={bulkApplying}
+            options={[
+              { value: "low", label: "Low" },
+              { value: "medium", label: "Medium" },
+              { value: "high", label: "High" },
+              { value: "critical", label: "Critical" },
+            ]}
+            onApply={(v) => void runBulkPatch({ riskLevel: v })}
+            testId="bulk-risk"
+          />
+          <BulkSelect
+            label="Status"
+            disabled={bulkApplying}
+            options={[
+              { value: "new", label: "New" },
+              { value: "in_progress", label: "In Progress" },
+              { value: "with_user", label: "With User" },
+              { value: "with_vendor", label: "With Vendor" },
+              { value: "on_hold", label: "On Hold" },
+              { value: "scheduled", label: "Scheduled" },
+              { value: "resolved", label: "Resolved" },
+              { value: "closed", label: "Closed" },
+            ]}
+            onApply={(v) => void runBulkPatch({ status: v })}
+            testId="bulk-status"
+          />
+          <BulkSelect
+            label="Level"
+            disabled={bulkApplying}
+            options={[
+              { value: "1", label: "L1" },
+              { value: "2", label: "L2" },
+              { value: "3", label: "L3" },
+            ]}
+            onApply={(v) =>
+              v && void runBulkPatch({ supportLevel: Number(v) })
+            }
+            testId="bulk-level"
+          />
+          <BulkSelect
+            label="Agent"
+            disabled={bulkApplying}
+            options={[
+              { value: "__unset__", label: "Unassigned" },
+              ...((agents ?? []).map((a) => ({
+                value: String(a.id),
+                label: a.name,
+              }))),
+            ]}
+            onApply={(v) =>
+              void runBulkPatch({
+                assigneeId: v === null ? null : Number(v),
+              })
+            }
+            testId="bulk-agent"
+          />
+          <BulkSelect
+            label="User"
+            disabled={bulkApplying}
+            options={(people ?? []).map((p) => ({
+              value: String(p.id),
+              label: p.name,
+            }))}
+            onApply={(v) => v && void runBulkPatch({ reporterId: Number(v) })}
+            testId="bulk-user"
+          />
+          <BulkSelect
+            label="Category"
+            disabled={bulkApplying}
+            options={[
+              { value: "__unset__", label: "— None —" },
+              ...categoryOptions.map((c) => ({ value: c, label: c })),
+            ]}
+            onApply={(v) => void runBulkPatch({ category: v })}
+            testId="bulk-category"
+          />
+          <div className="flex-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setSelectedIds(new Set())}
+            data-testid="button-clear-selection"
+          >
+            Clear selection
+          </Button>
+        </div>
+      )}
+
       <div className="bg-card rounded-lg border shadow-sm flex-1 overflow-hidden flex flex-col">
         <div className="overflow-auto flex-1">
           <Table>
             <TableHeader className="bg-muted/40 sticky top-0 z-10">
               <TableRow>
+                {/* Select-all checkbox. Indeterminate when partial. */}
+                <TableHead className="w-[40px]">
+                  <Checkbox
+                    checked={
+                      sortedTickets.length > 0 &&
+                      sortedTickets.every((t) => selectedIds.has(t.id))
+                    }
+                    onCheckedChange={(v) => {
+                      if (v) {
+                        setSelectedIds(
+                          new Set(sortedTickets.map((t) => t.id)),
+                        );
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                    data-testid="checkbox-select-all"
+                    aria-label="Select all tickets"
+                  />
+                </TableHead>
                 {visibleColumns.map((key) => {
                   const def = COLUMN_DEFS_META[key];
                   const active = sort.field === def.sortField;
@@ -1650,7 +1860,7 @@ export default function Tickets() {
               {isLoading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={visibleColumns.length}
+                    colSpan={visibleColumns.length + 1}
                     className="h-24 text-center text-muted-foreground"
                   >
                     Loading tickets…
@@ -1659,35 +1869,62 @@ export default function Tickets() {
               ) : sortedTickets.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={visibleColumns.length}
+                    colSpan={visibleColumns.length + 1}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No tickets found.
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedTickets.map((ticket) => (
-                  <TableRow
-                    key={ticket.id}
-                    className="group cursor-pointer"
-                    data-testid={`row-ticket-${ticket.id}`}
-                  >
-                    {visibleColumns.map((key) => (
-                      <TableCell
-                        key={key}
-                        className={
-                          key === "category" ||
-                          key === "created" ||
-                          key === "updated"
-                            ? "text-sm text-muted-foreground"
-                            : undefined
-                        }
-                      >
-                        {renderTicketCell(key, ticket)}
+                sortedTickets.map((ticket) => {
+                  const checked = selectedIds.has(ticket.id);
+                  return (
+                    <TableRow
+                      key={ticket.id}
+                      className="group"
+                      data-testid={`row-ticket-${ticket.id}`}
+                      data-state={checked ? "selected" : undefined}
+                    >
+                      <TableCell className="w-[40px]">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (v) next.add(ticket.id);
+                              else next.delete(ticket.id);
+                              return next;
+                            });
+                          }}
+                          data-testid={`checkbox-row-${ticket.id}`}
+                          aria-label={`Select ticket ${ticket.ticketKey ?? ticket.id}`}
+                        />
                       </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                      {visibleColumns.map((key) => (
+                        <TableCell
+                          key={key}
+                          className={
+                            key === "category" ||
+                            key === "created" ||
+                            key === "updated"
+                              ? "text-sm text-muted-foreground"
+                              : undefined
+                          }
+                        >
+                          {renderTicketCell(key, ticket, {
+                            canEdit: canTriage,
+                            onPatch: (id, data) => {
+                              void patchTicket(id, data);
+                            },
+                            agents: agents ?? [],
+                            people: people ?? [],
+                            categoryOptions,
+                          })}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -1826,9 +2063,138 @@ function initials(name: string): string {
     .join("");
 }
 
+// Bulk-edit dropdown shown in the action bar above the table. Picks one
+// value and fires `onApply` so the caller can dispatch a PATCH against
+// every selected ticket.
+function BulkSelect({
+  label,
+  options,
+  onApply,
+  testId,
+  disabled,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  onApply: (value: string | null) => void;
+  testId?: string;
+  disabled?: boolean;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          data-testid={testId}
+          disabled={disabled}
+        >
+          {label}
+          <ChevronDown className="h-3 w-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-1 max-h-72 overflow-auto" align="start">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            className="w-full text-left rounded px-2 py-1.5 text-sm hover:bg-muted"
+            onClick={() => {
+              onApply(o.value === "__unset__" ? null : o.value);
+              setOpen(false);
+            }}
+            data-testid={testId ? `${testId}-option-${o.value}` : undefined}
+          >
+            {o.label}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Inline-editable cell. Renders `display` as a clickable trigger; clicking
+// opens a popover with the supplied options. Used for priority, risk
+// level, status, level, agent, user, and category cells so triagers can
+// change individual ticket fields without leaving the list.
+function EditablePopoverCell({
+  display,
+  options,
+  value,
+  onChange,
+  testId,
+  disabled,
+  align = "start",
+  width = "w-48",
+}: {
+  display: ReactNode;
+  options: { value: string; label: string }[];
+  value: string | null | undefined;
+  onChange: (next: string | null) => void;
+  testId?: string;
+  disabled?: boolean;
+  align?: "start" | "center" | "end";
+  width?: string;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  if (disabled) return <>{display}</>;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="-mx-1 cursor-pointer rounded px-1 py-0.5 text-left hover:bg-muted/60 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          data-testid={testId}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {display}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className={`p-1 ${width} max-h-72 overflow-auto`}
+        align={align}
+      >
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
+              o.value === (value ?? "") ? "bg-muted font-medium" : ""
+            }`}
+            onClick={() => {
+              onChange(o.value === "__unset__" ? null : o.value);
+              setOpen(false);
+            }}
+            data-testid={testId ? `${testId}-option-${o.value}` : undefined}
+          >
+            <span className="truncate">{o.label}</span>
+            {o.value === (value ?? "") && (
+              <Check className="ml-2 h-3.5 w-3.5 shrink-0 text-foreground" />
+            )}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // Centralised cell renderer keyed by ColumnKey so the table body can be
-// driven by the user-controlled visibleColumns array.
-function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
+// driven by the user-controlled visibleColumns array. When `ctx.canEdit`
+// is true and the column is editable, the cell becomes a popover that
+// dispatches a PATCH via `ctx.onPatch`.
+function renderTicketCell(
+  key: ColumnKey,
+  ticket: Ticket,
+  ctx?: {
+    canEdit: boolean;
+    onPatch: (id: number, data: Record<string, unknown>) => void;
+    agents: { id: number; name: string }[];
+    people: { id: number; name: string }[];
+    categoryOptions: string[];
+  },
+): ReactNode {
+  const canEdit = ctx?.canEdit ?? false;
   switch (key) {
     case "id":
       return (
@@ -1839,8 +2205,8 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
           {ticket.ticketKey}
         </Link>
       );
-    case "priority":
-      return (
+    case "priority": {
+      const display = (
         <Badge
           variant="secondary"
           className={priorityColor(ticket.priority)}
@@ -1848,10 +2214,44 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
           {ticket.priority}
         </Badge>
       );
-    case "riskLevel":
-      return <RiskBadge level={ticket.riskLevel} />;
-    case "status":
       return (
+        <EditablePopoverCell
+          display={display}
+          value={ticket.priority}
+          options={[
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" },
+            { value: "urgent", label: "Urgent" },
+          ]}
+          onChange={(v) => v && ctx?.onPatch(ticket.id, { priority: v })}
+          testId={`edit-priority-${ticket.id}`}
+          disabled={!canEdit}
+          width="w-36"
+        />
+      );
+    }
+    case "riskLevel": {
+      const display = <RiskBadge level={ticket.riskLevel} />;
+      return (
+        <EditablePopoverCell
+          display={display}
+          value={ticket.riskLevel}
+          options={[
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" },
+            { value: "critical", label: "Critical" },
+          ]}
+          onChange={(v) => v && ctx?.onPatch(ticket.id, { riskLevel: v })}
+          testId={`edit-risk-${ticket.id}`}
+          disabled={!canEdit}
+          width="w-36"
+        />
+      );
+    }
+    case "status": {
+      const display = (
         <div className="flex items-center gap-2">
           {statusIcon(ticket.status)}
           <span className="text-sm font-medium">
@@ -1859,6 +2259,27 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
           </span>
         </div>
       );
+      return (
+        <EditablePopoverCell
+          display={display}
+          value={ticket.status}
+          options={[
+            { value: "new", label: "New" },
+            { value: "in_progress", label: "In Progress" },
+            { value: "with_user", label: "With User" },
+            { value: "with_vendor", label: "With Vendor" },
+            { value: "on_hold", label: "On Hold" },
+            { value: "scheduled", label: "Scheduled" },
+            { value: "resolved", label: "Resolved" },
+            { value: "closed", label: "Closed" },
+          ]}
+          onChange={(v) => v && ctx?.onPatch(ticket.id, { status: v })}
+          testId={`edit-status-${ticket.id}`}
+          disabled={!canEdit}
+          width="w-44"
+        />
+      );
+    }
     case "title":
       return (
         <Link href={`/tickets/${ticket.id}`} className="block">
@@ -1872,8 +2293,8 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
           </div>
         </Link>
       );
-    case "user":
-      return (
+    case "user": {
+      const display = (
         <div className="flex items-center gap-2">
           <Avatar className="h-6 w-6">
             <AvatarFallback className="text-[10px]">
@@ -1885,10 +2306,46 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
           </span>
         </div>
       );
-    case "supportLevel":
-      return <LevelBadge level={ticket.supportLevel ?? 1} />;
-    case "agent":
-      return ticket.assigneeName ? (
+      const peopleOpts = (ctx?.people ?? []).map((p) => ({
+        value: String(p.id),
+        label: p.name,
+      }));
+      return (
+        <EditablePopoverCell
+          display={display}
+          value={String(ticket.reporterId ?? "")}
+          options={peopleOpts}
+          onChange={(v) =>
+            v && ctx?.onPatch(ticket.id, { reporterId: Number(v) })
+          }
+          testId={`edit-user-${ticket.id}`}
+          disabled={!canEdit || peopleOpts.length === 0}
+          width="w-56"
+        />
+      );
+    }
+    case "supportLevel": {
+      const display = <LevelBadge level={ticket.supportLevel ?? 1} />;
+      return (
+        <EditablePopoverCell
+          display={display}
+          value={String(ticket.supportLevel ?? 1)}
+          options={[
+            { value: "1", label: "L1" },
+            { value: "2", label: "L2" },
+            { value: "3", label: "L3" },
+          ]}
+          onChange={(v) =>
+            v && ctx?.onPatch(ticket.id, { supportLevel: Number(v) })
+          }
+          testId={`edit-level-${ticket.id}`}
+          disabled={!canEdit}
+          width="w-28"
+        />
+      );
+    }
+    case "agent": {
+      const display = ticket.assigneeName ? (
         <div className="flex items-center gap-2">
           <Avatar className="h-6 w-6">
             <AvatarFallback className="text-[10px]">
@@ -1902,12 +2359,49 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
       ) : (
         <span className="text-xs text-muted-foreground/60">Unassigned</span>
       );
-    case "category":
+      const agentOpts = [
+        { value: "__unset__", label: "Unassigned" },
+        ...(ctx?.agents ?? []).map((a) => ({
+          value: String(a.id),
+          label: a.name,
+        })),
+      ];
       return (
-        ticket.category ?? (
-          <span className="text-muted-foreground/50">—</span>
-        )
+        <EditablePopoverCell
+          display={display}
+          value={String(ticket.assigneeId ?? "")}
+          options={agentOpts}
+          onChange={(v) =>
+            ctx?.onPatch(ticket.id, {
+              assigneeId: v === null ? null : Number(v),
+            })
+          }
+          testId={`edit-agent-${ticket.id}`}
+          disabled={!canEdit}
+          width="w-56"
+        />
       );
+    }
+    case "category": {
+      const display = ticket.category ?? (
+        <span className="text-muted-foreground/50">—</span>
+      );
+      const catOpts = [
+        { value: "__unset__", label: "— None —" },
+        ...(ctx?.categoryOptions ?? []).map((c) => ({ value: c, label: c })),
+      ];
+      return (
+        <EditablePopoverCell
+          display={display}
+          value={ticket.category ?? ""}
+          options={catOpts}
+          onChange={(v) => ctx?.onPatch(ticket.id, { category: v })}
+          testId={`edit-category-${ticket.id}`}
+          disabled={!canEdit || catOpts.length <= 1}
+          width="w-56"
+        />
+      );
+    }
     case "created":
       return format(new Date(ticket.createdAt), "MMM d");
     case "updated":
