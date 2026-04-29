@@ -1,3 +1,5 @@
+import type { Ticket } from "@workspace/api-client-react";
+import type { ReactNode } from "react";
 import {
   useListTickets,
   useGetSession,
@@ -36,6 +38,7 @@ import {
   ChevronRight,
   ChevronsUpDown,
   Clock,
+  Columns3,
   Filter as FilterIcon,
   Inbox,
   MoreHorizontal,
@@ -82,14 +85,80 @@ import { CreateTicketDialog } from "@/components/create-ticket-dialog";
 import { SlaCountdown } from "@/components/sla-countdown";
 
 type SortField =
+  | "id"
   | "created"
   | "updated"
   | "priority"
   | "risk"
   | "level"
   | "assignee"
-  | "status";
+  | "user"
+  | "status"
+  | "title"
+  | "category"
+  | "sla";
 type SortDir = "asc" | "desc";
+
+type ColumnKey =
+  | "id"
+  | "priority"
+  | "riskLevel"
+  | "status"
+  | "title"
+  | "user"
+  | "supportLevel"
+  | "agent"
+  | "category"
+  | "created"
+  | "updated"
+  | "sla";
+
+const ALL_COLUMN_KEYS: ColumnKey[] = [
+  "id",
+  "priority",
+  "riskLevel",
+  "status",
+  "title",
+  "user",
+  "supportLevel",
+  "agent",
+  "category",
+  "created",
+  "updated",
+  "sla",
+];
+
+const COLUMN_VISIBILITY_KEY = "itsm.tickets.visibleColumns";
+
+// Static column metadata (label, sort field, width, alwaysVisible). Renderers
+// live inside the component because they reference helper functions that
+// close over component-local state.
+const COLUMN_DEFS_META: Record<
+  ColumnKey,
+  {
+    label: string;
+    width?: string;
+    sortField?: SortField;
+    alwaysVisible?: boolean;
+  }
+> = {
+  id: { label: "ID", width: "w-[100px]", sortField: "id", alwaysVisible: true },
+  priority: { label: "Priority", width: "w-[110px]", sortField: "priority" },
+  riskLevel: { label: "Risk Level", width: "w-[120px]", sortField: "risk" },
+  status: { label: "Status", width: "w-[130px]", sortField: "status" },
+  title: { label: "Title", sortField: "title", alwaysVisible: true },
+  user: { label: "User", width: "w-[170px]", sortField: "user" },
+  supportLevel: { label: "Level", width: "w-[90px]", sortField: "level" },
+  agent: { label: "Agent", width: "w-[170px]", sortField: "assignee" },
+  category: { label: "Category", width: "w-[150px]", sortField: "category" },
+  created: { label: "Created", width: "w-[120px]", sortField: "created" },
+  updated: {
+    label: "Last Update",
+    width: "w-[120px]",
+    sortField: "updated",
+  },
+  sla: { label: "SLA", width: "w-[140px]", sortField: "sla" },
+};
 
 type DateRange = "all" | "today" | "week" | "month";
 type TriState = "all" | "yes" | "no";
@@ -219,6 +288,43 @@ export default function Tickets() {
     field: "created",
     dir: "desc",
   });
+  // Visible columns are user-controlled via the "Columns" popover and
+  // persisted in localStorage. ID and Title are always visible so the user
+  // can never lose access to the row link or the headline summary.
+  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(() => {
+    if (typeof window === "undefined") return ALL_COLUMN_KEYS;
+    try {
+      const raw = window.localStorage.getItem(COLUMN_VISIBILITY_KEY);
+      if (!raw) return ALL_COLUMN_KEYS;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return ALL_COLUMN_KEYS;
+      const filtered = parsed.filter((k): k is ColumnKey =>
+        ALL_COLUMN_KEYS.includes(k as ColumnKey),
+      );
+      // Always-visible columns stay visible regardless of stored prefs.
+      const required = ALL_COLUMN_KEYS.filter(
+        (k) => COLUMN_DEFS_META[k].alwaysVisible,
+      );
+      return Array.from(new Set([...required, ...filtered]));
+    } catch {
+      return ALL_COLUMN_KEYS;
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      COLUMN_VISIBILITY_KEY,
+      JSON.stringify(visibleColumns),
+    );
+  }, [visibleColumns]);
+
+  function toggleSort(field: SortField) {
+    setSort((s) =>
+      s.field === field
+        ? { field, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { field, dir: "asc" },
+    );
+  }
   const [activeViewId, setActiveViewId] = useState<number | null>(null);
   const [defaultApplied, setDefaultApplied] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -347,8 +453,34 @@ export default function Tickets() {
   const sortedTickets = useMemo(() => {
     const list = [...(tickets ?? [])];
     const dir = sort.dir === "asc" ? 1 : -1;
+    const SLA_RANK: Record<string, number> = { breached: 2, on_track: 1 };
     list.sort((a, b) => {
       switch (sort.field) {
+        case "id":
+          return (a.id - b.id) * dir;
+        case "title":
+          return a.title.localeCompare(b.title) * dir;
+        case "user":
+          return (
+            (a.reporterName ?? "~").localeCompare(b.reporterName ?? "~") * dir
+          );
+        case "category":
+          return (
+            (a.category ?? "~").localeCompare(b.category ?? "~") * dir
+          );
+        case "sla": {
+          // Sort by urgency: breached first, then by soonest deadline.
+          const ra = SLA_RANK[a.slaStatus ?? ""] ?? 0;
+          const rb = SLA_RANK[b.slaStatus ?? ""] ?? 0;
+          if (ra !== rb) return (ra - rb) * dir;
+          const da = a.resolutionDueAt
+            ? new Date(a.resolutionDueAt).getTime()
+            : Number.POSITIVE_INFINITY;
+          const db = b.resolutionDueAt
+            ? new Date(b.resolutionDueAt).getTime()
+            : Number.POSITIVE_INFINITY;
+          return (da - db) * dir;
+        }
         case "priority":
           return (
             ((PRIORITY_RANK[a.priority] ?? 0) -
@@ -973,44 +1105,77 @@ export default function Tickets() {
 
         <div className="flex-1" />
 
-        {/* Sort */}
-        <div className="inline-flex h-9 items-center gap-1">
-          <Select
-            value={sort.field}
-            onValueChange={(v) =>
-              setSort((s) => ({ ...s, field: v as SortField }))
-            }
-          >
-            <SelectTrigger className="w-[150px] h-9" data-testid="select-sort">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="created">Sort: Created</SelectItem>
-              <SelectItem value="updated">Sort: Updated</SelectItem>
-              <SelectItem value="priority">Sort: Priority</SelectItem>
-              <SelectItem value="risk">Sort: Risk</SelectItem>
-              <SelectItem value="level">Sort: Level</SelectItem>
-              <SelectItem value="assignee">Sort: Assignee</SelectItem>
-              <SelectItem value="status">Sort: Status</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() =>
-              setSort((s) => ({ ...s, dir: s.dir === "asc" ? "desc" : "asc" }))
-            }
-            data-testid="button-sort-dir"
-            title={sort.dir === "asc" ? "Ascending" : "Descending"}
-          >
-            {sort.dir === "asc" ? (
-              <ArrowUp className="h-4 w-4" />
-            ) : (
-              <ArrowDown className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+        {/* Manage columns */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="h-9 gap-2"
+              data-testid="button-manage-columns"
+            >
+              <Columns3 className="h-4 w-4" />
+              Columns
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-60 p-2" align="end">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              Show columns
+            </div>
+            <div className="space-y-0.5">
+              {ALL_COLUMN_KEYS.map((key) => {
+                const def = COLUMN_DEFS_META[key];
+                const checked = visibleColumns.includes(key);
+                const disabled = def.alwaysVisible;
+                return (
+                  <label
+                    key={key}
+                    className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60 ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                    data-testid={`column-toggle-${key}`}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      disabled={disabled}
+                      onCheckedChange={(v) => {
+                        if (disabled) return;
+                        setVisibleColumns((prev) =>
+                          v
+                            ? Array.from(new Set([...prev, key]))
+                            : prev.filter((k) => k !== key),
+                        );
+                      }}
+                    />
+                    <span>{def.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <Separator className="my-2" />
+            <div className="flex items-center justify-between px-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setVisibleColumns(ALL_COLUMN_KEYS)}
+                data-testid="button-columns-show-all"
+              >
+                Show all
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() =>
+                  setVisibleColumns(
+                    ALL_COLUMN_KEYS.filter((k) => COLUMN_DEFS_META[k].alwaysVisible),
+                  )
+                }
+                data-testid="button-columns-hide-all"
+              >
+                Reset
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
 
         <Button
           variant="outline"
@@ -1074,25 +1239,52 @@ export default function Tickets() {
           <Table>
             <TableHeader className="bg-muted/40 sticky top-0 z-10">
               <TableRow>
-                <TableHead className="w-[100px]">ID</TableHead>
-                <TableHead className="w-[100px]">Priority</TableHead>
-                <TableHead className="w-[110px]">Risk Level</TableHead>
-                <TableHead className="w-[120px]">Status</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead className="w-[160px]">User</TableHead>
-                <TableHead className="w-[80px]">Level</TableHead>
-                <TableHead className="w-[160px]">Agent</TableHead>
-                <TableHead className="w-[140px]">Category</TableHead>
-                <TableHead className="w-[110px]">Created</TableHead>
-                <TableHead className="w-[110px]">Last Update</TableHead>
-                <TableHead className="w-[110px]">SLA</TableHead>
+                {visibleColumns.map((key) => {
+                  const def = COLUMN_DEFS_META[key];
+                  const active = sort.field === def.sortField;
+                  const ariaSort: "ascending" | "descending" | "none" = active
+                    ? sort.dir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none";
+                  return (
+                    <TableHead
+                      key={key}
+                      className={def.width}
+                      aria-sort={def.sortField ? ariaSort : undefined}
+                    >
+                      {def.sortField ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(def.sortField!)}
+                          className="group/h -ml-2 inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted/60 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          data-testid={`header-sort-${key}`}
+                          title={`Sort by ${def.label}`}
+                        >
+                          <span>{def.label}</span>
+                          {active ? (
+                            sort.dir === "asc" ? (
+                              <ArrowUp className="h-3.5 w-3.5 text-foreground" />
+                            ) : (
+                              <ArrowDown className="h-3.5 w-3.5 text-foreground" />
+                            )
+                          ) : (
+                            <ChevronsUpDown className="h-3.5 w-3.5 opacity-30 group-hover/h:opacity-60" />
+                          )}
+                        </button>
+                      ) : (
+                        def.label
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={11}
+                    colSpan={visibleColumns.length}
                     className="h-24 text-center text-muted-foreground"
                   >
                     Loading tickets…
@@ -1101,7 +1293,7 @@ export default function Tickets() {
               ) : sortedTickets.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={11}
+                    colSpan={visibleColumns.length}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No tickets found.
@@ -1114,98 +1306,20 @@ export default function Tickets() {
                     className="group cursor-pointer"
                     data-testid={`row-ticket-${ticket.id}`}
                   >
-                    <TableCell>
-                      <Link
-                        href={`/tickets/${ticket.id}`}
-                        className="font-medium text-indigo-600 hover:underline tabular-nums"
+                    {visibleColumns.map((key) => (
+                      <TableCell
+                        key={key}
+                        className={
+                          key === "category" ||
+                          key === "created" ||
+                          key === "updated"
+                            ? "text-sm text-muted-foreground"
+                            : undefined
+                        }
                       >
-                        {ticket.ticketKey}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={priorityColor(ticket.priority)}
-                      >
-                        {ticket.priority}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <RiskBadge level={ticket.riskLevel} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 capitalize">
-                        {statusIcon(ticket.status)}
-                        <span className="text-sm font-medium">
-                          {ticket.status}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Link href={`/tickets/${ticket.id}`} className="block">
-                        <div className="font-medium text-foreground truncate max-w-[420px]">
-                          {ticket.title}
-                        </div>
-                        <div className="text-xs text-muted-foreground capitalize">
-                          {ticket.type}
-                          {ticket.location ? ` · ${ticket.location}` : ""}
-                          {ticket.departmentName
-                            ? ` · ${ticket.departmentName}`
-                            : ""}
-                        </div>
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-[10px]">
-                            {initials(ticket.reporterName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm truncate max-w-[120px]">
-                          {ticket.reporterName}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <LevelBadge level={ticket.supportLevel ?? 1} />
-                    </TableCell>
-                    <TableCell>
-                      {ticket.assigneeName ? (
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-[10px]">
-                              {initials(ticket.assigneeName)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm text-foreground/80">
-                            {ticket.assigneeName}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/60">
-                          Unassigned
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {ticket.category ?? (
-                        <span className="text-muted-foreground/50">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(ticket.createdAt), "MMM d")}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(ticket.updatedAt), "MMM d")}
-                    </TableCell>
-                    <TableCell>
-                      <SlaCountdown
-                        slaStatus={ticket.slaStatus}
-                        resolutionDueAt={ticket.resolutionDueAt}
-                        resolvedAt={ticket.resolvedAt}
-                      />
-                    </TableCell>
+                        {renderTicketCell(key, ticket)}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))
               )}
@@ -1336,6 +1450,101 @@ function initials(name: string): string {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+// Centralised cell renderer keyed by ColumnKey so the table body can be
+// driven by the user-controlled visibleColumns array.
+function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
+  switch (key) {
+    case "id":
+      return (
+        <Link
+          href={`/tickets/${ticket.id}`}
+          className="font-medium text-indigo-600 hover:underline tabular-nums"
+        >
+          {ticket.ticketKey}
+        </Link>
+      );
+    case "priority":
+      return (
+        <Badge
+          variant="secondary"
+          className={priorityColor(ticket.priority)}
+        >
+          {ticket.priority}
+        </Badge>
+      );
+    case "riskLevel":
+      return <RiskBadge level={ticket.riskLevel} />;
+    case "status":
+      return (
+        <div className="flex items-center gap-2 capitalize">
+          {statusIcon(ticket.status)}
+          <span className="text-sm font-medium">{ticket.status}</span>
+        </div>
+      );
+    case "title":
+      return (
+        <Link href={`/tickets/${ticket.id}`} className="block">
+          <div className="font-medium text-foreground truncate max-w-[420px]">
+            {ticket.title}
+          </div>
+          <div className="text-xs text-muted-foreground capitalize">
+            {ticket.type}
+            {ticket.location ? ` · ${ticket.location}` : ""}
+            {ticket.departmentName ? ` · ${ticket.departmentName}` : ""}
+          </div>
+        </Link>
+      );
+    case "user":
+      return (
+        <div className="flex items-center gap-2">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className="text-[10px]">
+              {initials(ticket.reporterName)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-sm truncate max-w-[120px]">
+            {ticket.reporterName}
+          </span>
+        </div>
+      );
+    case "supportLevel":
+      return <LevelBadge level={ticket.supportLevel ?? 1} />;
+    case "agent":
+      return ticket.assigneeName ? (
+        <div className="flex items-center gap-2">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className="text-[10px]">
+              {initials(ticket.assigneeName)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-sm text-foreground/80">
+            {ticket.assigneeName}
+          </span>
+        </div>
+      ) : (
+        <span className="text-xs text-muted-foreground/60">Unassigned</span>
+      );
+    case "category":
+      return (
+        ticket.category ?? (
+          <span className="text-muted-foreground/50">—</span>
+        )
+      );
+    case "created":
+      return format(new Date(ticket.createdAt), "MMM d");
+    case "updated":
+      return format(new Date(ticket.updatedAt), "MMM d");
+    case "sla":
+      return (
+        <SlaCountdown
+          slaStatus={ticket.slaStatus}
+          resolutionDueAt={ticket.resolutionDueAt}
+          resolvedAt={ticket.resolvedAt}
+        />
+      );
+  }
 }
 
 // Silence unused-import warnings for icons only used as visual cues
