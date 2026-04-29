@@ -1143,19 +1143,24 @@ export default function Tickets() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="px-2 py-1 rounded bg-blue-50 text-blue-700">
-              {summary.newCount} new
+              {summary.newCount} New
             </span>
             <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">
-              {summary.inProgress} in progress
+              {summary.inProgress} In Progress
             </span>
             {summary.waiting > 0 && (
               <span className="px-2 py-1 rounded bg-slate-100 text-slate-700">
-                {summary.waiting} waiting
+                {summary.waiting} Waiting
+              </span>
+            )}
+            {summary.resolved > 0 && (
+              <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700">
+                {summary.resolved} Resolved
               </span>
             )}
             {summary.breached > 0 && (
               <span className="px-2 py-1 rounded bg-red-50 text-red-700">
-                {summary.breached} breached
+                {summary.breached} Breached
               </span>
             )}
           </div>
