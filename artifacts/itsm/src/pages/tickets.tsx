@@ -298,47 +298,19 @@ export default function Tickets() {
   const canTriage =
     session?.role === "admin" || session?.role === "agent";
 
-  // Bulk-select state. Keyed by ticket id; cleared whenever the user
-  // changes filters/department, and pruned whenever the visible result
-  // set changes so we never carry stale ids into a different working
-  // set or patch tickets the user can no longer see.
+  // Selection state — used both by the per-row checkboxes (for the
+  // Export CSV "Selected vs All" choice) and as a hint for the
+  // selection-status strip. Cleared on department change, pruned to
+  // visible ids whenever the working set changes.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(
     () => new Set(),
   );
-  // Tracks an in-flight bulk apply so we can disable the action bar and
-  // prevent overlapping fan-outs.
-  const [bulkApplying, setBulkApplying] = useState(false);
 
-  // Helper that mutates a single ticket field and returns the promise so
-  // bulk operations can await each one. The mutation hook's onSuccess
-  // already refreshes the tickets list so the UI updates automatically.
+  // Single-cell PATCH used by the inline-edit popovers. The mutation
+  // hook's onSuccess invalidates the tickets cache so the UI refreshes
+  // automatically.
   function patchTicket(id: number, data: Record<string, unknown>) {
     return updateTicket.mutateAsync({ id, data: data as never });
-  }
-
-  // Run a bulk PATCH across the current selection. Uses allSettled so a
-  // single failure doesn't abandon the rest, surfaces failures via
-  // alert(), and clears the selection once everything settles so the
-  // user starts from a clean slate after the working set refreshes.
-  async function runBulkPatch(data: Record<string, unknown>) {
-    if (bulkApplying || selectedIds.size === 0) return;
-    setBulkApplying(true);
-    const ids = [...selectedIds];
-    try {
-      const results = await Promise.allSettled(
-        ids.map((id) => patchTicket(id, data)),
-      );
-      const failed = results.filter((r) => r.status === "rejected").length;
-      if (failed > 0) {
-        // eslint-disable-next-line no-alert
-        alert(
-          `Bulk update: ${failed} of ${ids.length} ticket(s) failed to update.`,
-        );
-      }
-    } finally {
-      setSelectedIds(new Set());
-      setBulkApplying(false);
-    }
   }
   const deleteView = useDeleteTicketView();
   const updatePreferences = useUpdateMePreferences();
@@ -1445,19 +1417,71 @@ export default function Tickets() {
 
         <div className="flex-1" />
 
-        {/* Export to CSV — exports the rows currently displayed in the
-            table (after filters + sort) using the user's chosen visible
-            columns, in their chosen order. */}
-        <Button
-          variant="outline"
-          className="h-9 gap-2"
-          data-testid="button-export-csv"
-          disabled={(sortedTickets?.length ?? 0) === 0}
-          onClick={() => exportTicketsToCsv(sortedTickets, visibleColumns)}
-        >
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
+        {/* Export to CSV — when no tickets are selected, exports every
+            row currently visible in the table (after filters + sort).
+            When the user has selected one or more rows, opens a
+            popover that lets them choose between exporting just the
+            selection or every visible row. */}
+        {selectedIds.size > 0 ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-9 gap-2"
+                data-testid="button-export-csv"
+                disabled={(sortedTickets?.length ?? 0) === 0}
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-1" align="end">
+              <button
+                type="button"
+                className="flex w-full flex-col rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                onClick={() =>
+                  exportTicketsToCsv(
+                    sortedTickets.filter((t) => selectedIds.has(t.id)),
+                    visibleColumns,
+                  )
+                }
+                data-testid="button-export-selected"
+              >
+                <span className="font-medium">
+                  Export selected ({selectedIds.size})
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Only the rows you've checked
+                </span>
+              </button>
+              <button
+                type="button"
+                className="flex w-full flex-col rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                onClick={() => exportTicketsToCsv(sortedTickets, visibleColumns)}
+                data-testid="button-export-all"
+              >
+                <span className="font-medium">
+                  Export all ({sortedTickets.length})
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Every row currently visible
+                </span>
+              </button>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <Button
+            variant="outline"
+            className="h-9 gap-2"
+            data-testid="button-export-csv"
+            disabled={(sortedTickets?.length ?? 0) === 0}
+            onClick={() => exportTicketsToCsv(sortedTickets, visibleColumns)}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+        )}
 
         {/* Manage columns */}
         <Popover>
@@ -1672,111 +1696,20 @@ export default function Tickets() {
         </div>
       )}
 
-      {/* Bulk action bar — appears whenever the user has selected one or
-          more tickets via the per-row checkboxes. Lets triagers update
-          priority, risk, status, level, agent, or category for every
-          selected ticket in one shot. */}
-      {canTriage && selectedIds.size > 0 && (
+      {/* Selection status — appears whenever the user has selected one
+          or more tickets via the per-row checkboxes. Inline editing is
+          done directly in the row cells; this strip just shows the
+          count and a clear link, and lets the Export CSV button know
+          to offer "Export selected" vs "Export all". */}
+      {selectedIds.size > 0 && (
         <div
-          className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 mb-2"
-          data-testid="bulk-action-bar"
-          aria-busy={bulkApplying}
+          className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 mb-2 text-sm"
+          data-testid="selection-status"
         >
-          <span className="text-sm font-medium">
-            {selectedIds.size} selected
-            {bulkApplying ? " — applying…" : ""}
+          <span className="font-medium">{selectedIds.size} selected</span>
+          <span className="text-muted-foreground">
+            Click any cell in the row to edit it directly.
           </span>
-          <Separator orientation="vertical" className="h-5" />
-          <BulkSelect
-            label="Priority"
-            disabled={bulkApplying}
-            options={[
-              { value: "low", label: "Low" },
-              { value: "medium", label: "Medium" },
-              { value: "high", label: "High" },
-              { value: "urgent", label: "Urgent" },
-            ]}
-            onApply={(v) => void runBulkPatch({ priority: v })}
-            testId="bulk-priority"
-          />
-          <BulkSelect
-            label="Risk"
-            disabled={bulkApplying}
-            options={[
-              { value: "low", label: "Low" },
-              { value: "medium", label: "Medium" },
-              { value: "high", label: "High" },
-              { value: "critical", label: "Critical" },
-            ]}
-            onApply={(v) => void runBulkPatch({ riskLevel: v })}
-            testId="bulk-risk"
-          />
-          <BulkSelect
-            label="Status"
-            disabled={bulkApplying}
-            options={[
-              { value: "new", label: "New" },
-              { value: "in_progress", label: "In Progress" },
-              { value: "with_user", label: "With User" },
-              { value: "with_vendor", label: "With Vendor" },
-              { value: "on_hold", label: "On Hold" },
-              { value: "scheduled", label: "Scheduled" },
-              { value: "resolved", label: "Resolved" },
-              { value: "closed", label: "Closed" },
-            ]}
-            onApply={(v) => void runBulkPatch({ status: v })}
-            testId="bulk-status"
-          />
-          <BulkSelect
-            label="Level"
-            disabled={bulkApplying}
-            options={[
-              { value: "1", label: "L1" },
-              { value: "2", label: "L2" },
-              { value: "3", label: "L3" },
-            ]}
-            onApply={(v) =>
-              v && void runBulkPatch({ supportLevel: Number(v) })
-            }
-            testId="bulk-level"
-          />
-          <BulkSelect
-            label="Agent"
-            disabled={bulkApplying}
-            options={[
-              { value: "__unset__", label: "Unassigned" },
-              ...((agents ?? []).map((a) => ({
-                value: String(a.id),
-                label: a.name,
-              }))),
-            ]}
-            onApply={(v) =>
-              void runBulkPatch({
-                assigneeId: v === null ? null : Number(v),
-              })
-            }
-            testId="bulk-agent"
-          />
-          <BulkSelect
-            label="User"
-            disabled={bulkApplying}
-            options={(people ?? []).map((p) => ({
-              value: String(p.id),
-              label: p.name,
-            }))}
-            onApply={(v) => v && void runBulkPatch({ reporterId: Number(v) })}
-            testId="bulk-user"
-          />
-          <BulkSelect
-            label="Category"
-            disabled={bulkApplying}
-            options={[
-              { value: "__unset__", label: "— None —" },
-              ...categoryOptions.map((c) => ({ value: c, label: c })),
-            ]}
-            onApply={(v) => void runBulkPatch({ category: v })}
-            testId="bulk-category"
-          />
           <div className="flex-1" />
           <Button
             variant="ghost"
@@ -2063,57 +1996,6 @@ function initials(name: string): string {
     .join("");
 }
 
-// Bulk-edit dropdown shown in the action bar above the table. Picks one
-// value and fires `onApply` so the caller can dispatch a PATCH against
-// every selected ticket.
-function BulkSelect({
-  label,
-  options,
-  onApply,
-  testId,
-  disabled,
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  onApply: (value: string | null) => void;
-  testId?: string;
-  disabled?: boolean;
-}): ReactNode {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          data-testid={testId}
-          disabled={disabled}
-        >
-          {label}
-          <ChevronDown className="h-3 w-3" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-48 p-1 max-h-72 overflow-auto" align="start">
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            className="w-full text-left rounded px-2 py-1.5 text-sm hover:bg-muted"
-            onClick={() => {
-              onApply(o.value === "__unset__" ? null : o.value);
-              setOpen(false);
-            }}
-            data-testid={testId ? `${testId}-option-${o.value}` : undefined}
-          >
-            {o.label}
-          </button>
-        ))}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 // Inline-editable cell. Renders `display` as a clickable trigger; clicking
 // opens a popover with the supplied options. Used for priority, risk
 // level, status, level, agent, user, and category cells so triagers can
@@ -2138,9 +2020,26 @@ function EditablePopoverCell({
   width?: string;
 }): ReactNode {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  // Show the search box automatically once the option count justifies
+  // it — small fixed lists (priority, risk, status, level) stay
+  // distraction-free while long lists (agents, users, categories) get
+  // a type-to-filter input.
+  const showSearch = options.length > 6;
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
   if (disabled) return <>{display}</>;
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setQuery("");
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -2152,28 +2051,49 @@ function EditablePopoverCell({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className={`p-1 ${width} max-h-72 overflow-auto`}
+        className={`p-1 ${width} max-h-72 overflow-hidden flex flex-col`}
         align={align}
       >
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
-              o.value === (value ?? "") ? "bg-muted font-medium" : ""
-            }`}
-            onClick={() => {
-              onChange(o.value === "__unset__" ? null : o.value);
-              setOpen(false);
-            }}
-            data-testid={testId ? `${testId}-option-${o.value}` : undefined}
-          >
-            <span className="truncate">{o.label}</span>
-            {o.value === (value ?? "") && (
-              <Check className="ml-2 h-3.5 w-3.5 shrink-0 text-foreground" />
-            )}
-          </button>
-        ))}
+        {showSearch && (
+          <div className="p-1">
+            <Input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search…"
+              className="h-7 text-sm"
+              data-testid={testId ? `${testId}-search` : undefined}
+            />
+          </div>
+        )}
+        <div className="overflow-auto">
+          {filtered.length === 0 ? (
+            <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+              No matches
+            </div>
+          ) : (
+            filtered.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
+                  o.value === (value ?? "") ? "bg-muted font-medium" : ""
+                }`}
+                onClick={() => {
+                  onChange(o.value === "__unset__" ? null : o.value);
+                  setOpen(false);
+                  setQuery("");
+                }}
+                data-testid={testId ? `${testId}-option-${o.value}` : undefined}
+              >
+                <span className="truncate">{o.label}</span>
+                {o.value === (value ?? "") && (
+                  <Check className="ml-2 h-3.5 w-3.5 shrink-0 text-foreground" />
+                )}
+              </button>
+            ))
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );
