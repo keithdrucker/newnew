@@ -14,6 +14,53 @@ The business vision is to provide a tailored, efficient, and scalable ITSM platf
 
 I prefer clear, concise explanations and direct answers. I value iterative development and expect to be consulted before any major architectural changes or significant feature removals. Ensure all changes are well-documented.
 
+# Navigation & Workspace Structure (Authoritative)
+
+The top-level navigation is intentional and must be followed exactly for ALL
+future workflow, UI, and data-model changes. Do not reshuffle these groups
+without an explicit user request.
+
+```
+WORKSPACE
+  Dashboard
+
+  Day-to-Day Operations
+    - Tickets
+    - Operational Tasks
+
+  Improvements
+    - Initiatives
+    - Projects
+
+  Knowledge
+  Timesheets
+
+ADMINISTRATION
+  Assets
+  Applications
+  Vendors
+  People
+  Settings
+```
+
+Rules:
+- **Workspace** is where users do day-to-day work.
+- **Administration** is only for system configuration and master data.
+- **Tickets** and **Operational Tasks** are reactive / operational work
+  (Day-to-Day Operations group).
+- **Initiatives** and **Projects** are proactive improvement work
+  (Improvements group). Projects are NOT operational items.
+- **Knowledge** and **Timesheets** are operational tools, not
+  administration items.
+- Never place Initiatives or Projects under Day-to-Day Operations.
+- Never place Knowledge or Timesheets under Administration.
+
+Note: as of this writing, the current side-nav (`artifacts/itsm/src/components/layout/side-nav.tsx`)
+still uses the flat pre-restructure layout (Tickets, Projects, Knowledge,
+Timesheet under Workspace; no subgroups; no Operational Tasks or
+Initiatives items). Migrating to the structure above is pending an
+explicit task and should align with workflow/data-model changes.
+
 # System Architecture
 
 ## Monorepo Structure
