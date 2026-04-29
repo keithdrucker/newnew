@@ -450,6 +450,51 @@ export default function Tickets() {
       createdRange: (c.createdRange as DateRange) ?? "all",
       updatedRange: (c.updatedRange as DateRange) ?? "all",
     });
+    // Restore sort order if the view captured one. Older views without a
+    // sort field fall back to the page default (created desc). Field +
+    // dir are validated against the known enums before applying so a
+    // malformed config can't push an arbitrary string into the sort
+    // state.
+    const validSortFields: SortField[] = [
+      "id",
+      "created",
+      "updated",
+      "priority",
+      "risk",
+      "level",
+      "assignee",
+      "user",
+      "status",
+      "title",
+      "category",
+      "sla",
+    ];
+    if (
+      c.sort &&
+      typeof c.sort.field === "string" &&
+      validSortFields.includes(c.sort.field as SortField) &&
+      (c.sort.dir === "asc" || c.sort.dir === "desc")
+    ) {
+      setSort({
+        field: c.sort.field as SortField,
+        dir: c.sort.dir as SortDir,
+      });
+    } else {
+      setSort({ field: "created", dir: "desc" });
+    }
+    // Restore visible columns. Always-visible columns (id, title) are
+    // re-added so a view can't accidentally hide the row link.
+    if (Array.isArray(c.columns)) {
+      const restored = c.columns.filter((k): k is ColumnKey =>
+        ALL_COLUMN_KEYS.includes(k as ColumnKey),
+      );
+      const required = ALL_COLUMN_KEYS.filter(
+        (k) => COLUMN_DEFS_META[k].alwaysVisible,
+      );
+      setVisibleColumns(Array.from(new Set([...required, ...restored])));
+    } else {
+      setVisibleColumns(ALL_COLUMN_KEYS);
+    }
     setActiveViewId(viewId);
   }
 
@@ -738,8 +783,18 @@ export default function Tickets() {
     });
   }
 
+  // "Dirty" includes sort + visible columns now that those are part of
+  // the saved view payload — otherwise tweaking only the sort wouldn't
+  // enable the Save action.
+  const sortIsDefault = sort.field === "created" && sort.dir === "desc";
+  const columnsAreDefault =
+    visibleColumns.length === ALL_COLUMN_KEYS.length &&
+    ALL_COLUMN_KEYS.every((k) => visibleColumns.includes(k));
   const filtersDirty =
-    activeFilterChips.length > 0 || filters.search !== DEFAULT_FILTERS.search;
+    activeFilterChips.length > 0 ||
+    filters.search !== DEFAULT_FILTERS.search ||
+    !sortIsDefault ||
+    !columnsAreDefault;
 
   const activeFilterCount = activeFilterChips.length;
 
@@ -797,6 +852,10 @@ export default function Tickets() {
           ? null
           : (filters.updatedRange as never),
       departmentId: dept?.id ?? null,
+      // Sort + visible columns are part of "what the screen looks like
+      // right now" — capture them so saved views restore exactly.
+      sort: { field: sort.field as never, dir: sort.dir },
+      columns: visibleColumns as never,
     };
   }
 

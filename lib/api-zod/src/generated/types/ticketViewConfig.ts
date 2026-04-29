@@ -5,10 +5,12 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { TicketViewConfigColumnsItem } from "./ticketViewConfigColumnsItem";
 import type { TicketViewConfigCreatedRange } from "./ticketViewConfigCreatedRange";
 import type { TicketViewConfigPriority } from "./ticketViewConfigPriority";
 import type { TicketViewConfigRiskLevel } from "./ticketViewConfigRiskLevel";
 import type { TicketViewConfigSlaStatus } from "./ticketViewConfigSlaStatus";
+import type { TicketViewConfigSort } from "./ticketViewConfigSort";
 import type { TicketViewConfigStatusItem } from "./ticketViewConfigStatusItem";
 import type { TicketViewConfigSupportLevel } from "./ticketViewConfigSupportLevel";
 import type { TicketViewConfigUpdatedRange } from "./ticketViewConfigUpdatedRange";
@@ -47,4 +49,19 @@ workflow statuses; `null` means "no status filter".
   createdRange?: TicketViewConfigCreatedRange;
   /** @nullable */
   updatedRange?: TicketViewConfigUpdatedRange;
+  /** Saved sort order for the ticket list. `field` is the column
+key being sorted on; `dir` is the direction. Both must be
+present together; omit the whole object to inherit the
+default (created desc).
+ */
+  sort?: TicketViewConfigSort;
+  /**
+   * Saved column visibility. Each entry is a column key. Omit
+(or `null`) to inherit the default — every column visible.
+`id` and `title` are always rendered regardless of what's
+stored here.
+
+   * @nullable
+   */
+  columns?: TicketViewConfigColumnsItem[] | null;
 }

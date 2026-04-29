@@ -1803,6 +1803,57 @@ components:
         updatedRange:
           type: ["string", "null"]
           enum: [today, week, month, all, null]
+        sort:
+          description: |
+            Saved sort order for the ticket list. `field` is the column
+            key being sorted on; `dir` is the direction. Both must be
+            present together; omit the whole object to inherit the
+            default (created desc).
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                field:
+                  type: string
+                  enum:
+                    - id
+                    - created
+                    - updated
+                    - priority
+                    - risk
+                    - level
+                    - assignee
+                    - user
+                    - status
+                    - title
+                    - category
+                    - sla
+                dir:
+                  type: string
+                  enum: [asc, desc]
+              required: [field, dir]
+        columns:
+          description: |
+            Saved column visibility. Each entry is a column key. Omit
+            (or `null`) to inherit the default — every column visible.
+            `id` and `title` are always rendered regardless of what's
+            stored here.
+          type: ["array", "null"]
+          items:
+            type: string
+            enum:
+              - id
+              - priority
+              - riskLevel
+              - status
+              - title
+              - user
+              - supportLevel
+              - agent
+              - category
+              - created
+              - updated
+              - sla
 
     RiskRule:
       type: object

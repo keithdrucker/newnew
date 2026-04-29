@@ -561,6 +561,48 @@ export const TicketViewConfigUpdatedRange = {
   all: "all",
 } as const;
 
+/**
+ * Saved sort order for the ticket list. `field` is the column
+key being sorted on; `dir` is the direction. Both must be
+present together; omit the whole object to inherit the
+default (created desc).
+
+ */
+export type TicketViewConfigSort = null | {
+  field:
+    | "id"
+    | "created"
+    | "updated"
+    | "priority"
+    | "risk"
+    | "level"
+    | "assignee"
+    | "user"
+    | "status"
+    | "title"
+    | "category"
+    | "sla";
+  dir: "asc" | "desc";
+};
+
+export type TicketViewConfigColumnsItem =
+  (typeof TicketViewConfigColumnsItem)[keyof typeof TicketViewConfigColumnsItem];
+
+export const TicketViewConfigColumnsItem = {
+  id: "id",
+  priority: "priority",
+  riskLevel: "riskLevel",
+  status: "status",
+  title: "title",
+  user: "user",
+  supportLevel: "supportLevel",
+  agent: "agent",
+  category: "category",
+  created: "created",
+  updated: "updated",
+  sla: "sla",
+} as const;
+
 export interface TicketViewConfig {
   /** @nullable */
   search?: string | null;
@@ -595,6 +637,21 @@ workflow statuses; `null` means "no status filter".
   createdRange?: TicketViewConfigCreatedRange;
   /** @nullable */
   updatedRange?: TicketViewConfigUpdatedRange;
+  /** Saved sort order for the ticket list. `field` is the column
+key being sorted on; `dir` is the direction. Both must be
+present together; omit the whole object to inherit the
+default (created desc).
+ */
+  sort?: TicketViewConfigSort;
+  /**
+   * Saved column visibility. Each entry is a column key. Omit
+(or `null`) to inherit the default — every column visible.
+`id` and `title` are always rendered regardless of what's
+stored here.
+
+   * @nullable
+   */
+  columns?: TicketViewConfigColumnsItem[] | null;
 }
 
 export type RiskRuleRiskLevel =

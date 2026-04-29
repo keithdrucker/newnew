@@ -769,6 +769,52 @@ export const ListTicketViewsResponseItem = zod.object({
         zod.literal(null),
       ])
       .nullish(),
+    sort: zod
+      .union([
+        zod.null(),
+        zod.object({
+          field: zod.enum([
+            "id",
+            "created",
+            "updated",
+            "priority",
+            "risk",
+            "level",
+            "assignee",
+            "user",
+            "status",
+            "title",
+            "category",
+            "sla",
+          ]),
+          dir: zod.enum(["asc", "desc"]),
+        }),
+      ])
+      .optional()
+      .describe(
+        "Saved sort order for the ticket list. `field` is the column\nkey being sorted on; `dir` is the direction. Both must be\npresent together; omit the whole object to inherit the\ndefault (created desc).\n",
+      ),
+    columns: zod
+      .array(
+        zod.enum([
+          "id",
+          "priority",
+          "riskLevel",
+          "status",
+          "title",
+          "user",
+          "supportLevel",
+          "agent",
+          "category",
+          "created",
+          "updated",
+          "sla",
+        ]),
+      )
+      .nullish()
+      .describe(
+        "Saved column visibility. Each entry is a column key. Omit\n(or `null`) to inherit the default — every column visible.\n`id` and `title` are always rendered regardless of what's\nstored here.\n",
+      ),
   }),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -856,6 +902,52 @@ export const CreateTicketViewBody = zod.object({
         zod.literal(null),
       ])
       .nullish(),
+    sort: zod
+      .union([
+        zod.null(),
+        zod.object({
+          field: zod.enum([
+            "id",
+            "created",
+            "updated",
+            "priority",
+            "risk",
+            "level",
+            "assignee",
+            "user",
+            "status",
+            "title",
+            "category",
+            "sla",
+          ]),
+          dir: zod.enum(["asc", "desc"]),
+        }),
+      ])
+      .optional()
+      .describe(
+        "Saved sort order for the ticket list. `field` is the column\nkey being sorted on; `dir` is the direction. Both must be\npresent together; omit the whole object to inherit the\ndefault (created desc).\n",
+      ),
+    columns: zod
+      .array(
+        zod.enum([
+          "id",
+          "priority",
+          "riskLevel",
+          "status",
+          "title",
+          "user",
+          "supportLevel",
+          "agent",
+          "category",
+          "created",
+          "updated",
+          "sla",
+        ]),
+      )
+      .nullish()
+      .describe(
+        "Saved column visibility. Each entry is a column key. Omit\n(or `null`) to inherit the default — every column visible.\n`id` and `title` are always rendered regardless of what's\nstored here.\n",
+      ),
   }),
   isDefault: zod.boolean().optional(),
 });
@@ -946,6 +1038,52 @@ export const UpdateTicketViewBody = zod.object({
           zod.literal(null),
         ])
         .nullish(),
+      sort: zod
+        .union([
+          zod.null(),
+          zod.object({
+            field: zod.enum([
+              "id",
+              "created",
+              "updated",
+              "priority",
+              "risk",
+              "level",
+              "assignee",
+              "user",
+              "status",
+              "title",
+              "category",
+              "sla",
+            ]),
+            dir: zod.enum(["asc", "desc"]),
+          }),
+        ])
+        .optional()
+        .describe(
+          "Saved sort order for the ticket list. `field` is the column\nkey being sorted on; `dir` is the direction. Both must be\npresent together; omit the whole object to inherit the\ndefault (created desc).\n",
+        ),
+      columns: zod
+        .array(
+          zod.enum([
+            "id",
+            "priority",
+            "riskLevel",
+            "status",
+            "title",
+            "user",
+            "supportLevel",
+            "agent",
+            "category",
+            "created",
+            "updated",
+            "sla",
+          ]),
+        )
+        .nullish()
+        .describe(
+          "Saved column visibility. Each entry is a column key. Omit\n(or `null`) to inherit the default — every column visible.\n`id` and `title` are always rendered regardless of what's\nstored here.\n",
+        ),
     })
     .optional(),
   isDefault: zod.boolean().optional(),
@@ -1032,6 +1170,52 @@ export const UpdateTicketViewResponse = zod.object({
         zod.literal(null),
       ])
       .nullish(),
+    sort: zod
+      .union([
+        zod.null(),
+        zod.object({
+          field: zod.enum([
+            "id",
+            "created",
+            "updated",
+            "priority",
+            "risk",
+            "level",
+            "assignee",
+            "user",
+            "status",
+            "title",
+            "category",
+            "sla",
+          ]),
+          dir: zod.enum(["asc", "desc"]),
+        }),
+      ])
+      .optional()
+      .describe(
+        "Saved sort order for the ticket list. `field` is the column\nkey being sorted on; `dir` is the direction. Both must be\npresent together; omit the whole object to inherit the\ndefault (created desc).\n",
+      ),
+    columns: zod
+      .array(
+        zod.enum([
+          "id",
+          "priority",
+          "riskLevel",
+          "status",
+          "title",
+          "user",
+          "supportLevel",
+          "agent",
+          "category",
+          "created",
+          "updated",
+          "sla",
+        ]),
+      )
+      .nullish()
+      .describe(
+        "Saved column visibility. Each entry is a column key. Omit\n(or `null`) to inherit the default — every column visible.\n`id` and `title` are always rendered regardless of what's\nstored here.\n",
+      ),
   }),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
