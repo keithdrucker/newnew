@@ -5,7 +5,8 @@ import type { SessionUser } from "./session";
 const ROLE_RANK: Record<BoardRole, number> = {
   read_only: 1,
   modify: 2,
-  owner: 3,
+  manager: 3,
+  owner: 4,
 };
 
 // Returns the highest role the user has on a department, treating
@@ -93,6 +94,72 @@ export async function modifiableDepartmentIds(
   ) {
     set.add(user.departmentId);
   }
+  return Array.from(set);
+}
+
+// Returns the set of department ids where the caller is at least
+// `manager` (the timesheet-visibility tier). Admins → null = "all".
+// End users → empty.
+export async function timesheetVisibleDepartmentIds(
+  user: SessionUser,
+): Promise<number[] | null> {
+  return modifiableDepartmentIds(user, "manager");
+}
+
+// True when the caller may view the target user's timesheet.
+// Self-view is always allowed. Admins can view everyone. Otherwise the
+// caller must hold `manager+` on at least one board where the target
+// user is also a member (so a manager can audit their teammates'
+// time, but cannot peek into agents on unrelated boards).
+export async function canViewTimesheet(
+  caller: SessionUser,
+  targetUserId: number,
+): Promise<boolean> {
+  if (caller.id === targetUserId) return true;
+  if (caller.role === "admin") return true;
+  if (caller.role !== "agent") return false;
+
+  const callerBoards = await timesheetVisibleDepartmentIds(caller);
+  if (callerBoards === null) return true; // shouldn't happen for agent, but safe
+  if (callerBoards.length === 0) return false;
+
+  // Find any board where both the caller (manager+) AND the target are
+  // members. We treat an end_user target as "no board membership" and
+  // refuse — timesheets are an internal-only concept.
+  const targetMembershipRows = await db
+    .select({ deptId: boardMembersTable.departmentId })
+    .from(boardMembersTable)
+    .where(eq(boardMembersTable.userId, targetUserId));
+  const targetDepts = new Set(targetMembershipRows.map((r) => r.deptId));
+  return callerBoards.some((d) => targetDepts.has(d));
+}
+
+// Returns the user ids whose timesheets the caller may view (always
+// includes the caller). Used to populate the timesheet user-picker.
+// Admins receive every agent + admin id (end users excluded).
+export async function timesheetVisibleUserIds(
+  caller: SessionUser,
+  // injected to avoid a circular import on usersTable in this small
+  // helper module — caller passes the agents table reference.
+  agentsLister: () => Promise<{ id: number }[]>,
+): Promise<number[]> {
+  if (caller.role === "admin") {
+    const all = await agentsLister();
+    return all.map((u) => u.id);
+  }
+  if (caller.role !== "agent") return [caller.id];
+
+  const visibleBoards = await timesheetVisibleDepartmentIds(caller);
+  if (visibleBoards === null || visibleBoards.length === 0) {
+    return [caller.id];
+  }
+
+  const rows = await db
+    .select({ userId: boardMembersTable.userId })
+    .from(boardMembersTable)
+    .where(inArray(boardMembersTable.departmentId, visibleBoards));
+  const set = new Set<number>(rows.map((r) => r.userId));
+  set.add(caller.id);
   return Array.from(set);
 }
 

@@ -108,9 +108,17 @@ export type BoardRole = (typeof BoardRole)[keyof typeof BoardRole];
 
 export const BoardRole = {
   owner: "owner",
+  manager: "manager",
   modify: "modify",
   read_only: "read_only",
 } as const;
+
+export interface TimesheetVisibleUser {
+  id: number;
+  name: string;
+  email: string;
+  isSelf: boolean;
+}
 
 export interface BoardMember {
   id: number;
@@ -1660,6 +1668,7 @@ export const ListTicketsSlaStatus = {
 export type ListTimeEntriesParams = {
   from: string;
   to: string;
+  userId?: number;
 };
 
 export type ListPeopleParams = {

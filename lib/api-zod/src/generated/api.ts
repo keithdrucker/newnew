@@ -244,7 +244,7 @@ export const ListBoardMembersResponseItem = zod.object({
   id: zod.number(),
   departmentId: zod.number(),
   userId: zod.number(),
-  role: zod.enum(["owner", "modify", "read_only"]),
+  role: zod.enum(["owner", "manager", "modify", "read_only"]),
   userName: zod.string(),
   userEmail: zod.string(),
   userTitle: zod.string().nullable(),
@@ -262,14 +262,14 @@ export const AddBoardMemberParams = zod.object({
 
 export const AddBoardMemberBody = zod.object({
   userId: zod.number(),
-  role: zod.enum(["owner", "modify", "read_only"]),
+  role: zod.enum(["owner", "manager", "modify", "read_only"]),
 });
 
 export const AddBoardMemberResponse = zod.object({
   id: zod.number(),
   departmentId: zod.number(),
   userId: zod.number(),
-  role: zod.enum(["owner", "modify", "read_only"]),
+  role: zod.enum(["owner", "manager", "modify", "read_only"]),
   userName: zod.string(),
   userEmail: zod.string(),
   userTitle: zod.string().nullable(),
@@ -286,14 +286,14 @@ export const UpdateBoardMemberParams = zod.object({
 });
 
 export const UpdateBoardMemberBody = zod.object({
-  role: zod.enum(["owner", "modify", "read_only"]),
+  role: zod.enum(["owner", "manager", "modify", "read_only"]),
 });
 
 export const UpdateBoardMemberResponse = zod.object({
   id: zod.number(),
   departmentId: zod.number(),
   userId: zod.number(),
-  role: zod.enum(["owner", "modify", "read_only"]),
+  role: zod.enum(["owner", "manager", "modify", "read_only"]),
   userName: zod.string(),
   userEmail: zod.string(),
   userTitle: zod.string().nullable(),
@@ -716,11 +716,14 @@ export const CreateTicketTimeEntryBody = zod.object({
 });
 
 /**
- * @summary List the current user's time entries within a date range
+ * Returns the entries for `userId` if provided, otherwise the caller's own entries. The caller may only request another user's id when they are an admin or hold `manager+` on at least one board where the target user is also a member.
+
+ * @summary List time entries within a date range
  */
 export const ListTimeEntriesQueryParams = zod.object({
   from: zod.date(),
   to: zod.date(),
+  userId: zod.coerce.number().optional(),
 });
 
 export const ListTimeEntriesResponseItem = zod.object({
@@ -739,6 +742,21 @@ export const ListTimeEntriesResponseItem = zod.object({
   createdAt: zod.coerce.date(),
 });
 export const ListTimeEntriesResponse = zod.array(ListTimeEntriesResponseItem);
+
+/**
+ * Always includes the caller. For managers, also includes every teammate on the boards where they hold `manager+`. Admins receive every agent + admin.
+
+ * @summary List users whose timesheets the caller may view
+ */
+export const ListTimesheetVisibleUsersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  isSelf: zod.boolean(),
+});
+export const ListTimesheetVisibleUsersResponse = zod.array(
+  ListTimesheetVisibleUsersResponseItem,
+);
 
 /**
  * @summary Update a time entry's start/end/note (owner or admin)

@@ -43,6 +43,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  Star,
   Trash2,
   UserPlus,
 } from "lucide-react";
@@ -53,6 +54,11 @@ const ROLE_OPTIONS: { value: BoardRole; label: string; description: string }[] =
       value: "owner",
       label: "Full Control",
       description: "Edit, comment, and delete tickets",
+    },
+    {
+      value: "manager",
+      label: "Manager",
+      description: "Modify + can view team timesheets",
     },
     {
       value: "modify",
@@ -72,6 +78,14 @@ function RoleBadge({ role }: { role: BoardRole }) {
       <Badge className="bg-primary/10 text-primary hover:bg-primary/15 gap-1 border-primary/20">
         <ShieldCheck className="h-3 w-3" />
         Full Control
+      </Badge>
+    );
+  }
+  if (role === "manager") {
+    return (
+      <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 gap-1 border-amber-200">
+        <Star className="h-3 w-3" />
+        Manager
       </Badge>
     );
   }

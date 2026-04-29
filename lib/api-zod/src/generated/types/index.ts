@@ -129,6 +129,7 @@ export * from "./ticketViewConfigSupportLevel";
 export * from "./ticketViewConfigUpdatedRange";
 export * from "./timeEntry";
 export * from "./timeseriesPoint";
+export * from "./timesheetVisibleUser";
 export * from "./updateAgentInput";
 export * from "./updateApplicationInput";
 export * from "./updateApplicationInputCategory";

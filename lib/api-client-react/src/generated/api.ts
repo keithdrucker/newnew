@@ -70,6 +70,7 @@ import type {
   TicketDetail,
   TicketView,
   TimeEntry,
+  TimesheetVisibleUser,
   UpdateAgentInput,
   UpdateApplicationInput,
   UpdateAssetInput,
@@ -2333,7 +2334,9 @@ export const useCreateTicketTimeEntry = <
 };
 
 /**
- * @summary List the current user's time entries within a date range
+ * Returns the entries for `userId` if provided, otherwise the caller's own entries. The caller may only request another user's id when they are an admin or hold `manager+` on at least one board where the target user is also a member.
+
+ * @summary List time entries within a date range
  */
 export const getListTimeEntriesUrl = (params: ListTimeEntriesParams) => {
   const normalizedParams = new URLSearchParams();
@@ -2400,7 +2403,7 @@ export type ListTimeEntriesQueryResult = NonNullable<
 export type ListTimeEntriesQueryError = ErrorType<unknown>;
 
 /**
- * @summary List the current user's time entries within a date range
+ * @summary List time entries within a date range
  */
 
 export function useListTimeEntries<
@@ -2418,6 +2421,87 @@ export function useListTimeEntries<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListTimeEntriesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Always includes the caller. For managers, also includes every teammate on the boards where they hold `manager+`. Admins receive every agent + admin.
+
+ * @summary List users whose timesheets the caller may view
+ */
+export const getListTimesheetVisibleUsersUrl = () => {
+  return `/api/time-entries/visible-users`;
+};
+
+export const listTimesheetVisibleUsers = async (
+  options?: RequestInit,
+): Promise<TimesheetVisibleUser[]> => {
+  return customFetch<TimesheetVisibleUser[]>(
+    getListTimesheetVisibleUsersUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListTimesheetVisibleUsersQueryKey = () => {
+  return [`/api/time-entries/visible-users`] as const;
+};
+
+export const getListTimesheetVisibleUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTimesheetVisibleUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTimesheetVisibleUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListTimesheetVisibleUsersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTimesheetVisibleUsers>>
+  > = ({ signal }) => listTimesheetVisibleUsers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTimesheetVisibleUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTimesheetVisibleUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTimesheetVisibleUsers>>
+>;
+export type ListTimesheetVisibleUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List users whose timesheets the caller may view
+ */
+
+export function useListTimesheetVisibleUsers<
+  TData = Awaited<ReturnType<typeof listTimesheetVisibleUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTimesheetVisibleUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTimesheetVisibleUsersQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

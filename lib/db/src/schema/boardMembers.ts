@@ -8,10 +8,14 @@ import {
 } from "drizzle-orm/pg-core";
 
 // Per-board (per-department) membership for agents.
-// Roles:
-//   owner      → full control on this board (settings + tickets)
-//   modify     → can view + edit + comment + close tickets on this board
+// Roles (ranked low → high):
 //   read_only  → can view tickets and the dashboard for this board, no edits
+//   modify     → can view + edit + comment + close tickets on this board
+//   manager    → modify + can view teammates' timesheets for this board
+//                (the "team lead" tier — multiple managers per board are
+//                supported and all of them can audit team time)
+//   owner      → full control on this board (settings + tickets), and
+//                inherits manager-level visibility
 export const boardMembersTable = pgTable(
   "board_members",
   {
@@ -36,4 +40,4 @@ export const boardMembersTable = pgTable(
 );
 
 export type BoardMember = typeof boardMembersTable.$inferSelect;
-export type BoardRole = "owner" | "modify" | "read_only";
+export type BoardRole = "owner" | "manager" | "modify" | "read_only";

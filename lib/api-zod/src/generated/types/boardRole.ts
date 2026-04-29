@@ -10,6 +10,7 @@ export type BoardRole = (typeof BoardRole)[keyof typeof BoardRole];
 
 export const BoardRole = {
   owner: "owner",
+  manager: "manager",
   modify: "modify",
   read_only: "read_only",
 } as const;

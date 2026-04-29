@@ -6,8 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListTimeEntriesParams = {
-  from: Date;
-  to: Date;
-  userId?: number;
-};
+export interface TimesheetVisibleUser {
+  id: number;
+  name: string;
+  email: string;
+  isSelf: boolean;
+}

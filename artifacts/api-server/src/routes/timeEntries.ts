@@ -18,7 +18,12 @@ import {
 } from "@workspace/api-zod";
 import { getCurrentUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
-import { getBoardRole, roleAtLeast } from "../lib/board-access";
+import {
+  getBoardRole,
+  roleAtLeast,
+  canViewTimesheet,
+  timesheetVisibleUserIds,
+} from "../lib/board-access";
 
 const router: IRouter = Router();
 
@@ -185,7 +190,9 @@ router.post("/tickets/:id/time-entries", async (req, res): Promise<void> => {
 });
 
 // ────────────────────────────────────────────────────────────────────
-// GET /time-entries?from&to — current user's entries in a window
+// GET /time-entries?from&to[&userId] — entries in a window for the
+// caller, or for `userId` if the caller is a manager+ on a board the
+// target shares (or admin).
 // ────────────────────────────────────────────────────────────────────
 router.get("/time-entries", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
@@ -200,18 +207,76 @@ router.get("/time-entries", async (req, res): Promise<void> => {
   }
   const from = new Date(parsed.data.from);
   const to = new Date(parsed.data.to);
+
+  // Default to self if no `userId` is provided. When provided, the
+  // caller must have permission to view that user (admin, self, or
+  // manager+ on a shared board).
+  const targetUserId = parsed.data.userId ?? user.id;
+  if (targetUserId !== user.id) {
+    const allowed = await canViewTimesheet(user, targetUserId);
+    if (!allowed) {
+      res.status(403).json({ error: "Cannot view this user's timesheet" });
+      return;
+    }
+  }
+
   const rows = await db
     .select()
     .from(timeEntriesTable)
     .where(
       and(
-        eq(timeEntriesTable.userId, user.id),
+        eq(timeEntriesTable.userId, targetUserId),
         gte(timeEntriesTable.startAt, from),
         lt(timeEntriesTable.startAt, to),
       ),
     )
     .orderBy(desc(timeEntriesTable.startAt));
   res.json(await hydrate(rows));
+});
+
+// ────────────────────────────────────────────────────────────────────
+// GET /time-entries/visible-users — users whose timesheets the
+// caller can view (always includes the caller).
+// ────────────────────────────────────────────────────────────────────
+router.get("/time-entries/visible-users", async (req, res): Promise<void> => {
+  const user = await getCurrentUser(req);
+  if (user.role === "end_user") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const ids = await timesheetVisibleUserIds(user, async () => {
+    // Admin path → list every non-end_user once. End users are
+    // intentionally excluded since they don't log time.
+    return db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(inArray(usersTable.role, ["agent", "admin"]));
+  });
+
+  if (ids.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const users = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+    })
+    .from(usersTable)
+    .where(inArray(usersTable.id, ids));
+
+  // Sort so the caller is always first (UI defaults to "My Timesheet"),
+  // then by display name for predictable ordering in the dropdown.
+  users.sort((a, b) => {
+    if (a.id === user.id) return -1;
+    if (b.id === user.id) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  res.json(users.map((u) => ({ ...u, isSelf: u.id === user.id })));
 });
 
 // ────────────────────────────────────────────────────────────────────

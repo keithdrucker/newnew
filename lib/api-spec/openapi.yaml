@@ -552,7 +552,12 @@ paths:
     get:
       operationId: listTimeEntries
       tags: [tickets]
-      summary: List the current user's time entries within a date range
+      summary: List time entries within a date range
+      description: >
+        Returns the entries for `userId` if provided, otherwise the
+        caller's own entries. The caller may only request another
+        user's id when they are an admin or hold `manager+` on at
+        least one board where the target user is also a member.
       parameters:
         - in: query
           name: from
@@ -562,6 +567,10 @@ paths:
           name: to
           required: true
           schema: { type: string, format: date-time }
+        - in: query
+          name: userId
+          required: false
+          schema: { type: integer }
       responses:
         "200":
           description: Time entries (most recent first)
@@ -570,6 +579,24 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/TimeEntry" }
+
+  /time-entries/visible-users:
+    get:
+      operationId: listTimesheetVisibleUsers
+      tags: [tickets]
+      summary: List users whose timesheets the caller may view
+      description: >
+        Always includes the caller. For managers, also includes every
+        teammate on the boards where they hold `manager+`. Admins
+        receive every agent + admin.
+      responses:
+        "200":
+          description: Users (sorted by name)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TimesheetVisibleUser" }
 
   /time-entries/{id}:
     patch:
@@ -1569,7 +1596,21 @@ components:
 
     BoardRole:
       type: string
-      enum: [owner, modify, read_only]
+      # `manager` sits between `modify` and `owner`: same write powers
+      # as modify, plus the ability to view teammates' timesheets on
+      # this board. `owner` inherits manager-level visibility.
+      enum: [owner, manager, modify, read_only]
+
+    TimesheetVisibleUser:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        # True for the row that represents the caller — lets the UI
+        # default to "My Timesheet" without a follow-up session lookup.
+        isSelf: { type: boolean }
+      required: [id, name, email, isSelf]
 
     BoardMember:
       type: object

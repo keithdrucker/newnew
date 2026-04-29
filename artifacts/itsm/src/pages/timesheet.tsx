@@ -1,7 +1,19 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, Redirect } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks } from "date-fns";
-import { useGetSession, useListTimeEntries } from "@workspace/api-client-react";
+import {
+  useGetSession,
+  useListTimeEntries,
+  useListTimesheetVisibleUsers,
+} from "@workspace/api-client-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Users } from "lucide-react";
 
 // Monday-anchored week boundaries. We compute three windows up front
 // (this week, last week, plus a single combined query covering both)
@@ -163,6 +175,18 @@ export default function Timesheet() {
   // but a direct URL must not render the page shell either, since this
   // is internal-only data.
   const { data: session, isLoading: sessionLoading } = useGetSession();
+
+  // Selected user for the timesheet view. `null` means "the caller
+  // themself"; managers / admins may switch to a teammate's id. We
+  // initialize once `visibleUsers` resolves below.
+  const [viewingUserId, setViewingUserId] = useState<number | null>(null);
+
+  // Fetched once per page load so the picker has the full list of
+  // teammates the caller may audit. End users / unauthenticated
+  // visitors will simply get a 401/403 here but the early redirect
+  // below means we never actually render with that data.
+  const { data: visibleUsers } = useListTimesheetVisibleUsers();
+
   if (sessionLoading) {
     return <p className="p-6 text-sm text-muted-foreground">Loading…</p>;
   }
@@ -180,10 +204,23 @@ export default function Timesheet() {
   // query without overshooting into the following Monday.
   const upperBound = new Date(thisWeek.end.getTime() + 1);
 
+  // Pass `userId` only when the caller picked a teammate (server
+  // defaults to "self" on omission, so we never request our own id
+  // explicitly — keeps the cache key stable for the common case).
+  const isViewingSelf =
+    viewingUserId == null || viewingUserId === session.userId;
   const { data, isLoading } = useListTimeEntries({
     from: lastWeek.start.toISOString(),
     to: upperBound.toISOString(),
+    ...(isViewingSelf ? {} : { userId: viewingUserId! }),
   });
+
+  const teammateOptions = (visibleUsers ?? []).filter((u) => !u.isSelf);
+  const canSwitchUser = teammateOptions.length > 0;
+  const viewingUser =
+    (visibleUsers ?? []).find(
+      (u) => u.id === (viewingUserId ?? session.userId),
+    ) ?? null;
 
   const entries = (data ?? []) as Entry[];
   const thisWeekEntries = entries.filter((e) => {
@@ -208,13 +245,56 @@ export default function Timesheet() {
     0,
   );
 
+  const viewingSomeoneElse = !isViewingSelf && viewingUser != null;
+
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto" data-testid="page-timesheet">
-      <div>
-        <h1 className="text-2xl font-semibold">Timesheet</h1>
-        <p className="text-sm text-muted-foreground">
-          Time you've logged on tickets. Visible only to you and your team.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold">
+            {viewingSomeoneElse
+              ? `${viewingUser.name}'s Timesheet`
+              : "Timesheet"}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {viewingSomeoneElse
+              ? "Viewing as a board manager. Only your team sees this."
+              : "Time you've logged on tickets. Visible only to you and your team."}
+          </p>
+        </div>
+        {canSwitchUser && (
+          <div
+            className="flex items-center gap-2"
+            data-testid="timesheet-user-picker"
+          >
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <Select
+              value={String(viewingUserId ?? session.userId)}
+              onValueChange={(v) => {
+                const id = Number(v);
+                setViewingUserId(id === session.userId ? null : id);
+              }}
+            >
+              <SelectTrigger
+                className="h-8 w-[220px]"
+                data-testid="select-timesheet-user"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(visibleUsers ?? []).map((u) => (
+                  <SelectItem
+                    key={u.id}
+                    value={String(u.id)}
+                    data-testid={`option-timesheet-user-${u.id}`}
+                  >
+                    {u.isSelf ? `${u.name} (me)` : u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-4">
