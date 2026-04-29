@@ -3,7 +3,10 @@ import {
   useUpdateTicket,
   useAddTicketComment,
   useGetSession,
+  getGetTicketQueryKey,
+  getListTicketsQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +70,29 @@ export default function TicketDetail() {
 
   const updateTicket = useUpdateTicket();
   const addComment = useAddTicketComment();
+  const queryClient = useQueryClient();
+
+  // The generated mutation hooks don't invalidate queries on their own,
+  // so any field edit or new comment would otherwise leave the detail
+  // view (and the tickets list we navigated from) showing stale data
+  // until the user manually refreshed. Wrapping mutateAsync with
+  // explicit invalidation of both the single-ticket key and the
+  // listTickets key prefix keeps both in sync.
+  async function patchTicket(data: Record<string, unknown>) {
+    const result = await updateTicket.mutateAsync({
+      id: ticketId,
+      data: data as never,
+    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: getGetTicketQueryKey(ticketId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: getListTicketsQueryKey(),
+      }),
+    ]);
+    return result;
+  }
 
   // Local editable state for fields that save on blur. Reset whenever the
   // ticket payload changes (e.g. after another agent edits the same ticket).
@@ -100,10 +126,7 @@ export default function TicketDetail() {
     const trimmed = value.trim();
     const current = (ticket[field] as string | null | undefined) ?? "";
     if (trimmed === current) return;
-    updateTicket.mutate({
-      id: ticketId,
-      data: { [field]: trimmed.length === 0 ? null : trimmed } as never,
-    });
+    void patchTicket({ [field]: trimmed.length === 0 ? null : trimmed });
   }
 
   return (
@@ -241,7 +264,23 @@ export default function TicketDetail() {
                       data: { body: commentBody },
                     },
                     {
-                      onSuccess: () => setCommentBody(""),
+                      // Clear the textarea, then refresh both the
+                      // detail view (so the new comment appears in the
+                      // thread) and the tickets list (its preview /
+                      // status may have shifted, e.g. an end-user
+                      // reply on a resolved ticket flips it back to
+                      // in_progress on the server).
+                      onSuccess: async () => {
+                        setCommentBody("");
+                        await Promise.all([
+                          queryClient.invalidateQueries({
+                            queryKey: getGetTicketQueryKey(ticketId),
+                          }),
+                          queryClient.invalidateQueries({
+                            queryKey: getListTicketsQueryKey(),
+                          }),
+                        ]);
+                      },
                     },
                   );
                 }}
@@ -268,10 +307,7 @@ export default function TicketDetail() {
                 <Select
                   value={ticket.status}
                   onValueChange={(val: string) =>
-                    updateTicket.mutate({
-                      id: ticketId,
-                      data: { status: val as never },
-                    })
+                    void patchTicket({ status: val })
                   }
                 >
                   <SelectTrigger
@@ -322,10 +358,7 @@ export default function TicketDetail() {
                 <Select
                   value={ticket.priority}
                   onValueChange={(val: string) =>
-                    updateTicket.mutate({
-                      id: ticketId,
-                      data: { priority: val as never },
-                    })
+                    void patchTicket({ priority: val })
                   }
                 >
                   <SelectTrigger
@@ -361,10 +394,7 @@ export default function TicketDetail() {
                 <Select
                   value={ticket.riskLevel}
                   onValueChange={(val: string) =>
-                    updateTicket.mutate({
-                      id: ticketId,
-                      data: { riskLevel: val as never },
-                    })
+                    void patchTicket({ riskLevel: val })
                   }
                 >
                   <SelectTrigger

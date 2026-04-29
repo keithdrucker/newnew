@@ -15,6 +15,7 @@ import {
   useListRiskRules,
   getListTicketViewsQueryKey,
   getGetSessionQueryKey,
+  getListTicketsQueryKey,
 } from "@workspace/api-client-react";
 import { Link, useRoute, useLocation } from "wouter";
 import {
@@ -306,11 +307,20 @@ export default function Tickets() {
     () => new Set(),
   );
 
-  // Single-cell PATCH used by the inline-edit popovers. The mutation
-  // hook's onSuccess invalidates the tickets cache so the UI refreshes
-  // automatically.
-  function patchTicket(id: number, data: Record<string, unknown>) {
-    return updateTicket.mutateAsync({ id, data: data as never });
+  // Single-cell PATCH used by the inline-edit popovers. The generated
+  // mutation hook does not invalidate the tickets cache on its own, so
+  // we explicitly invalidate every `listTickets` query (regardless of
+  // its `params` suffix) after a successful PATCH so the table re-reads
+  // the row and reflects the new value.
+  async function patchTicket(id: number, data: Record<string, unknown>) {
+    const result = await updateTicket.mutateAsync({
+      id,
+      data: data as never,
+    });
+    await queryClient.invalidateQueries({
+      queryKey: getListTicketsQueryKey(),
+    });
+    return result;
   }
   const deleteView = useDeleteTicketView();
   const updatePreferences = useUpdateMePreferences();
