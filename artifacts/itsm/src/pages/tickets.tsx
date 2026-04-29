@@ -1031,6 +1031,48 @@ export default function Tickets() {
             )}
           </div>
 
+          {/* Quick toggle: Resolved+Closed are hidden by default. Clicking
+              this swaps the status filter between "active only" (the
+              default 6) and "include resolved + closed" (all 8). */}
+          {(() => {
+            const showingClosed =
+              filters.status.includes("resolved") &&
+              filters.status.includes("closed");
+            return (
+              <Button
+                variant={showingClosed ? "secondary" : "outline"}
+                size="sm"
+                className="h-9 gap-2"
+                onClick={() => {
+                  if (showingClosed) {
+                    // Snap back to the active-only default.
+                    setFilter(
+                      "status",
+                      DEFAULT_FILTERS.status as never,
+                    );
+                  } else {
+                    // Add resolved + closed to whatever's currently
+                    // selected, deduped.
+                    setFilter(
+                      "status",
+                      Array.from(
+                        new Set([
+                          ...filters.status,
+                          "resolved",
+                          "closed",
+                        ]),
+                      ) as never,
+                    );
+                  }
+                }}
+                data-testid="button-toggle-closed"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {showingClosed ? "Hide closed" : "Show closed"}
+              </Button>
+            );
+          })()}
+
           <Button
             onClick={() => setCreateTicketOpen(true)}
             data-testid="button-create-ticket"
@@ -1191,6 +1233,11 @@ export default function Tickets() {
                                 }}
                                 className="h-4 w-4"
                               />
+                              {activeCategory === "status" && (
+                                <span className="shrink-0">
+                                  {statusIcon(opt.value)}
+                                </span>
+                              )}
                               <span className="truncate">{opt.label}</span>
                             </label>
                           );
