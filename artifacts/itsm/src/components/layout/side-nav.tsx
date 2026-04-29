@@ -290,7 +290,7 @@ function TicketsNavItem({
 
       <CollapsibleContent className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
         <Link
-          href="/tickets"
+          href="/tickets?all=1"
           data-testid="nav-tickets-all"
           className={cn(
             "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",

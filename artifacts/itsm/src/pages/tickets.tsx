@@ -180,29 +180,26 @@ export default function Tickets() {
 
   // If the user lands on the bare /tickets page (e.g. via direct URL or page
   // refresh) and has a default ticket board configured, redirect to that
-  // board ONCE per browser session. After that, explicit navigation to
-  // "All Tickets" from the sidebar is honored and not bounced back. The
-  // dropdown on the page also lets them switch back manually.
+  // board. The "All Tickets" sidebar link and the dropdown's "All" option
+  // navigate with `?all=1`, which is an explicit signal to skip the
+  // redirect and show every department.
+  const explicitlyAllTickets =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("all") === "1";
   useEffect(() => {
-    if (deptSlug) {
-      sessionStorage.setItem("itsm.ticketsDefaultBoardRedirected", "1");
-      return;
-    }
-    if (typeof window !== "undefined") {
-      if (sessionStorage.getItem("itsm.ticketsDefaultBoardRedirected")) return;
-    }
+    if (deptSlug) return;
+    if (explicitlyAllTickets) return;
     if (!session || !departments) return;
-    sessionStorage.setItem("itsm.ticketsDefaultBoardRedirected", "1");
     const slug = session.defaultTicketBoard;
     if (!slug) return;
     if (departments.some((d) => d.slug === slug)) {
       setLocation(`/tickets/dept/${slug}`, { replace: true });
     }
-  }, [deptSlug, session, departments, setLocation]);
+  }, [deptSlug, explicitlyAllTickets, session, departments, setLocation]);
 
   async function handleChangeBoard(value: string) {
     if (value === "all") {
-      setLocation("/tickets");
+      setLocation("/tickets?all=1");
     } else {
       setLocation(`/tickets/dept/${value}`);
     }
