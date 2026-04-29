@@ -178,12 +178,21 @@ export default function Tickets() {
   const deleteView = useDeleteTicketView();
   const updatePreferences = useUpdateMePreferences();
 
-  // If the user lands on the bare /tickets page and has a default ticket
-  // board configured, redirect to that board. The dropdown on the page
-  // still lets them switch back manually.
+  // If the user lands on the bare /tickets page (e.g. via direct URL or page
+  // refresh) and has a default ticket board configured, redirect to that
+  // board ONCE per browser session. After that, explicit navigation to
+  // "All Tickets" from the sidebar is honored and not bounced back. The
+  // dropdown on the page also lets them switch back manually.
   useEffect(() => {
-    if (deptSlug) return;
+    if (deptSlug) {
+      sessionStorage.setItem("itsm.ticketsDefaultBoardRedirected", "1");
+      return;
+    }
+    if (typeof window !== "undefined") {
+      if (sessionStorage.getItem("itsm.ticketsDefaultBoardRedirected")) return;
+    }
     if (!session || !departments) return;
+    sessionStorage.setItem("itsm.ticketsDefaultBoardRedirected", "1");
     const slug = session.defaultTicketBoard;
     if (!slug) return;
     if (departments.some((d) => d.slug === slug)) {
