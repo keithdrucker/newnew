@@ -206,6 +206,24 @@ export const TicketSupportLevel = {
   NUMBER_3: 3,
 } as const;
 
+export type TicketRiskLevel =
+  (typeof TicketRiskLevel)[keyof typeof TicketRiskLevel];
+
+export const TicketRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
+export type TicketSlaStatus =
+  (typeof TicketSlaStatus)[keyof typeof TicketSlaStatus];
+
+export const TicketSlaStatus = {
+  on_track: "on_track",
+  breached: "breached",
+} as const;
+
 export interface Ticket {
   id: number;
   ticketKey: string;
@@ -230,7 +248,13 @@ export interface Ticket {
   team?: string | null;
   /** @nullable */
   category?: string | null;
+  riskLevel: TicketRiskLevel;
+  /** @nullable */
+  rootCause?: string | null;
+  /** @nullable */
+  resolution?: string | null;
   slaBreached: boolean;
+  slaStatus: TicketSlaStatus;
   /** @nullable */
   responseDueAt?: string | null;
   /** @nullable */
@@ -294,6 +318,16 @@ export const CreateTicketInputSupportLevel = {
   NUMBER_3: 3,
 } as const;
 
+export type CreateTicketInputRiskLevel =
+  (typeof CreateTicketInputRiskLevel)[keyof typeof CreateTicketInputRiskLevel];
+
+export const CreateTicketInputRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
 export interface CreateTicketInput {
   title: string;
   description: string;
@@ -311,6 +345,11 @@ export interface CreateTicketInput {
   team?: string | null;
   /** @nullable */
   category?: string | null;
+  riskLevel?: CreateTicketInputRiskLevel;
+  /** @nullable */
+  rootCause?: string | null;
+  /** @nullable */
+  resolution?: string | null;
 }
 
 export type UpdateTicketInputPriority =
@@ -342,6 +381,16 @@ export const UpdateTicketInputSupportLevel = {
   NUMBER_3: 3,
 } as const;
 
+export type UpdateTicketInputRiskLevel =
+  (typeof UpdateTicketInputRiskLevel)[keyof typeof UpdateTicketInputRiskLevel];
+
+export const UpdateTicketInputRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
 export interface UpdateTicketInput {
   title?: string;
   description?: string;
@@ -356,6 +405,11 @@ export interface UpdateTicketInput {
   team?: string | null;
   /** @nullable */
   category?: string | null;
+  riskLevel?: UpdateTicketInputRiskLevel;
+  /** @nullable */
+  rootCause?: string | null;
+  /** @nullable */
+  resolution?: string | null;
 }
 
 /**
@@ -399,6 +453,60 @@ export const TicketViewConfigSupportLevel = {
   NUMBER_3: 3,
 } as const;
 
+/**
+ * @nullable
+ */
+export type TicketViewConfigRiskLevel =
+  | (typeof TicketViewConfigRiskLevel)[keyof typeof TicketViewConfigRiskLevel]
+  | null;
+
+export const TicketViewConfigRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TicketViewConfigSlaStatus =
+  | (typeof TicketViewConfigSlaStatus)[keyof typeof TicketViewConfigSlaStatus]
+  | null;
+
+export const TicketViewConfigSlaStatus = {
+  on_track: "on_track",
+  breached: "breached",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TicketViewConfigCreatedRange =
+  | (typeof TicketViewConfigCreatedRange)[keyof typeof TicketViewConfigCreatedRange]
+  | null;
+
+export const TicketViewConfigCreatedRange = {
+  today: "today",
+  week: "week",
+  month: "month",
+  all: "all",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TicketViewConfigUpdatedRange =
+  | (typeof TicketViewConfigUpdatedRange)[keyof typeof TicketViewConfigUpdatedRange]
+  | null;
+
+export const TicketViewConfigUpdatedRange = {
+  today: "today",
+  week: "week",
+  month: "month",
+  all: "all",
+} as const;
+
 export interface TicketViewConfig {
   /** @nullable */
   search?: string | null;
@@ -414,6 +522,68 @@ export interface TicketViewConfig {
   unassigned?: boolean | null;
   /** @nullable */
   departmentId?: number | null;
+  /** @nullable */
+  riskLevel?: TicketViewConfigRiskLevel;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  slaStatus?: TicketViewConfigSlaStatus;
+  /** @nullable */
+  hasRootCause?: boolean | null;
+  /** @nullable */
+  hasResolution?: boolean | null;
+  /** @nullable */
+  createdRange?: TicketViewConfigCreatedRange;
+  /** @nullable */
+  updatedRange?: TicketViewConfigUpdatedRange;
+}
+
+export type RiskRuleRiskLevel =
+  (typeof RiskRuleRiskLevel)[keyof typeof RiskRuleRiskLevel];
+
+export const RiskRuleRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
+export interface RiskRule {
+  id: number;
+  category: string;
+  riskLevel: RiskRuleRiskLevel;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateRiskRuleInputRiskLevel =
+  (typeof CreateRiskRuleInputRiskLevel)[keyof typeof CreateRiskRuleInputRiskLevel];
+
+export const CreateRiskRuleInputRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
+export interface CreateRiskRuleInput {
+  category: string;
+  riskLevel: CreateRiskRuleInputRiskLevel;
+}
+
+export type UpdateRiskRuleInputRiskLevel =
+  (typeof UpdateRiskRuleInputRiskLevel)[keyof typeof UpdateRiskRuleInputRiskLevel];
+
+export const UpdateRiskRuleInputRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
+export interface UpdateRiskRuleInput {
+  category?: string;
+  riskLevel?: UpdateRiskRuleInputRiskLevel;
 }
 
 export interface TicketView {
@@ -1241,6 +1411,15 @@ export type ListTicketsParams = {
   supportLevel?: ListTicketsSupportLevel;
   assigneeId?: number;
   unassigned?: boolean;
+  riskLevel?: ListTicketsRiskLevel;
+  category?: string;
+  slaStatus?: ListTicketsSlaStatus;
+  hasRootCause?: boolean;
+  hasResolution?: boolean;
+  createdAfter?: string;
+  createdBefore?: string;
+  updatedAfter?: string;
+  updatedBefore?: string;
   q?: string;
 };
 
@@ -1271,6 +1450,24 @@ export const ListTicketsSupportLevel = {
   NUMBER_1: 1,
   NUMBER_2: 2,
   NUMBER_3: 3,
+} as const;
+
+export type ListTicketsRiskLevel =
+  (typeof ListTicketsRiskLevel)[keyof typeof ListTicketsRiskLevel];
+
+export const ListTicketsRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
+export type ListTicketsSlaStatus =
+  (typeof ListTicketsSlaStatus)[keyof typeof ListTicketsSlaStatus];
+
+export const ListTicketsSlaStatus = {
+  on_track: "on_track",
+  breached: "breached",
 } as const;
 
 export type ListPeopleParams = {

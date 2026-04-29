@@ -8,7 +8,62 @@ import {
   kbArticlesTable,
   assetsTable,
   sessionStateTable,
+  riskRulesTable,
 } from "@workspace/db";
+
+// Default category → risk level mapping. Surfaced in Settings → Risk Rules so
+// admins can extend it; also used at ticket-create time to pick a default
+// risk level when the caller (or AI categoriser) doesn't supply one.
+const DEFAULT_RISK_RULES: Array<{
+  category: string;
+  riskLevel: "low" | "medium" | "high" | "critical";
+}> = [
+  { category: "Security Incident", riskLevel: "high" },
+  { category: "Access Request", riskLevel: "medium" },
+  { category: "Hardware", riskLevel: "low" },
+  { category: "Software", riskLevel: "low" },
+  { category: "Email/Phishing", riskLevel: "high" },
+  { category: "Privileged Access", riskLevel: "high" },
+  { category: "Data Exposure", riskLevel: "critical" },
+];
+
+// Best-effort title → category heuristics for demo tickets.
+function inferCategory(title: string): string | null {
+  const t = title.toLowerCase();
+  if (t.includes("phish") || t.includes("spam") || t.includes("email"))
+    return "Email/Phishing";
+  if (t.includes("password") || t.includes("mfa") || t.includes("login"))
+    return "Access Request";
+  if (
+    t.includes("vpn") ||
+    t.includes("admin rights") ||
+    t.includes("privileged")
+  )
+    return "Privileged Access";
+  if (t.includes("breach") || t.includes("leak") || t.includes("exposure"))
+    return "Data Exposure";
+  if (
+    t.includes("malware") ||
+    t.includes("ransomware") ||
+    t.includes("incident")
+  )
+    return "Security Incident";
+  if (
+    t.includes("laptop") ||
+    t.includes("monitor") ||
+    t.includes("printer") ||
+    t.includes("device")
+  )
+    return "Hardware";
+  if (
+    t.includes("teams") ||
+    t.includes("outlook") ||
+    t.includes("software") ||
+    t.includes("app")
+  )
+    return "Software";
+  return null;
+}
 
 const departments = [
   { name: "IT", slug: "it", color: "#6366f1", icon: "Laptop", description: "Information Technology service desk." },
@@ -36,6 +91,10 @@ async function main() {
   await db.delete(departmentSettingsTable);
   await db.delete(usersTable);
   await db.delete(departmentsTable);
+  await db.delete(riskRulesTable);
+
+  console.log("Inserting risk rules...");
+  await db.insert(riskRulesTable).values(DEFAULT_RISK_RULES);
 
   console.log("Inserting departments...");
   const deptRows = await db
@@ -325,7 +384,11 @@ async function main() {
               : dept.slug === "finance"
                 ? "AP"
                 : null,
-        category: null,
+        category: inferCategory(titles[i]),
+        riskLevel:
+          DEFAULT_RISK_RULES.find(
+            (rule) => rule.category === inferCategory(titles[i]),
+          )?.riskLevel ?? "low",
         slaBreached: !!slaBreached,
         responseDueAt,
         resolutionDueAt,

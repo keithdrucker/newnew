@@ -310,6 +310,53 @@ export const RemoveBoardMemberParams = zod.object({
 });
 
 /**
+ * @summary List category → default risk-level rules used to seed new tickets
+ */
+export const ListRiskRulesResponseItem = zod.object({
+  id: zod.number(),
+  category: zod.string(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListRiskRulesResponse = zod.array(ListRiskRulesResponseItem);
+
+/**
+ * @summary Create a category risk-level rule (admin only)
+ */
+export const CreateRiskRuleBody = zod.object({
+  category: zod.string(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]),
+});
+
+/**
+ * @summary Update a risk-level rule (admin only)
+ */
+export const UpdateRiskRuleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateRiskRuleBody = zod.object({
+  category: zod.string().optional(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]).optional(),
+});
+
+export const UpdateRiskRuleResponse = zod.object({
+  id: zod.number(),
+  category: zod.string(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a risk-level rule (admin only)
+ */
+export const DeleteRiskRuleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary List tickets, scoped by current user's role and department
  */
 export const ListTicketsQueryParams = zod.object({
@@ -321,6 +368,15 @@ export const ListTicketsQueryParams = zod.object({
     .optional(),
   assigneeId: zod.coerce.number().optional(),
   unassigned: zod.coerce.boolean().optional(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]).optional(),
+  category: zod.coerce.string().optional(),
+  slaStatus: zod.enum(["on_track", "breached"]).optional(),
+  hasRootCause: zod.coerce.boolean().optional(),
+  hasResolution: zod.coerce.boolean().optional(),
+  createdAfter: zod.date().optional(),
+  createdBefore: zod.date().optional(),
+  updatedAfter: zod.date().optional(),
+  updatedBefore: zod.date().optional(),
   q: zod.coerce.string().optional(),
 });
 
@@ -345,7 +401,11 @@ export const ListTicketsResponseItem = zod.object({
   location: zod.string().nullish(),
   team: zod.string().nullish(),
   category: zod.string().nullish(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]),
+  rootCause: zod.string().nullish(),
+  resolution: zod.string().nullish(),
   slaBreached: zod.boolean(),
+  slaStatus: zod.enum(["on_track", "breached"]),
   responseDueAt: zod.coerce.date().nullish(),
   resolutionDueAt: zod.coerce.date().nullish(),
   firstResponseAt: zod.coerce.date().nullish(),
@@ -373,6 +433,9 @@ export const CreateTicketBody = zod.object({
   location: zod.string().nullish(),
   team: zod.string().nullish(),
   category: zod.string().nullish(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]).optional(),
+  rootCause: zod.string().nullish(),
+  resolution: zod.string().nullish(),
 });
 
 /**
@@ -404,7 +467,11 @@ export const GetTicketResponse = zod
     location: zod.string().nullish(),
     team: zod.string().nullish(),
     category: zod.string().nullish(),
+    riskLevel: zod.enum(["low", "medium", "high", "critical"]),
+    rootCause: zod.string().nullish(),
+    resolution: zod.string().nullish(),
     slaBreached: zod.boolean(),
+    slaStatus: zod.enum(["on_track", "breached"]),
     responseDueAt: zod.coerce.date().nullish(),
     resolutionDueAt: zod.coerce.date().nullish(),
     firstResponseAt: zod.coerce.date().nullish(),
@@ -446,6 +513,9 @@ export const UpdateTicketBody = zod.object({
   location: zod.string().nullish(),
   team: zod.string().nullish(),
   category: zod.string().nullish(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]).optional(),
+  rootCause: zod.string().nullish(),
+  resolution: zod.string().nullish(),
 });
 
 export const UpdateTicketResponse = zod.object({
@@ -469,7 +539,11 @@ export const UpdateTicketResponse = zod.object({
   location: zod.string().nullish(),
   team: zod.string().nullish(),
   category: zod.string().nullish(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]),
+  rootCause: zod.string().nullish(),
+  resolution: zod.string().nullish(),
   slaBreached: zod.boolean(),
+  slaStatus: zod.enum(["on_track", "breached"]),
   responseDueAt: zod.coerce.date().nullish(),
   resolutionDueAt: zod.coerce.date().nullish(),
   firstResponseAt: zod.coerce.date().nullish(),
@@ -535,6 +609,43 @@ export const ListTicketViewsResponseItem = zod.object({
     assigneeId: zod.number().nullish(),
     unassigned: zod.boolean().nullish(),
     departmentId: zod.number().nullish(),
+    riskLevel: zod
+      .union([
+        zod.literal("low"),
+        zod.literal("medium"),
+        zod.literal("high"),
+        zod.literal("critical"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    category: zod.string().nullish(),
+    slaStatus: zod
+      .union([
+        zod.literal("on_track"),
+        zod.literal("breached"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    hasRootCause: zod.boolean().nullish(),
+    hasResolution: zod.boolean().nullish(),
+    createdRange: zod
+      .union([
+        zod.literal("today"),
+        zod.literal("week"),
+        zod.literal("month"),
+        zod.literal("all"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    updatedRange: zod
+      .union([
+        zod.literal("today"),
+        zod.literal("week"),
+        zod.literal("month"),
+        zod.literal("all"),
+        zod.literal(null),
+      ])
+      .nullish(),
   }),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -577,6 +688,43 @@ export const CreateTicketViewBody = zod.object({
     assigneeId: zod.number().nullish(),
     unassigned: zod.boolean().nullish(),
     departmentId: zod.number().nullish(),
+    riskLevel: zod
+      .union([
+        zod.literal("low"),
+        zod.literal("medium"),
+        zod.literal("high"),
+        zod.literal("critical"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    category: zod.string().nullish(),
+    slaStatus: zod
+      .union([
+        zod.literal("on_track"),
+        zod.literal("breached"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    hasRootCause: zod.boolean().nullish(),
+    hasResolution: zod.boolean().nullish(),
+    createdRange: zod
+      .union([
+        zod.literal("today"),
+        zod.literal("week"),
+        zod.literal("month"),
+        zod.literal("all"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    updatedRange: zod
+      .union([
+        zod.literal("today"),
+        zod.literal("week"),
+        zod.literal("month"),
+        zod.literal("all"),
+        zod.literal(null),
+      ])
+      .nullish(),
   }),
   isDefault: zod.boolean().optional(),
 });
@@ -622,6 +770,43 @@ export const UpdateTicketViewBody = zod.object({
       assigneeId: zod.number().nullish(),
       unassigned: zod.boolean().nullish(),
       departmentId: zod.number().nullish(),
+      riskLevel: zod
+        .union([
+          zod.literal("low"),
+          zod.literal("medium"),
+          zod.literal("high"),
+          zod.literal("critical"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      category: zod.string().nullish(),
+      slaStatus: zod
+        .union([
+          zod.literal("on_track"),
+          zod.literal("breached"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      hasRootCause: zod.boolean().nullish(),
+      hasResolution: zod.boolean().nullish(),
+      createdRange: zod
+        .union([
+          zod.literal("today"),
+          zod.literal("week"),
+          zod.literal("month"),
+          zod.literal("all"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      updatedRange: zod
+        .union([
+          zod.literal("today"),
+          zod.literal("week"),
+          zod.literal("month"),
+          zod.literal("all"),
+          zod.literal(null),
+        ])
+        .nullish(),
     })
     .optional(),
   isDefault: zod.boolean().optional(),
@@ -663,6 +848,43 @@ export const UpdateTicketViewResponse = zod.object({
     assigneeId: zod.number().nullish(),
     unassigned: zod.boolean().nullish(),
     departmentId: zod.number().nullish(),
+    riskLevel: zod
+      .union([
+        zod.literal("low"),
+        zod.literal("medium"),
+        zod.literal("high"),
+        zod.literal("critical"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    category: zod.string().nullish(),
+    slaStatus: zod
+      .union([
+        zod.literal("on_track"),
+        zod.literal("breached"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    hasRootCause: zod.boolean().nullish(),
+    hasResolution: zod.boolean().nullish(),
+    createdRange: zod
+      .union([
+        zod.literal("today"),
+        zod.literal("week"),
+        zod.literal("month"),
+        zod.literal("all"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    updatedRange: zod
+      .union([
+        zod.literal("today"),
+        zod.literal("week"),
+        zod.literal("month"),
+        zod.literal("all"),
+        zod.literal(null),
+      ])
+      .nullish(),
   }),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -1860,7 +2082,11 @@ export const GetBreachedTicketsResponseItem = zod.object({
   location: zod.string().nullish(),
   team: zod.string().nullish(),
   category: zod.string().nullish(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]),
+  rootCause: zod.string().nullish(),
+  resolution: zod.string().nullish(),
   slaBreached: zod.boolean(),
+  slaStatus: zod.enum(["on_track", "breached"]),
   responseDueAt: zod.coerce.date().nullish(),
   resolutionDueAt: zod.coerce.date().nullish(),
   firstResponseAt: zod.coerce.date().nullish(),

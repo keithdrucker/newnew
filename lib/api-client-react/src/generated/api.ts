@@ -32,6 +32,7 @@ import type {
   CreatePersonInput,
   CreateProjectCommentInput,
   CreateProjectInput,
+  CreateRiskRuleInput,
   CreateTicketInput,
   CreateTicketViewInput,
   CreateVendorInput,
@@ -59,6 +60,7 @@ import type {
   ProjectComment,
   ProjectDetail,
   ProjectSummary,
+  RiskRule,
   Session,
   SwitchSessionInput,
   Ticket,
@@ -76,6 +78,7 @@ import type {
   UpdateMePreferencesInput,
   UpdatePersonInput,
   UpdateProjectInput,
+  UpdateRiskRuleInput,
   UpdateTicketInput,
   UpdateTicketViewInput,
   UpdateVendorInput,
@@ -1371,6 +1374,338 @@ export const useRemoveBoardMember = <
   TContext
 > => {
   return useMutation(getRemoveBoardMemberMutationOptions(options));
+};
+
+/**
+ * @summary List category → default risk-level rules used to seed new tickets
+ */
+export const getListRiskRulesUrl = () => {
+  return `/api/risk-rules`;
+};
+
+export const listRiskRules = async (
+  options?: RequestInit,
+): Promise<RiskRule[]> => {
+  return customFetch<RiskRule[]>(getListRiskRulesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRiskRulesQueryKey = () => {
+  return [`/api/risk-rules`] as const;
+};
+
+export const getListRiskRulesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRiskRules>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listRiskRules>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListRiskRulesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listRiskRules>>> = ({
+    signal,
+  }) => listRiskRules({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRiskRules>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRiskRulesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRiskRules>>
+>;
+export type ListRiskRulesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List category → default risk-level rules used to seed new tickets
+ */
+
+export function useListRiskRules<
+  TData = Awaited<ReturnType<typeof listRiskRules>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listRiskRules>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRiskRulesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a category risk-level rule (admin only)
+ */
+export const getCreateRiskRuleUrl = () => {
+  return `/api/risk-rules`;
+};
+
+export const createRiskRule = async (
+  createRiskRuleInput: CreateRiskRuleInput,
+  options?: RequestInit,
+): Promise<RiskRule> => {
+  return customFetch<RiskRule>(getCreateRiskRuleUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createRiskRuleInput),
+  });
+};
+
+export const getCreateRiskRuleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRiskRule>>,
+    TError,
+    { data: BodyType<CreateRiskRuleInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createRiskRule>>,
+  TError,
+  { data: BodyType<CreateRiskRuleInput> },
+  TContext
+> => {
+  const mutationKey = ["createRiskRule"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createRiskRule>>,
+    { data: BodyType<CreateRiskRuleInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createRiskRule(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateRiskRuleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createRiskRule>>
+>;
+export type CreateRiskRuleMutationBody = BodyType<CreateRiskRuleInput>;
+export type CreateRiskRuleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a category risk-level rule (admin only)
+ */
+export const useCreateRiskRule = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRiskRule>>,
+    TError,
+    { data: BodyType<CreateRiskRuleInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createRiskRule>>,
+  TError,
+  { data: BodyType<CreateRiskRuleInput> },
+  TContext
+> => {
+  return useMutation(getCreateRiskRuleMutationOptions(options));
+};
+
+/**
+ * @summary Update a risk-level rule (admin only)
+ */
+export const getUpdateRiskRuleUrl = (id: number) => {
+  return `/api/risk-rules/${id}`;
+};
+
+export const updateRiskRule = async (
+  id: number,
+  updateRiskRuleInput: UpdateRiskRuleInput,
+  options?: RequestInit,
+): Promise<RiskRule> => {
+  return customFetch<RiskRule>(getUpdateRiskRuleUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateRiskRuleInput),
+  });
+};
+
+export const getUpdateRiskRuleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRiskRule>>,
+    TError,
+    { id: number; data: BodyType<UpdateRiskRuleInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateRiskRule>>,
+  TError,
+  { id: number; data: BodyType<UpdateRiskRuleInput> },
+  TContext
+> => {
+  const mutationKey = ["updateRiskRule"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateRiskRule>>,
+    { id: number; data: BodyType<UpdateRiskRuleInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateRiskRule(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateRiskRuleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateRiskRule>>
+>;
+export type UpdateRiskRuleMutationBody = BodyType<UpdateRiskRuleInput>;
+export type UpdateRiskRuleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a risk-level rule (admin only)
+ */
+export const useUpdateRiskRule = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRiskRule>>,
+    TError,
+    { id: number; data: BodyType<UpdateRiskRuleInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateRiskRule>>,
+  TError,
+  { id: number; data: BodyType<UpdateRiskRuleInput> },
+  TContext
+> => {
+  return useMutation(getUpdateRiskRuleMutationOptions(options));
+};
+
+/**
+ * @summary Delete a risk-level rule (admin only)
+ */
+export const getDeleteRiskRuleUrl = (id: number) => {
+  return `/api/risk-rules/${id}`;
+};
+
+export const deleteRiskRule = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteRiskRuleUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteRiskRuleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRiskRule>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteRiskRule>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteRiskRule"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteRiskRule>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteRiskRule(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteRiskRuleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteRiskRule>>
+>;
+
+export type DeleteRiskRuleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a risk-level rule (admin only)
+ */
+export const useDeleteRiskRule = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRiskRule>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteRiskRule>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteRiskRuleMutationOptions(options));
 };
 
 /**

@@ -19,6 +19,7 @@ import {
   Pencil,
   Trash2,
   Users,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/components/providers/session-provider";
@@ -40,8 +41,43 @@ export default function Settings() {
       </div>
       <AppearanceCard />
       <TeamCard />
+      <AutomationCard />
       <TicketBoardsCard />
     </div>
+  );
+}
+
+function AutomationCard() {
+  const { session } = useSession();
+  if (session?.role !== "admin") return null;
+
+  return (
+    <Card data-testid="card-automation">
+      <CardHeader>
+        <CardTitle className="text-base">Automation</CardTitle>
+        <CardDescription>
+          Defaults applied to new tickets and AI categorization.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Link
+          href="/settings/risk-rules"
+          className="group flex items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm hover-elevate active-elevate-2"
+          data-testid="link-settings-risk-rules"
+        >
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted/60 shrink-0 text-amber-600">
+            <ShieldAlert className="h-4 w-4" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">Risk rules</p>
+            <p className="text-xs text-muted-foreground">
+              Map ticket categories to a default risk level
+            </p>
+          </div>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 

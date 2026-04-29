@@ -1,5 +1,18 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   db,
   ticketsTable,
@@ -7,6 +20,7 @@ import {
   departmentsTable,
   usersTable,
   departmentSettingsTable,
+  riskRulesTable,
 } from "@workspace/db";
 import {
   ListTicketsQueryParams,
@@ -33,6 +47,21 @@ import {
 const router: IRouter = Router();
 
 type TicketRow = typeof ticketsTable.$inferSelect;
+
+function deriveSlaStatus(r: TicketRow): "on_track" | "breached" {
+  if (r.slaBreached) return "breached";
+  const now = Date.now();
+  const unresolved = r.status !== "resolved" && r.status !== "closed";
+  if (unresolved && r.resolutionDueAt && r.resolutionDueAt.getTime() < now)
+    return "breached";
+  if (
+    !r.firstResponseAt &&
+    r.responseDueAt &&
+    r.responseDueAt.getTime() < now
+  )
+    return "breached";
+  return "on_track";
+}
 
 async function hydrate(rows: TicketRow[]) {
   if (rows.length === 0) return [];
@@ -79,7 +108,17 @@ async function hydrate(rows: TicketRow[]) {
     location: r.location ?? null,
     team: r.team ?? null,
     category: r.category ?? null,
+    riskLevel: (r.riskLevel ?? "low") as
+      | "low"
+      | "medium"
+      | "high"
+      | "critical",
+    rootCause: r.rootCause ?? null,
+    resolution: r.resolution ?? null,
     slaBreached: r.slaBreached,
+    // Derived: "breached" if the boolean was raised OR an unmet due date is in
+    // the past. Lets the UI render a single column without re-deriving.
+    slaStatus: deriveSlaStatus(r),
     responseDueAt: r.responseDueAt ? r.responseDueAt.toISOString() : null,
     resolutionDueAt: r.resolutionDueAt ? r.resolutionDueAt.toISOString() : null,
     firstResponseAt: r.firstResponseAt ? r.firstResponseAt.toISOString() : null,
@@ -110,6 +149,26 @@ router.get("/tickets", async (req, res): Promise<void> => {
   } else if (params.data.assigneeId != null) {
     conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
   }
+  if (params.data.riskLevel)
+    conds.push(eq(ticketsTable.riskLevel, params.data.riskLevel));
+  if (params.data.category)
+    conds.push(eq(ticketsTable.category, params.data.category));
+  if (params.data.hasRootCause === true)
+    conds.push(isNotNull(ticketsTable.rootCause));
+  if (params.data.hasRootCause === false)
+    conds.push(isNull(ticketsTable.rootCause));
+  if (params.data.hasResolution === true)
+    conds.push(isNotNull(ticketsTable.resolution));
+  if (params.data.hasResolution === false)
+    conds.push(isNull(ticketsTable.resolution));
+  if (params.data.createdAfter)
+    conds.push(gte(ticketsTable.createdAt, new Date(params.data.createdAfter)));
+  if (params.data.createdBefore)
+    conds.push(lte(ticketsTable.createdAt, new Date(params.data.createdBefore)));
+  if (params.data.updatedAfter)
+    conds.push(gte(ticketsTable.updatedAt, new Date(params.data.updatedAfter)));
+  if (params.data.updatedBefore)
+    conds.push(lte(ticketsTable.updatedAt, new Date(params.data.updatedBefore)));
 
   // Per-board access filter (admin sees all; agent sees boards they're members of;
   // end_user only their own reported tickets).
@@ -137,6 +196,13 @@ router.get("/tickets", async (req, res): Promise<void> => {
         r.title.toLowerCase().includes(needle) ||
         r.ticketKey.toLowerCase().includes(needle) ||
         r.description.toLowerCase().includes(needle),
+    );
+  }
+  // SLA filter is applied post-hydrate because slaStatus is a derived field
+  // (combines sla_breached flag + due-date math).
+  if (params.data.slaStatus) {
+    filtered = filtered.filter(
+      (r) => deriveSlaStatus(r) === params.data.slaStatus,
     );
   }
 
@@ -184,6 +250,31 @@ router.post("/tickets", async (req, res): Promise<void> => {
   const resolutionDueAt = new Date(now.getTime() + slaResMin * 60 * 1000);
   const ticketKey = await nextTicketKey(parsed.data.type);
 
+  // If the caller didn't pick a risk level explicitly, fall back to the
+  // category's default rule (e.g. "Security Incident" → high). Falls through
+  // to "low" when there's no rule.
+  let riskLevel: "low" | "medium" | "high" | "critical" | null =
+    (parsed.data.riskLevel as
+      | "low"
+      | "medium"
+      | "high"
+      | "critical"
+      | undefined) ?? null;
+  if (!riskLevel && parsed.data.category) {
+    const [rule] = await db
+      .select()
+      .from(riskRulesTable)
+      .where(eq(riskRulesTable.category, parsed.data.category))
+      .limit(1);
+    if (rule) {
+      riskLevel = rule.riskLevel as
+        | "low"
+        | "medium"
+        | "high"
+        | "critical";
+    }
+  }
+
   const [row] = await db
     .insert(ticketsTable)
     .values({
@@ -201,6 +292,9 @@ router.post("/tickets", async (req, res): Promise<void> => {
       location: parsed.data.location ?? null,
       team: parsed.data.team ?? null,
       category: parsed.data.category ?? null,
+      riskLevel: riskLevel ?? "low",
+      rootCause: parsed.data.rootCause ?? null,
+      resolution: parsed.data.resolution ?? null,
       responseDueAt,
       resolutionDueAt,
     })
@@ -297,6 +391,8 @@ router.patch("/tickets/:id", async (req, res): Promise<void> => {
     }
   }
 
+  // parsed.data already includes riskLevel/rootCause/resolution from the
+  // generated zod schema, so spreading is safe.
   const updates: Partial<typeof ticketsTable.$inferInsert> = { ...parsed.data };
   if (parsed.data.status === "resolved" || parsed.data.status === "closed") {
     if (!existing.resolvedAt) updates.resolvedAt = new Date();

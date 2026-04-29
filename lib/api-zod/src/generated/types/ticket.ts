@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TicketPriority } from "./ticketPriority";
+import type { TicketRiskLevel } from "./ticketRiskLevel";
+import type { TicketSlaStatus } from "./ticketSlaStatus";
 import type { TicketSource } from "./ticketSource";
 import type { TicketStatus } from "./ticketStatus";
 import type { TicketSupportLevel } from "./ticketSupportLevel";
@@ -35,7 +37,13 @@ export interface Ticket {
   team?: string | null;
   /** @nullable */
   category?: string | null;
+  riskLevel: TicketRiskLevel;
+  /** @nullable */
+  rootCause?: string | null;
+  /** @nullable */
+  resolution?: string | null;
   slaBreached: boolean;
+  slaStatus: TicketSlaStatus;
   /** @nullable */
   responseDueAt?: Date | null;
   /** @nullable */

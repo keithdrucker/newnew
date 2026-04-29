@@ -8,6 +8,7 @@ import {
   useUpdateTicketView,
   useDeleteTicketView,
   useUpdateMePreferences,
+  useListRiskRules,
   getListTicketViewsQueryKey,
   getGetSessionQueryKey,
 } from "@workspace/api-client-react";
@@ -79,23 +80,47 @@ import { Separator } from "@/components/ui/separator";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreateTicketDialog } from "@/components/create-ticket-dialog";
 
-type SortField = "created" | "priority" | "level" | "assignee" | "status";
+type SortField =
+  | "created"
+  | "updated"
+  | "priority"
+  | "risk"
+  | "level"
+  | "assignee"
+  | "status";
 type SortDir = "asc" | "desc";
+
+type DateRange = "all" | "today" | "week" | "month";
+type TriState = "all" | "yes" | "no";
 
 type Filters = {
   search: string;
   status: string; // "all" | open | pending | resolved | closed
   priority: string; // "all" | low | medium | high | urgent
+  riskLevel: string; // "all" | low | medium | high | critical
   supportLevel: string; // "all" | "1" | "2" | "3"
   assigneeId: string; // "all" | "unassigned" | numeric id
+  category: string; // "all" | category name
+  slaStatus: string; // "all" | "on_track" | "breached"
+  hasRootCause: TriState;
+  hasResolution: TriState;
+  createdRange: DateRange;
+  updatedRange: DateRange;
 };
 
 const DEFAULT_FILTERS: Filters = {
   search: "",
   status: "all",
   priority: "all",
+  riskLevel: "all",
   supportLevel: "all",
   assigneeId: "all",
+  category: "all",
+  slaStatus: "all",
+  hasRootCause: "all",
+  hasResolution: "all",
+  createdRange: "all",
+  updatedRange: "all",
 };
 
 const PRIORITY_RANK: Record<string, number> = {
@@ -104,6 +129,33 @@ const PRIORITY_RANK: Record<string, number> = {
   medium: 2,
   low: 1,
 };
+
+const RISK_RANK: Record<string, number> = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+function rangeToAfter(range: DateRange): string | undefined {
+  const now = new Date();
+  if (range === "today") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    return start.toISOString();
+  }
+  if (range === "week") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 7);
+    return d.toISOString();
+  }
+  if (range === "month") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 30);
+    return d.toISOString();
+  }
+  return undefined;
+}
 
 export default function Tickets() {
   const { data: session } = useGetSession();
@@ -119,6 +171,7 @@ export default function Tickets() {
 
   const { data: agents } = useListAgents();
   const { data: views } = useListTicketViews();
+  const { data: riskRules } = useListRiskRules();
   const createView = useCreateTicketView();
   const updateView = useUpdateTicketView();
   const deleteView = useDeleteTicketView();
@@ -137,7 +190,6 @@ export default function Tickets() {
     }
   }, [deptSlug, session, departments, setLocation]);
 
-  const currentBoardSlug: string = deptSlug ?? "all";
   async function handleChangeBoard(value: string) {
     if (value === "all") {
       setLocation("/tickets");
@@ -154,7 +206,6 @@ export default function Tickets() {
       queryKey: getGetSessionQueryKey(),
     });
   }
-  const defaultBoardSlug: string = session?.defaultTicketBoard ?? "all";
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [sort, setSort] = useState<{ field: SortField; dir: SortDir }>({
@@ -169,9 +220,10 @@ export default function Tickets() {
 
   // Filters popover state
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<
-    "status" | "priority" | "supportLevel" | "assigneeId" | null
-  >("status");
+  type FilterKey = Exclude<keyof Filters, "search">;
+  const [activeCategory, setActiveCategory] = useState<FilterKey | null>(
+    "status",
+  );
   const [optionSearch, setOptionSearch] = useState("");
 
   // Board / Views menus
@@ -205,6 +257,7 @@ export default function Tickets() {
       search: c.search ?? "",
       status: c.status ?? "all",
       priority: c.priority ?? "all",
+      riskLevel: c.riskLevel ?? "all",
       supportLevel:
         c.supportLevel === 1 || c.supportLevel === 2 || c.supportLevel === 3
           ? String(c.supportLevel)
@@ -214,6 +267,22 @@ export default function Tickets() {
         : c.assigneeId == null
           ? "all"
           : String(c.assigneeId),
+      category: c.category ?? "all",
+      slaStatus: c.slaStatus ?? "all",
+      hasRootCause:
+        c.hasRootCause === true
+          ? "yes"
+          : c.hasRootCause === false
+            ? "no"
+            : "all",
+      hasResolution:
+        c.hasResolution === true
+          ? "yes"
+          : c.hasResolution === false
+            ? "no"
+            : "all",
+      createdRange: (c.createdRange as DateRange) ?? "all",
+      updatedRange: (c.updatedRange as DateRange) ?? "all",
     });
     setActiveViewId(viewId);
   }
@@ -234,6 +303,14 @@ export default function Tickets() {
       filters.priority === "all"
         ? undefined
         : (filters.priority as "low" | "medium" | "high" | "urgent"),
+    riskLevel:
+      filters.riskLevel === "all"
+        ? undefined
+        : (filters.riskLevel as
+            | "low"
+            | "medium"
+            | "high"
+            | "critical"),
     supportLevel:
       filters.supportLevel === "all"
         ? undefined
@@ -243,6 +320,21 @@ export default function Tickets() {
         ? undefined
         : Number(filters.assigneeId),
     unassigned: filters.assigneeId === "unassigned" ? true : undefined,
+    category: filters.category === "all" ? undefined : filters.category,
+    slaStatus:
+      filters.slaStatus === "all"
+        ? undefined
+        : (filters.slaStatus as "on_track" | "breached"),
+    hasRootCause:
+      filters.hasRootCause === "all"
+        ? undefined
+        : filters.hasRootCause === "yes",
+    hasResolution:
+      filters.hasResolution === "all"
+        ? undefined
+        : filters.hasResolution === "yes",
+    createdAfter: rangeToAfter(filters.createdRange),
+    updatedAfter: rangeToAfter(filters.updatedRange),
   });
 
   const sortedTickets = useMemo(() => {
@@ -256,6 +348,11 @@ export default function Tickets() {
               (PRIORITY_RANK[b.priority] ?? 0)) *
             dir
           );
+        case "risk":
+          return (
+            ((RISK_RANK[a.riskLevel] ?? 0) - (RISK_RANK[b.riskLevel] ?? 0)) *
+            dir
+          );
         case "level":
           return ((a.supportLevel ?? 1) - (b.supportLevel ?? 1)) * dir;
         case "assignee":
@@ -264,6 +361,12 @@ export default function Tickets() {
           );
         case "status":
           return a.status.localeCompare(b.status) * dir;
+        case "updated":
+          return (
+            (new Date(a.updatedAt).getTime() -
+              new Date(b.updatedAt).getTime()) *
+            dir
+          );
         case "created":
         default:
           return (
@@ -282,26 +385,26 @@ export default function Tickets() {
       total: t.length,
       open: t.filter((x) => x.status === "open").length,
       pending: t.filter((x) => x.status === "pending").length,
-      breached: t.filter((x) => x.slaBreached).length,
+      breached: t.filter((x) => x.slaStatus === "breached").length,
     };
   }, [tickets]);
 
   const activeView = views?.find((v) => v.id === activeViewId) ?? null;
-  const filtersDirty =
-    filters.search !== DEFAULT_FILTERS.search ||
-    filters.status !== DEFAULT_FILTERS.status ||
-    filters.priority !== DEFAULT_FILTERS.priority ||
-    filters.supportLevel !== DEFAULT_FILTERS.supportLevel ||
-    filters.assigneeId !== DEFAULT_FILTERS.assigneeId;
 
   // ────────────────────────────────────────────────────────────────────
   // Filter metadata (categories shown in the Filters panel)
   // ────────────────────────────────────────────────────────────────────
-  type FilterKey = Exclude<keyof Filters, "search">;
   const FILTER_CATEGORIES: { key: FilterKey; label: string }[] = [
     { key: "status", label: "Status" },
     { key: "priority", label: "Priority" },
+    { key: "riskLevel", label: "Risk Level" },
     { key: "supportLevel", label: "Support Level" },
+    { key: "category", label: "Category" },
+    { key: "slaStatus", label: "SLA" },
+    { key: "hasRootCause", label: "Root Cause" },
+    { key: "hasResolution", label: "Resolution" },
+    { key: "createdRange", label: "Created Date" },
+    { key: "updatedRange", label: "Last Update Date" },
     { key: "assigneeId", label: "Assignee" },
   ];
 
@@ -309,6 +412,17 @@ export default function Tickets() {
     const a = agents?.find((x) => x.id === id);
     return a?.name ?? `Agent #${id}`;
   }
+
+  // Categories for the Category filter come from the union of configured risk
+  // rules and any categories present in the currently-loaded ticket list.
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    (riskRules ?? []).forEach((r) => set.add(r.category));
+    (tickets ?? []).forEach((t) => {
+      if (t.category) set.add(t.category);
+    });
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [riskRules, tickets]);
 
   function optionsForCategory(
     key: FilterKey,
@@ -328,6 +442,13 @@ export default function Tickets() {
           { value: "medium", label: "Medium" },
           { value: "low", label: "Low" },
         ];
+      case "riskLevel":
+        return [
+          { value: "critical", label: "Critical" },
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ];
       case "supportLevel":
         return [
           { value: "1", label: "L1" },
@@ -342,6 +463,26 @@ export default function Tickets() {
             label: a.name,
           })),
         ];
+      case "category":
+        return categoryOptions.map((c) => ({ value: c, label: c }));
+      case "slaStatus":
+        return [
+          { value: "on_track", label: "On track" },
+          { value: "breached", label: "Breached" },
+        ];
+      case "hasRootCause":
+      case "hasResolution":
+        return [
+          { value: "yes", label: "Recorded" },
+          { value: "no", label: "Missing" },
+        ];
+      case "createdRange":
+      case "updatedRange":
+        return [
+          { value: "today", label: "Today" },
+          { value: "week", label: "Last 7 days" },
+          { value: "month", label: "Last 30 days" },
+        ];
     }
   }
 
@@ -349,6 +490,7 @@ export default function Tickets() {
     if (key === "assigneeId" && value !== "unassigned" && value !== "all") {
       return agentNameById(Number(value));
     }
+    if (key === "category" && value !== "all") return value;
     const opt = optionsForCategory(key).find((o) => o.value === value);
     return opt?.label ?? value;
   }
@@ -358,8 +500,11 @@ export default function Tickets() {
   ).map((c) => ({
     key: c.key,
     categoryLabel: c.label,
-    valueLabel: labelForFilterValue(c.key, filters[c.key]),
+    valueLabel: labelForFilterValue(c.key, filters[c.key] as string),
   }));
+
+  const filtersDirty =
+    activeFilterChips.length > 0 || filters.search !== DEFAULT_FILTERS.search;
 
   const activeFilterCount = activeFilterChips.length;
 
@@ -370,8 +515,12 @@ export default function Tickets() {
   function buildConfigFromFilters() {
     return {
       search: filters.search ? filters.search : null,
-      status: filters.status === "all" ? null : (filters.status as any),
-      priority: filters.priority === "all" ? null : (filters.priority as any),
+      status:
+        filters.status === "all" ? null : (filters.status as never),
+      priority:
+        filters.priority === "all" ? null : (filters.priority as never),
+      riskLevel:
+        filters.riskLevel === "all" ? null : (filters.riskLevel as never),
       supportLevel:
         filters.supportLevel === "all"
           ? null
@@ -381,6 +530,25 @@ export default function Tickets() {
           ? null
           : Number(filters.assigneeId),
       unassigned: filters.assigneeId === "unassigned" ? true : null,
+      category: filters.category === "all" ? null : filters.category,
+      slaStatus:
+        filters.slaStatus === "all" ? null : (filters.slaStatus as never),
+      hasRootCause:
+        filters.hasRootCause === "all"
+          ? null
+          : filters.hasRootCause === "yes",
+      hasResolution:
+        filters.hasResolution === "all"
+          ? null
+          : filters.hasResolution === "yes",
+      createdRange:
+        filters.createdRange === "all"
+          ? null
+          : (filters.createdRange as never),
+      updatedRange:
+        filters.updatedRange === "all"
+          ? null
+          : (filters.updatedRange as never),
       departmentId: dept?.id ?? null,
     };
   }
@@ -453,9 +621,7 @@ export default function Tickets() {
                 data-testid="board-option-all"
               >
                 <span>All Tickets</span>
-                {!deptSlug && (
-                  <Check className="h-4 w-4 text-emerald-500" />
-                )}
+                {!deptSlug && <Check className="h-4 w-4 text-emerald-500" />}
               </DropdownMenuItem>
               {(departments ?? []).map((d) => (
                 <DropdownMenuItem
@@ -511,7 +677,6 @@ export default function Tickets() {
               <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
                 Views
               </DropdownMenuLabel>
-              {/* Default (no view applied) */}
               <DropdownMenuItem
                 onSelect={(e) => {
                   e.preventDefault();
@@ -668,12 +833,12 @@ export default function Tickets() {
           </PopoverTrigger>
           <PopoverContent
             align="start"
-            className="p-0 w-[520px]"
+            className="p-0 w-[560px]"
             data-testid="popover-filters"
           >
-            <div className="flex h-[340px]">
+            <div className="flex h-[380px]">
               {/* Left: categories */}
-              <div className="w-[180px] border-r bg-muted/30 py-2 overflow-y-auto">
+              <div className="w-[200px] border-r bg-muted/30 py-2 overflow-y-auto">
                 {FILTER_CATEGORIES.map((cat) => {
                   const isActive = activeCategory === cat.key;
                   const isSet = filters[cat.key] !== DEFAULT_FILTERS[cat.key];
@@ -727,7 +892,8 @@ export default function Tickets() {
                             .includes(optionSearch.toLowerCase()),
                         )
                         .map((opt) => {
-                          const checked = filters[activeCategory] === opt.value;
+                          const checked =
+                            (filters[activeCategory] as string) === opt.value;
                           return (
                             <label
                               key={opt.value}
@@ -739,9 +905,11 @@ export default function Tickets() {
                                 onCheckedChange={(v) => {
                                   setFilter(
                                     activeCategory,
-                                    v
+                                    (v
                                       ? opt.value
-                                      : DEFAULT_FILTERS[activeCategory],
+                                      : DEFAULT_FILTERS[
+                                          activeCategory
+                                        ]) as never,
                                   );
                                 }}
                                 className="h-4 w-4"
@@ -750,6 +918,11 @@ export default function Tickets() {
                             </label>
                           );
                         })}
+                      {optionsForCategory(activeCategory).length === 0 && (
+                        <p className="px-3 py-3 text-sm text-muted-foreground">
+                          No options available.
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
@@ -806,7 +979,9 @@ export default function Tickets() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="created">Sort: Created</SelectItem>
+              <SelectItem value="updated">Sort: Updated</SelectItem>
               <SelectItem value="priority">Sort: Priority</SelectItem>
+              <SelectItem value="risk">Sort: Risk</SelectItem>
               <SelectItem value="level">Sort: Level</SelectItem>
               <SelectItem value="assignee">Sort: Assignee</SelectItem>
               <SelectItem value="status">Sort: Status</SelectItem>
@@ -892,22 +1067,24 @@ export default function Tickets() {
           <Table>
             <TableHeader className="bg-muted/40 sticky top-0 z-10">
               <TableRow>
-                <TableHead className="w-[110px]">ID</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead className="w-[140px]">Department</TableHead>
-                <TableHead className="w-[110px]">Priority</TableHead>
-                <TableHead className="w-[80px]">Level</TableHead>
+                <TableHead className="w-[100px]">ID</TableHead>
+                <TableHead className="w-[100px]">Priority</TableHead>
+                <TableHead className="w-[110px]">Risk Level</TableHead>
                 <TableHead className="w-[120px]">Status</TableHead>
-                <TableHead className="w-[160px]">Assignee</TableHead>
-                <TableHead className="w-[120px]">SLA</TableHead>
-                <TableHead className="w-[120px]">Created</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead className="w-[160px]">User</TableHead>
+                <TableHead className="w-[80px]">Level</TableHead>
+                <TableHead className="w-[140px]">Category</TableHead>
+                <TableHead className="w-[110px]">Created</TableHead>
+                <TableHead className="w-[110px]">Last Update</TableHead>
+                <TableHead className="w-[110px]">SLA</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={11}
                     className="h-24 text-center text-muted-foreground"
                   >
                     Loading tickets…
@@ -916,7 +1093,7 @@ export default function Tickets() {
               ) : sortedTickets.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={11}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No tickets found.
@@ -938,20 +1115,6 @@ export default function Tickets() {
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <Link href={`/tickets/${ticket.id}`} className="block">
-                        <div className="font-medium text-foreground truncate max-w-[420px]">
-                          {ticket.title}
-                        </div>
-                        <div className="text-xs text-muted-foreground capitalize">
-                          {ticket.type}
-                          {ticket.location ? ` · ${ticket.location}` : ""}
-                        </div>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {ticket.departmentName}
-                    </TableCell>
-                    <TableCell>
                       <Badge
                         variant="secondary"
                         className={priorityColor(ticket.priority)}
@@ -960,7 +1123,7 @@ export default function Tickets() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <LevelBadge level={ticket.supportLevel ?? 1} />
+                      <RiskBadge level={ticket.riskLevel} />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 capitalize">
@@ -971,25 +1134,47 @@ export default function Tickets() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {ticket.assigneeName ? (
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-[10px]">
-                              {initials(ticket.assigneeName)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm truncate max-w-[120px]">
-                            {ticket.assigneeName}
-                          </span>
+                      <Link href={`/tickets/${ticket.id}`} className="block">
+                        <div className="font-medium text-foreground truncate max-w-[420px]">
+                          {ticket.title}
                         </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground/70">
-                          Unassigned
-                        </span>
-                      )}
+                        <div className="text-xs text-muted-foreground capitalize">
+                          {ticket.type}
+                          {ticket.location ? ` · ${ticket.location}` : ""}
+                          {ticket.departmentName
+                            ? ` · ${ticket.departmentName}`
+                            : ""}
+                        </div>
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      {ticket.slaBreached ? (
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-[10px]">
+                            {initials(ticket.reporterName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm truncate max-w-[120px]">
+                          {ticket.reporterName}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <LevelBadge level={ticket.supportLevel ?? 1} />
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {ticket.category ?? (
+                        <span className="text-muted-foreground/50">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(new Date(ticket.createdAt), "MMM d")}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(new Date(ticket.updatedAt), "MMM d")}
+                    </TableCell>
+                    <TableCell>
+                      {ticket.slaStatus === "breached" ? (
                         <Badge
                           variant="secondary"
                           className="bg-amber-100 text-amber-800"
@@ -1002,9 +1187,6 @@ export default function Tickets() {
                           On track
                         </span>
                       )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(ticket.createdAt), "MMM d")}
                     </TableCell>
                   </TableRow>
                 ))
@@ -1042,8 +1224,7 @@ export default function Tickets() {
               Make this my default view
             </label>
             <p className="text-xs text-muted-foreground">
-              Saves your current search, status, priority, level, and assignee
-              filters.
+              Saves your search and all filter selections.
             </p>
           </div>
           <DialogFooter>
@@ -1077,6 +1258,28 @@ function priorityColor(priority: string): string {
     default:
       return "bg-muted text-muted-foreground";
   }
+}
+
+function RiskBadge({ level }: { level: string | null | undefined }) {
+  const v = (level ?? "low").toLowerCase();
+  const tone =
+    v === "critical"
+      ? "bg-red-100 text-red-800"
+      : v === "high"
+        ? "bg-orange-100 text-orange-800"
+        : v === "medium"
+          ? "bg-yellow-100 text-yellow-800"
+          : "bg-muted text-muted-foreground";
+  const label = v.charAt(0).toUpperCase() + v.slice(1);
+  return (
+    <Badge
+      variant="secondary"
+      className={`${tone} font-medium`}
+      data-testid={`badge-risk-${v}`}
+    >
+      {label}
+    </Badge>
+  );
 }
 
 function LevelBadge({ level }: { level: number }) {

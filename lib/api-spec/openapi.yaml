@@ -297,6 +297,69 @@ paths:
         "204":
           description: Removed
 
+  /risk-rules:
+    get:
+      operationId: listRiskRules
+      tags: [settings]
+      summary: List category → default risk-level rules used to seed new tickets
+      responses:
+        "200":
+          description: Risk rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RiskRule" }
+    post:
+      operationId: createRiskRule
+      tags: [settings]
+      summary: Create a category risk-level rule (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRiskRuleInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RiskRule" }
+
+  /risk-rules/{id}:
+    patch:
+      operationId: updateRiskRule
+      tags: [settings]
+      summary: Update a risk-level rule (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRiskRuleInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RiskRule" }
+    delete:
+      operationId: deleteRiskRule
+      tags: [settings]
+      summary: Delete a risk-level rule (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Removed
+
   /tickets:
     get:
       operationId: listTickets
@@ -325,6 +388,37 @@ paths:
         - in: query
           name: unassigned
           schema: { type: boolean }
+        - in: query
+          name: riskLevel
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - in: query
+          name: category
+          schema: { type: string }
+        - in: query
+          name: slaStatus
+          schema:
+            type: string
+            enum: [on_track, breached]
+        - in: query
+          name: hasRootCause
+          schema: { type: boolean }
+        - in: query
+          name: hasResolution
+          schema: { type: boolean }
+        - in: query
+          name: createdAfter
+          schema: { type: string, format: date-time }
+        - in: query
+          name: createdBefore
+          schema: { type: string, format: date-time }
+        - in: query
+          name: updatedAfter
+          schema: { type: string, format: date-time }
+        - in: query
+          name: updatedBefore
+          schema: { type: string, format: date-time }
         - in: query
           name: q
           schema: { type: string }
@@ -1455,7 +1549,17 @@ components:
           type: ["string", "null"]
         category:
           type: ["string", "null"]
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        rootCause:
+          type: ["string", "null"]
+        resolution:
+          type: ["string", "null"]
         slaBreached: { type: boolean }
+        slaStatus:
+          type: string
+          enum: [on_track, breached]
         responseDueAt:
           type: ["string", "null"]
           format: date-time
@@ -1488,6 +1592,8 @@ components:
         - reporterId
         - reporterName
         - slaBreached
+        - slaStatus
+        - riskLevel
         - createdAt
         - updatedAt
 
@@ -1541,6 +1647,13 @@ components:
           type: ["string", "null"]
         category:
           type: ["string", "null"]
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        rootCause:
+          type: ["string", "null"]
+        resolution:
+          type: ["string", "null"]
       required: [title, description, type, priority, source, departmentId, reporterId]
 
     UpdateTicketInput:
@@ -1565,6 +1678,13 @@ components:
           type: ["string", "null"]
         category:
           type: ["string", "null"]
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        rootCause:
+          type: ["string", "null"]
+        resolution:
+          type: ["string", "null"]
 
     TicketViewConfig:
       type: object
@@ -1586,6 +1706,57 @@ components:
           type: ["boolean", "null"]
         departmentId:
           type: ["integer", "null"]
+        riskLevel:
+          type: ["string", "null"]
+          enum: [low, medium, high, critical, null]
+        category:
+          type: ["string", "null"]
+        slaStatus:
+          type: ["string", "null"]
+          enum: [on_track, breached, null]
+        hasRootCause:
+          type: ["boolean", "null"]
+        hasResolution:
+          type: ["boolean", "null"]
+        createdRange:
+          type: ["string", "null"]
+          enum: [today, week, month, all, null]
+        updatedRange:
+          type: ["string", "null"]
+          enum: [today, week, month, all, null]
+
+    RiskRule:
+      type: object
+      properties:
+        id: { type: integer }
+        category: { type: string }
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, category, riskLevel, createdAt, updatedAt]
+
+    CreateRiskRuleInput:
+      type: object
+      properties:
+        category: { type: string }
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+      required: [category, riskLevel]
+
+    UpdateRiskRuleInput:
+      type: object
+      properties:
+        category: { type: string }
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
 
     TicketView:
       type: object

@@ -25,6 +25,12 @@ export const ticketsTable = pgTable("tickets", {
   location: text("location"),
   team: text("team"),
   category: text("category"),
+  // low | medium | high | critical — security-first ITSM risk dimension,
+  // stored independently of business priority. Default "low" lets existing
+  // rows backfill without surprises.
+  riskLevel: text("risk_level").notNull().default("low"),
+  rootCause: text("root_cause"),
+  resolution: text("resolution"),
   slaBreached: boolean("sla_breached").notNull().default(false),
   responseDueAt: timestamp("response_due_at", { withTimezone: true }),
   resolutionDueAt: timestamp("resolution_due_at", { withTimezone: true }),

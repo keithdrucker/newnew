@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ListTicketsPriority } from "./listTicketsPriority";
+import type { ListTicketsRiskLevel } from "./listTicketsRiskLevel";
+import type { ListTicketsSlaStatus } from "./listTicketsSlaStatus";
 import type { ListTicketsStatus } from "./listTicketsStatus";
 import type { ListTicketsSupportLevel } from "./listTicketsSupportLevel";
 
@@ -16,5 +18,14 @@ export type ListTicketsParams = {
   supportLevel?: ListTicketsSupportLevel;
   assigneeId?: number;
   unassigned?: boolean;
+  riskLevel?: ListTicketsRiskLevel;
+  category?: string;
+  slaStatus?: ListTicketsSlaStatus;
+  hasRootCause?: boolean;
+  hasResolution?: boolean;
+  createdAfter?: Date;
+  createdBefore?: Date;
+  updatedAfter?: Date;
+  updatedBefore?: Date;
   q?: string;
 };

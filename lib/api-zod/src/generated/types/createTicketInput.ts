@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateTicketInputPriority } from "./createTicketInputPriority";
+import type { CreateTicketInputRiskLevel } from "./createTicketInputRiskLevel";
 import type { CreateTicketInputSource } from "./createTicketInputSource";
 import type { CreateTicketInputSupportLevel } from "./createTicketInputSupportLevel";
 import type { CreateTicketInputType } from "./createTicketInputType";
@@ -27,4 +28,9 @@ export interface CreateTicketInput {
   team?: string | null;
   /** @nullable */
   category?: string | null;
+  riskLevel?: CreateTicketInputRiskLevel;
+  /** @nullable */
+  rootCause?: string | null;
+  /** @nullable */
+  resolution?: string | null;
 }

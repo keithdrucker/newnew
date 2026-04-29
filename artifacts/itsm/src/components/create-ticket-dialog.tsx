@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 
 type TicketType = "incident" | "request";
 type TicketPriority = "low" | "medium" | "high" | "urgent";
+type TicketRiskLevel = "low" | "medium" | "high" | "critical";
 type TicketSource = "portal" | "email" | "phone" | "chat" | "walk_in";
 type SupportLevel = 1 | 2 | 3;
 
@@ -72,12 +73,18 @@ export function CreateTicketDialog({
   const [description, setDescription] = useState("");
   const [type, setType] = useState<TicketType>("incident");
   const [priority, setPriority] = useState<TicketPriority>("medium");
+  // Risk level is the security/impact dimension (separate from business priority).
+  // The "auto" sentinel means: don't send a value, so the backend will look up
+  // the matching risk-rule for the chosen category. If no rule matches, the
+  // backend stores `null` (which renders as Low).
+  const [riskLevel, setRiskLevel] = useState<TicketRiskLevel | "auto">("auto");
   const [source, setSource] = useState<TicketSource>("portal");
   const [supportLevel, setSupportLevel] = useState<SupportLevel>(1);
   const [departmentId, setDepartmentId] = useState<number>(defaultDeptId);
   const [assigneeId, setAssigneeId] = useState<number | null>(null);
   const [location, setLocation] = useState("");
   const [team, setTeam] = useState("");
+  const [category, setCategory] = useState("");
 
   // When the dialog opens or defaults change, sync the department selection.
   useEffect(() => {
@@ -93,11 +100,13 @@ export function CreateTicketDialog({
       setDescription("");
       setType("incident");
       setPriority("medium");
+      setRiskLevel("auto");
       setSource("portal");
       setSupportLevel(1);
       setAssigneeId(null);
       setLocation("");
       setTeam("");
+      setCategory("");
     }
   }, [open]);
 
@@ -127,6 +136,8 @@ export function CreateTicketDialog({
           assigneeId: assigneeId ?? null,
           location: location.trim() ? location.trim() : null,
           team: team.trim() ? team.trim() : null,
+          category: category.trim() ? category.trim() : null,
+          ...(riskLevel === "auto" ? {} : { riskLevel }),
         },
       });
 
@@ -327,6 +338,38 @@ export function CreateTicketDialog({
                 value={team}
                 onChange={(e) => setTeam(e.target.value)}
                 data-testid="input-create-ticket-team"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Risk level</Label>
+              <Select
+                value={riskLevel}
+                onValueChange={(v) =>
+                  setRiskLevel(v as TicketRiskLevel | "auto")
+                }
+              >
+                <SelectTrigger data-testid="select-create-ticket-risk-level">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto from category</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ct-category">Category</Label>
+              <Input
+                id="ct-category"
+                placeholder="e.g. Security Incident, Access Request"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                data-testid="input-create-ticket-category"
               />
             </div>
           </div>

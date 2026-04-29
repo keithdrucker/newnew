@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UpdateTicketInputPriority } from "./updateTicketInputPriority";
+import type { UpdateTicketInputRiskLevel } from "./updateTicketInputRiskLevel";
 import type { UpdateTicketInputStatus } from "./updateTicketInputStatus";
 import type { UpdateTicketInputSupportLevel } from "./updateTicketInputSupportLevel";
 
@@ -23,4 +24,9 @@ export interface UpdateTicketInput {
   team?: string | null;
   /** @nullable */
   category?: string | null;
+  riskLevel?: UpdateTicketInputRiskLevel;
+  /** @nullable */
+  rootCause?: string | null;
+  /** @nullable */
+  resolution?: string | null;
 }

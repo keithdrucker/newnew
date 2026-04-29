@@ -18,6 +18,7 @@ import Applications from "@/pages/applications";
 import Vendors from "@/pages/vendors";
 import Projects from "@/pages/projects";
 import Settings from "@/pages/settings";
+import SettingsRiskRules from "@/pages/settings-risk-rules";
 import BoardSettings from "@/pages/board-settings";
 import {
   KnowledgeBaseList,
@@ -49,6 +50,7 @@ function Router() {
         <Route path="/projects" component={Projects} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />
+        <Route path="/settings/risk-rules" component={SettingsRiskRules} />
         <Route path="/settings/boards/:slug" component={BoardSettings} />
         <Route component={NotFound} />
       </Switch>

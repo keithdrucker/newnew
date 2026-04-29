@@ -5,9 +5,13 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { TicketViewConfigCreatedRange } from "./ticketViewConfigCreatedRange";
 import type { TicketViewConfigPriority } from "./ticketViewConfigPriority";
+import type { TicketViewConfigRiskLevel } from "./ticketViewConfigRiskLevel";
+import type { TicketViewConfigSlaStatus } from "./ticketViewConfigSlaStatus";
 import type { TicketViewConfigStatus } from "./ticketViewConfigStatus";
 import type { TicketViewConfigSupportLevel } from "./ticketViewConfigSupportLevel";
+import type { TicketViewConfigUpdatedRange } from "./ticketViewConfigUpdatedRange";
 
 export interface TicketViewConfig {
   /** @nullable */
@@ -24,4 +28,18 @@ export interface TicketViewConfig {
   unassigned?: boolean | null;
   /** @nullable */
   departmentId?: number | null;
+  /** @nullable */
+  riskLevel?: TicketViewConfigRiskLevel;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  slaStatus?: TicketViewConfigSlaStatus;
+  /** @nullable */
+  hasRootCause?: boolean | null;
+  /** @nullable */
+  hasResolution?: boolean | null;
+  /** @nullable */
+  createdRange?: TicketViewConfigCreatedRange;
+  /** @nullable */
+  updatedRange?: TicketViewConfigUpdatedRange;
 }

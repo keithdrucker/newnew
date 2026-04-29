@@ -13,6 +13,7 @@ import assetsRouter from "./assets";
 import applicationsRouter from "./applications";
 import vendorsRouter from "./vendors";
 import projectsRouter from "./projects";
+import riskRulesRouter from "./riskRules";
 import dashboardRouter from "./dashboard";
 
 const router: IRouter = Router();
@@ -31,6 +32,7 @@ router.use(assetsRouter);
 router.use(applicationsRouter);
 router.use(vendorsRouter);
 router.use(projectsRouter);
+router.use(riskRulesRouter);
 router.use(dashboardRouter);
 
 export default router;
