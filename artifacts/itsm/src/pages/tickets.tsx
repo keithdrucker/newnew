@@ -39,6 +39,7 @@ import {
   ChevronsUpDown,
   Clock,
   Columns3,
+  Download,
   Filter as FilterIcon,
   Inbox,
   MoreHorizontal,
@@ -1372,6 +1373,20 @@ export default function Tickets() {
 
         <div className="flex-1" />
 
+        {/* Export to CSV — exports the rows currently displayed in the
+            table (after filters + sort) using the user's chosen visible
+            columns, in their chosen order. */}
+        <Button
+          variant="outline"
+          className="h-9 gap-2"
+          data-testid="button-export-csv"
+          disabled={(sortedTickets?.length ?? 0) === 0}
+          onClick={() => exportTicketsToCsv(sortedTickets, visibleColumns)}
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
+
         {/* Manage columns */}
         <Popover>
           <PopoverTrigger asChild>
@@ -1909,6 +1924,88 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
         />
       );
   }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// CSV export
+// ────────────────────────────────────────────────────────────────────
+// Plain-text value for a given column, mirroring what the user sees in
+// the table cell but stripped of all JSX/markup. Used by the CSV
+// exporter so the downloaded file matches the on-screen view.
+function csvValueForColumn(key: ColumnKey, ticket: Ticket): string {
+  switch (key) {
+    case "id":
+      return ticket.ticketKey ?? String(ticket.id);
+    case "priority":
+      return ticket.priority ?? "";
+    case "riskLevel":
+      return ticket.riskLevel ?? "";
+    case "status":
+      return STATUS_LABEL[ticket.status] ?? ticket.status ?? "";
+    case "title":
+      return ticket.title ?? "";
+    case "user":
+      return ticket.reporterName ?? "";
+    case "supportLevel":
+      return ticket.supportLevel != null ? `L${ticket.supportLevel}` : "";
+    case "agent":
+      return ticket.assigneeName ?? "Unassigned";
+    case "category":
+      return ticket.category ?? "";
+    case "created":
+      return ticket.createdAt
+        ? format(new Date(ticket.createdAt), "yyyy-MM-dd HH:mm")
+        : "";
+    case "updated":
+      return ticket.updatedAt
+        ? format(new Date(ticket.updatedAt), "yyyy-MM-dd HH:mm")
+        : "";
+    case "sla": {
+      // Capture phase + status so the CSV is self-describing.
+      const phase = ticket.slaPhase ?? "none";
+      const paused = ticket.slaPaused ? " (paused)" : "";
+      const status = ticket.slaStatus ?? "on_track";
+      return `${status}:${phase}${paused}`;
+    }
+    default:
+      return "";
+  }
+}
+
+// RFC 4180 cell escaping: wrap in quotes when the value contains a
+// comma, quote, or newline; double up any embedded quotes.
+function csvEscape(raw: string): string {
+  if (raw == null) return "";
+  const s = String(raw);
+  if (/[",\r\n]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function exportTicketsToCsv(
+  tickets: Ticket[],
+  visibleColumns: ColumnKey[],
+): void {
+  if (!tickets.length) return;
+  const headers = visibleColumns.map(
+    (k) => COLUMN_DEFS_META[k]?.label ?? k,
+  );
+  const rows = tickets.map((t) =>
+    visibleColumns.map((k) => csvEscape(csvValueForColumn(k, t))).join(","),
+  );
+  // Prepend a UTF-8 BOM so Excel opens accented characters correctly.
+  const csv =
+    "\uFEFF" + [headers.map(csvEscape).join(","), ...rows].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tickets-${format(new Date(), "yyyy-MM-dd")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // Silence unused-import warnings for icons only used as visual cues
