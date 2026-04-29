@@ -14,6 +14,8 @@ import {
   Layers,
   KanbanSquare,
   Clock,
+  ListChecks,
+  Lightbulb,
 } from "lucide-react";
 import sidekickLogo from "@assets/sidekick_logo_dark.png";
 import {
@@ -55,13 +57,40 @@ type NavItem = {
   testId?: string;
 };
 
-const WORKSPACE: NavItem[] = [
+// Top of the Workspace section — Dashboard sits above the two thematic
+// sub-groups (Day-to-Day Operations / Improvements).
+const WORKSPACE_TOP: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+];
+
+// Reactive / operational work users do every day.
+const DAY_TO_DAY: NavItem[] = [
   {
     href: "/tickets",
     label: "Tickets",
     icon: Ticket,
     matchPrefix: "/tickets",
+  },
+  {
+    href: "/operational-tasks",
+    label: "Operational Tasks",
+    icon: ListChecks,
+    matchPrefix: "/operational-tasks",
+    endUserHidden: true,
+    testId: "nav-operational-tasks",
+  },
+];
+
+// Proactive improvement work — ideas (Initiatives) graduate into execution
+// (Projects). Both hidden from end users.
+const IMPROVEMENTS: NavItem[] = [
+  {
+    href: "/initiatives",
+    label: "Initiatives",
+    icon: Lightbulb,
+    matchPrefix: "/initiatives",
+    endUserHidden: true,
+    testId: "nav-initiatives",
   },
   {
     href: "/projects",
@@ -70,6 +99,11 @@ const WORKSPACE: NavItem[] = [
     matchPrefix: "/projects",
     endUserHidden: true,
   },
+];
+
+// Bottom of the Workspace section — operational tools that don't belong
+// inside either sub-group.
+const WORKSPACE_BOTTOM: NavItem[] = [
   {
     href: "/knowledge-base",
     label: "Knowledge",
@@ -80,7 +114,7 @@ const WORKSPACE: NavItem[] = [
   // time and shouldn't see internal effort).
   {
     href: "/timesheet",
-    label: "Timesheet",
+    label: "Timesheets",
     icon: Clock,
     matchPrefix: "/timesheet",
     endUserHidden: true,
@@ -143,28 +177,75 @@ export function SideNav({ session }: { session: Session | null }) {
 
       <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-5">
         <NavSection title="Workspace">
-          {WORKSPACE.map((item) => {
+          {WORKSPACE_TOP.map((item) => (
+            <NavRow
+              key={item.href}
+              item={item}
+              location={location}
+              session={session}
+            />
+          ))}
+
+          <NavSubGroup
+            title="Day-to-Day Operations"
+            session={session}
+            items={DAY_TO_DAY}
+          >
+            {DAY_TO_DAY.map((item) => {
+              if (item.endUserHidden && session?.role === "end_user")
+                return null;
+              if (item.href === "/tickets") {
+                return (
+                  <TicketsNavItem
+                    key={item.href}
+                    item={item}
+                    location={location}
+                    expanded={showTicketsTree}
+                  />
+                );
+              }
+              return (
+                <NavRow
+                  key={item.href}
+                  item={item}
+                  location={location}
+                  session={session}
+                />
+              );
+            })}
+          </NavSubGroup>
+
+          <NavSubGroup
+            title="Improvements"
+            session={session}
+            items={IMPROVEMENTS}
+          >
+            {IMPROVEMENTS.map((item) => {
+              if (item.endUserHidden && session?.role === "end_user")
+                return null;
+              if (item.href === "/projects") {
+                return (
+                  <ProjectsNavItem
+                    key={item.href}
+                    item={item}
+                    location={location}
+                    expanded={showProjectsTree}
+                  />
+                );
+              }
+              return (
+                <NavRow
+                  key={item.href}
+                  item={item}
+                  location={location}
+                  session={session}
+                />
+              );
+            })}
+          </NavSubGroup>
+
+          {WORKSPACE_BOTTOM.map((item) => {
             if (item.endUserHidden && session?.role === "end_user") return null;
-            if (item.href === "/tickets") {
-              return (
-                <TicketsNavItem
-                  key={item.href}
-                  item={item}
-                  location={location}
-                  expanded={showTicketsTree}
-                />
-              );
-            }
-            if (item.href === "/projects") {
-              return (
-                <ProjectsNavItem
-                  key={item.href}
-                  item={item}
-                  location={location}
-                  expanded={showProjectsTree}
-                />
-              );
-            }
             return (
               <NavRow
                 key={item.href}
@@ -205,6 +286,42 @@ function NavSection({
   return (
     <div>
       <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
+        {title}
+      </p>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+// A thematic sub-group inside a NavSection (e.g. "Day-to-Day Operations"
+// inside "Workspace"). Renders a small uppercase heading above its items
+// and is suppressed entirely when no items are visible to the current
+// session — that way an end-user session that can't see Initiatives or
+// Operational Tasks doesn't get an empty "Improvements" header.
+function NavSubGroup({
+  title,
+  session,
+  items,
+  children,
+}: {
+  title: string;
+  session: Session | null;
+  items: NavItem[];
+  children: React.ReactNode;
+}) {
+  const visible = items.some((item) => {
+    if (item.endUserHidden && session?.role === "end_user") return false;
+    if (item.adminOnly && session?.role !== "admin") return false;
+    return true;
+  });
+  if (!visible) return null;
+
+  return (
+    <div className="pt-2">
+      <p
+        className="px-3 mb-1 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/35"
+        data-testid={`nav-subgroup-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+      >
         {title}
       </p>
       <div className="space-y-0.5">{children}</div>

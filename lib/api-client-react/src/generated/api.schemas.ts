@@ -1574,6 +1574,84 @@ export interface UpdateProjectInput {
   checklist?: ChecklistItem[];
 }
 
+export type InitiativeStatus =
+  (typeof InitiativeStatus)[keyof typeof InitiativeStatus];
+
+export const InitiativeStatus = {
+  backlog: "backlog",
+  under_review: "under_review",
+  approved: "approved",
+  rejected_deferred: "rejected_deferred",
+} as const;
+
+export interface Initiative {
+  id: number;
+  title: string;
+  description: string;
+  status: InitiativeStatus;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  departmentName?: string | null;
+  /** @nullable */
+  reporterId?: number | null;
+  /** @nullable */
+  reporterName?: string | null;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
+  prosCons: string;
+  roughCost: string;
+  expectedBenefit: string;
+  riskNotes: string;
+  decisionReason: string;
+  /** @nullable */
+  decidedAt?: string | null;
+  /** @nullable */
+  decidedById?: number | null;
+  /** @nullable */
+  decidedByName?: string | null;
+  /** @nullable */
+  createdProjectId?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateInitiativeInput {
+  /** @minLength 1 */
+  title: string;
+  description?: string;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  reporterId?: number | null;
+  /** @nullable */
+  assigneeId?: number | null;
+}
+
+/**
+ * All fields optional. To approve, set status="approved" (a project
+is created automatically). To reject/defer, set
+status="rejected_deferred" and supply decisionReason.
+
+ */
+export interface UpdateInitiativeInput {
+  /** @minLength 1 */
+  title?: string;
+  description?: string;
+  status?: InitiativeStatus;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  assigneeId?: number | null;
+  prosCons?: string;
+  roughCost?: string;
+  expectedBenefit?: string;
+  riskNotes?: string;
+  decisionReason?: string;
+}
+
 export type ListDepartmentsParams = {
   /**
  * When set to `accessible`, returns only departments the current user can see data for (their visible boards). Admins always receive all departments regardless of this flag.
@@ -1793,6 +1871,11 @@ export const ListProjectsStatus = {
   completed: "completed",
   archived: "archived",
 } as const;
+
+export type ListInitiativesParams = {
+  status?: InitiativeStatus;
+  departmentId?: number;
+};
 
 export type GetDashboardOverviewParams = {
   departmentId?: number;

@@ -55,11 +55,12 @@ Rules:
 - Never place Initiatives or Projects under Day-to-Day Operations.
 - Never place Knowledge or Timesheets under Administration.
 
-Note: as of this writing, the current side-nav (`artifacts/itsm/src/components/layout/side-nav.tsx`)
-still uses the flat pre-restructure layout (Tickets, Projects, Knowledge,
-Timesheet under Workspace; no subgroups; no Operational Tasks or
-Initiatives items). Migrating to the structure above is pending an
-explicit task and should align with workflow/data-model changes.
+As of April 2026, the side-nav (`artifacts/itsm/src/components/layout/side-nav.tsx`)
+implements the structure above via four ordered arrays — `WORKSPACE_TOP`
+(Dashboard), `DAY_TO_DAY` (Tickets, Operational Tasks), `IMPROVEMENTS`
+(Initiatives, Projects), `WORKSPACE_BOTTOM` (Knowledge, Timesheets) —
+rendered through a new `NavSubGroup` component that suppresses any
+sub-group whose visible items are empty (e.g. for `end_user`).
 
 # System Architecture
 

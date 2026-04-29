@@ -28,6 +28,8 @@ tags:
     description: Dashboard analytics endpoints
   - name: settings
     description: Department portal settings
+  - name: initiatives
+    description: Lightweight decision records — should we even do this work?
 paths:
   /healthz:
     get:
@@ -1268,6 +1270,94 @@ paths:
     delete:
       operationId: deleteProject
       tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
+  /initiatives:
+    get:
+      operationId: listInitiatives
+      tags: [initiatives]
+      summary: List initiatives, newest first.
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: "#/components/schemas/InitiativeStatus" }
+        - in: query
+          name: departmentId
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Initiatives
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Initiative" }
+    post:
+      operationId: createInitiative
+      tags: [initiatives]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateInitiativeInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Initiative" }
+
+  /initiatives/{id}:
+    get:
+      operationId: getInitiative
+      tags: [initiatives]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Initiative
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Initiative" }
+        "404": { description: Not found }
+    patch:
+      operationId: updateInitiative
+      tags: [initiatives]
+      summary: |
+        Update fields and/or transition status. Approving an initiative
+        atomically creates a Project and stamps createdProjectId on the
+        returned record. Terminal states (approved, rejected_deferred)
+        cannot be left — the server returns 409 if you try.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateInitiativeInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Initiative" }
+        "400": { description: Validation error (e.g. missing decisionReason on rejection) }
+        "409": { description: Cannot leave a terminal state }
+    delete:
+      operationId: deleteInitiative
+      tags: [initiatives]
       parameters:
         - in: path
           name: id
@@ -2848,3 +2938,72 @@ components:
         checklist:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
+
+    InitiativeStatus:
+      type: string
+      enum: [backlog, under_review, approved, rejected_deferred]
+
+    Initiative:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/InitiativeStatus" }
+        departmentId: { type: ["integer", "null"] }
+        departmentName: { type: ["string", "null"] }
+        reporterId: { type: ["integer", "null"] }
+        reporterName: { type: ["string", "null"] }
+        assigneeId: { type: ["integer", "null"] }
+        assigneeName: { type: ["string", "null"] }
+        prosCons: { type: string }
+        roughCost: { type: string }
+        expectedBenefit: { type: string }
+        riskNotes: { type: string }
+        decisionReason: { type: string }
+        decidedAt: { type: ["string", "null"], format: date-time }
+        decidedById: { type: ["integer", "null"] }
+        decidedByName: { type: ["string", "null"] }
+        createdProjectId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - title
+        - description
+        - status
+        - prosCons
+        - roughCost
+        - expectedBenefit
+        - riskNotes
+        - decisionReason
+        - createdAt
+        - updatedAt
+
+    CreateInitiativeInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        departmentId: { type: ["integer", "null"] }
+        reporterId: { type: ["integer", "null"] }
+        assigneeId: { type: ["integer", "null"] }
+      required: [title]
+
+    UpdateInitiativeInput:
+      type: object
+      description: |
+        All fields optional. To approve, set status="approved" (a project
+        is created automatically). To reject/defer, set
+        status="rejected_deferred" and supply decisionReason.
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/InitiativeStatus" }
+        departmentId: { type: ["integer", "null"] }
+        assigneeId: { type: ["integer", "null"] }
+        prosCons: { type: string }
+        roughCost: { type: string }
+        expectedBenefit: { type: string }
+        riskNotes: { type: string }
+        decisionReason: { type: string }

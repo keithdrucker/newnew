@@ -2261,6 +2261,150 @@ export const DeleteProjectParams = zod.object({
 });
 
 /**
+ * @summary List initiatives, newest first.
+ */
+export const ListInitiativesQueryParams = zod.object({
+  status: zod
+    .enum(["backlog", "under_review", "approved", "rejected_deferred"])
+    .optional(),
+  departmentId: zod.coerce.number().optional(),
+});
+
+export const ListInitiativesResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  description: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "under_review",
+    "approved",
+    "rejected_deferred",
+  ]),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  reporterId: zod.number().nullish(),
+  reporterName: zod.string().nullish(),
+  assigneeId: zod.number().nullish(),
+  assigneeName: zod.string().nullish(),
+  prosCons: zod.string(),
+  roughCost: zod.string(),
+  expectedBenefit: zod.string(),
+  riskNotes: zod.string(),
+  decisionReason: zod.string(),
+  decidedAt: zod.coerce.date().nullish(),
+  decidedById: zod.number().nullish(),
+  decidedByName: zod.string().nullish(),
+  createdProjectId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListInitiativesResponse = zod.array(ListInitiativesResponseItem);
+
+export const CreateInitiativeBody = zod.object({
+  title: zod.string().min(1),
+  description: zod.string().optional(),
+  departmentId: zod.number().nullish(),
+  reporterId: zod.number().nullish(),
+  assigneeId: zod.number().nullish(),
+});
+
+export const GetInitiativeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetInitiativeResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  description: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "under_review",
+    "approved",
+    "rejected_deferred",
+  ]),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  reporterId: zod.number().nullish(),
+  reporterName: zod.string().nullish(),
+  assigneeId: zod.number().nullish(),
+  assigneeName: zod.string().nullish(),
+  prosCons: zod.string(),
+  roughCost: zod.string(),
+  expectedBenefit: zod.string(),
+  riskNotes: zod.string(),
+  decisionReason: zod.string(),
+  decidedAt: zod.coerce.date().nullish(),
+  decidedById: zod.number().nullish(),
+  decidedByName: zod.string().nullish(),
+  createdProjectId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update fields and/or transition status. Approving an initiative
+atomically creates a Project and stamps createdProjectId on the
+returned record. Terminal states (approved, rejected_deferred)
+cannot be left — the server returns 409 if you try.
+
+ */
+export const UpdateInitiativeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateInitiativeBody = zod
+  .object({
+    title: zod.string().min(1).optional(),
+    description: zod.string().optional(),
+    status: zod
+      .enum(["backlog", "under_review", "approved", "rejected_deferred"])
+      .optional(),
+    departmentId: zod.number().nullish(),
+    assigneeId: zod.number().nullish(),
+    prosCons: zod.string().optional(),
+    roughCost: zod.string().optional(),
+    expectedBenefit: zod.string().optional(),
+    riskNotes: zod.string().optional(),
+    decisionReason: zod.string().optional(),
+  })
+  .describe(
+    'All fields optional. To approve, set status=\"approved\" (a project\nis created automatically). To reject\/defer, set\nstatus=\"rejected_deferred\" and supply decisionReason.\n',
+  );
+
+export const UpdateInitiativeResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  description: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "under_review",
+    "approved",
+    "rejected_deferred",
+  ]),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  reporterId: zod.number().nullish(),
+  reporterName: zod.string().nullish(),
+  assigneeId: zod.number().nullish(),
+  assigneeName: zod.string().nullish(),
+  prosCons: zod.string(),
+  roughCost: zod.string(),
+  expectedBenefit: zod.string(),
+  riskNotes: zod.string(),
+  decisionReason: zod.string(),
+  decidedAt: zod.coerce.date().nullish(),
+  decidedById: zod.number().nullish(),
+  decidedByName: zod.string().nullish(),
+  createdProjectId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+export const DeleteInitiativeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Department-level Kanban — phase columns + project cards.
  */
 export const GetDepartmentBoardParams = zod.object({

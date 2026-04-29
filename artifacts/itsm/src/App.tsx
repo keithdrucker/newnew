@@ -25,6 +25,8 @@ import {
   KnowledgeBaseDetail,
 } from "@/pages/knowledge-base";
 import Timesheet from "@/pages/timesheet";
+import OperationalTasks from "@/pages/operational-tasks";
+import Initiatives from "@/pages/initiatives";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +52,8 @@ function Router() {
         <Route path="/projects/dashboard" component={ProjectsDashboard} />
         <Route path="/projects/dept/:slug" component={Projects} />
         <Route path="/projects" component={Projects} />
+        <Route path="/operational-tasks" component={OperationalTasks} />
+        <Route path="/initiatives" component={Initiatives} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />
         <Route path="/settings/risk-rules" component={SettingsRiskRules} />

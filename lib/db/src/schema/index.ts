@@ -10,5 +10,6 @@ export * from "./ticketViews";
 export * from "./applications";
 export * from "./vendors";
 export * from "./projects";
+export * from "./initiatives";
 export * from "./riskRules";
 export * from "./timeEntries";

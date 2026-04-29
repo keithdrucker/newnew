@@ -14,6 +14,7 @@ import assetsRouter from "./assets";
 import applicationsRouter from "./applications";
 import vendorsRouter from "./vendors";
 import projectsRouter from "./projects";
+import initiativesRouter from "./initiatives";
 import riskRulesRouter from "./riskRules";
 import dashboardRouter from "./dashboard";
 
@@ -34,6 +35,7 @@ router.use(assetsRouter);
 router.use(applicationsRouter);
 router.use(vendorsRouter);
 router.use(projectsRouter);
+router.use(initiativesRouter);
 router.use(riskRulesRouter);
 router.use(dashboardRouter);
 
