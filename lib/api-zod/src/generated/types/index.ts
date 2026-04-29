@@ -122,6 +122,7 @@ export * from "./updateDepartmentInput";
 export * from "./updateDepartmentSettingsInput";
 export * from "./updateDepartmentSettingsInputDefaultPriority";
 export * from "./updateKbArticleInput";
+export * from "./updateMePreferencesInput";
 export * from "./updatePersonInput";
 export * from "./updateProjectInput";
 export * from "./updateTicketInput";

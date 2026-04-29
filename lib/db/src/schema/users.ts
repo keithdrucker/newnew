@@ -10,6 +10,7 @@ export const usersTable = pgTable("users", {
   phone: text("phone"),
   location: text("location"),
   departmentId: integer("department_id"),
+  defaultTicketBoard: text("default_ticket_board"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

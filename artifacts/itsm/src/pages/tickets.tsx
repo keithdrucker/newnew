@@ -7,9 +7,11 @@ import {
   useCreateTicketView,
   useUpdateTicketView,
   useDeleteTicketView,
+  useUpdateMePreferences,
   getListTicketViewsQueryKey,
+  getGetSessionQueryKey,
 } from "@workspace/api-client-react";
-import { Link, useRoute } from "wouter";
+import { Link, useRoute, useLocation } from "wouter";
 import {
   Table,
   TableBody,
@@ -32,6 +34,7 @@ import {
   Inbox,
   MoreHorizontal,
   Search,
+  Settings2,
   Star,
   Trash2,
 } from "lucide-react";
@@ -88,9 +91,10 @@ const PRIORITY_RANK: Record<string, number> = {
 };
 
 export default function Tickets() {
-  useGetSession();
+  const { data: session } = useGetSession();
   const queryClient = useQueryClient();
   const [, params] = useRoute("/tickets/dept/:slug");
+  const [, setLocation] = useLocation();
   const deptSlug = params?.slug ?? null;
 
   const { data: departments } = useListDepartments({ scope: "accessible" });
@@ -103,6 +107,39 @@ export default function Tickets() {
   const createView = useCreateTicketView();
   const updateView = useUpdateTicketView();
   const deleteView = useDeleteTicketView();
+  const updatePreferences = useUpdateMePreferences();
+
+  // If the user lands on the bare /tickets page and has a default ticket
+  // board configured, redirect to that board. The dropdown on the page
+  // still lets them switch back manually.
+  useEffect(() => {
+    if (deptSlug) return;
+    if (!session || !departments) return;
+    const slug = session.defaultTicketBoard;
+    if (!slug) return;
+    if (departments.some((d) => d.slug === slug)) {
+      setLocation(`/tickets/dept/${slug}`, { replace: true });
+    }
+  }, [deptSlug, session, departments, setLocation]);
+
+  const currentBoardSlug: string = deptSlug ?? "all";
+  async function handleChangeBoard(value: string) {
+    if (value === "all") {
+      setLocation("/tickets");
+    } else {
+      setLocation(`/tickets/dept/${value}`);
+    }
+  }
+  async function handleSetDefaultBoard(value: string) {
+    const next = value === "all" ? null : value;
+    await updatePreferences.mutateAsync({
+      data: { defaultTicketBoard: next },
+    });
+    await queryClient.invalidateQueries({
+      queryKey: getGetSessionQueryKey(),
+    });
+  }
+  const defaultBoardSlug: string = session?.defaultTicketBoard ?? "all";
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [sort, setSort] = useState<{ field: SortField; dir: SortDir }>({
@@ -321,8 +358,76 @@ export default function Tickets() {
         </div>
       </div>
 
-      {/* Toolbar: Views + Filters + Sort */}
+      {/* Toolbar: Board + Views + Filters + Sort */}
       <div className="flex items-center gap-2 flex-wrap">
+        {/* Board switcher */}
+        <Select value={currentBoardSlug} onValueChange={handleChangeBoard}>
+          <SelectTrigger
+            className="w-[180px] h-9"
+            data-testid="select-board"
+          >
+            <SelectValue placeholder="Board" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Tickets</SelectItem>
+            {(departments ?? []).map((d) => (
+              <SelectItem key={d.id} value={d.slug}>
+                {d.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* View Settings: choose default ticket board */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2"
+              data-testid="button-view-settings"
+              title="View settings"
+            >
+              <Settings2 className="h-4 w-4" />
+              <span className="font-medium">View Settings</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-72">
+            <DropdownMenuLabel>Default Ticket Board</DropdownMenuLabel>
+            <div className="px-2 pb-2 pt-1 text-[11px] text-muted-foreground">
+              Opening{" "}
+              <span className="font-medium text-foreground">Tickets</span> from
+              the sidebar will load this board.
+            </div>
+            <div className="px-2 pb-2">
+              <Select
+                value={defaultBoardSlug}
+                onValueChange={handleSetDefaultBoard}
+              >
+                <SelectTrigger
+                  className="w-full h-9"
+                  data-testid="select-default-board"
+                >
+                  <SelectValue placeholder="Default board" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Tickets</SelectItem>
+                  {(departments ?? []).map((d) => (
+                    <SelectItem key={d.id} value={d.slug}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+              Saved as a personal preference. You can still switch boards
+              manually any time.
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {/* Views menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

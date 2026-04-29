@@ -24,6 +24,12 @@ export const GetSessionResponse = zod.object({
   role: zod.enum(["admin", "agent", "end_user"]),
   departmentId: zod.number().nullish(),
   departmentName: zod.string().nullish(),
+  defaultTicketBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default ticket board. `null` means All Tickets. When the user opens `\/tickets`, the UI auto-loads this board.\n",
+    ),
 });
 
 /**
@@ -40,6 +46,39 @@ export const SwitchSessionResponse = zod.object({
   role: zod.enum(["admin", "agent", "end_user"]),
   departmentId: zod.number().nullish(),
   departmentName: zod.string().nullish(),
+  defaultTicketBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default ticket board. `null` means All Tickets. When the user opens `\/tickets`, the UI auto-loads this board.\n",
+    ),
+});
+
+/**
+ * @summary Update preferences for the current user
+ */
+export const UpdateMePreferencesBody = zod.object({
+  defaultTicketBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the department to use as the user's default ticket board. Pass `null` to reset to All Tickets.\n",
+    ),
+});
+
+export const UpdateMePreferencesResponse = zod.object({
+  userId: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum(["admin", "agent", "end_user"]),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  defaultTicketBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default ticket board. `null` means All Tickets. When the user opens `\/tickets`, the UI auto-loads this board.\n",
+    ),
 });
 
 /**

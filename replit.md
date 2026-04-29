@@ -52,6 +52,7 @@ The project utilizes a pnpm workspace monorepo with each package managing its ow
 - **Ticket Management**:
     - Ticket key format: `INC-###` (incident) / `REQ-###` (request).
     - Per-department settings for portal, SLA, business hours, and auto-assignment.
+    - **Default Ticket Board (per-user)**: `usersTable.defaultTicketBoard` (text, nullable) holds a department slug; `null` means All Tickets. The Tickets page (`artifacts/itsm/src/pages/tickets.tsx`) auto-redirects from `/tickets` to `/tickets/dept/<slug>` on mount when this is set, and exposes a "View Settings" dropdown (`button-view-settings` / `select-default-board`) plus an inline board switcher (`select-board`) so users can change boards manually. The preference is exposed on `Session.defaultTicketBoard` and updated via `PATCH /api/me/preferences` (`updateMePreferences`).
 - **Project Management (Initiative Pipeline)** — pivoted April 2026:
     - The 7-phase Kanban board now lives at the **department** level. Each project is a single card on its department's board. The old per-project board (one Kanban inside each project) is gone.
     - Phases (per-department, renamable, seeded on first read of `/api/departments/:id/board`): New Suggestions, Future Roadmap, Backlog, Phase 1 - R&D Go/No-Go, Phase 2 - Preparation & Planning, Phase 3 - Implementation, "2026 Completed Initiatives".

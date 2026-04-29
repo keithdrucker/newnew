@@ -26,6 +26,21 @@ export interface Session {
   departmentId?: number | null;
   /** @nullable */
   departmentName?: string | null;
+  /**
+   * Slug of the user's preferred default ticket board. `null` means All Tickets. When the user opens `/tickets`, the UI auto-loads this board.
+
+   * @nullable
+   */
+  defaultTicketBoard?: string | null;
+}
+
+export interface UpdateMePreferencesInput {
+  /**
+   * Slug of the department to use as the user's default ticket board. Pass `null` to reset to All Tickets.
+
+   * @nullable
+   */
+  defaultTicketBoard?: string | null;
 }
 
 export interface SwitchSessionInput {

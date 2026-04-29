@@ -68,6 +68,23 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Session" }
 
+  /me/preferences:
+    patch:
+      operationId: updateMePreferences
+      tags: [session]
+      summary: Update preferences for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMePreferencesInput" }
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+
   /departments:
     get:
       operationId: listDepartments
@@ -1250,7 +1267,22 @@ components:
           type: ["integer", "null"]
         departmentName:
           type: ["string", "null"]
+        defaultTicketBoard:
+          type: ["string", "null"]
+          description: >
+            Slug of the user's preferred default ticket board. `null` means
+            All Tickets. When the user opens `/tickets`, the UI auto-loads
+            this board.
       required: [userId, name, email, role]
+
+    UpdateMePreferencesInput:
+      type: object
+      properties:
+        defaultTicketBoard:
+          type: ["string", "null"]
+          description: >
+            Slug of the department to use as the user's default ticket
+            board. Pass `null` to reset to All Tickets.
 
     SwitchSessionInput:
       type: object

@@ -73,6 +73,7 @@ import type {
   UpdateDepartmentInput,
   UpdateDepartmentSettingsInput,
   UpdateKbArticleInput,
+  UpdateMePreferencesInput,
   UpdatePersonInput,
   UpdateProjectInput,
   UpdateTicketInput,
@@ -322,6 +323,93 @@ export const useSwitchSession = <
   TContext
 > => {
   return useMutation(getSwitchSessionMutationOptions(options));
+};
+
+/**
+ * @summary Update preferences for the current user
+ */
+export const getUpdateMePreferencesUrl = () => {
+  return `/api/me/preferences`;
+};
+
+export const updateMePreferences = async (
+  updateMePreferencesInput: UpdateMePreferencesInput,
+  options?: RequestInit,
+): Promise<Session> => {
+  return customFetch<Session>(getUpdateMePreferencesUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateMePreferencesInput),
+  });
+};
+
+export const getUpdateMePreferencesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMePreferences>>,
+    TError,
+    { data: BodyType<UpdateMePreferencesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMePreferences>>,
+  TError,
+  { data: BodyType<UpdateMePreferencesInput> },
+  TContext
+> => {
+  const mutationKey = ["updateMePreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMePreferences>>,
+    { data: BodyType<UpdateMePreferencesInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateMePreferences(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMePreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMePreferences>>
+>;
+export type UpdateMePreferencesMutationBody =
+  BodyType<UpdateMePreferencesInput>;
+export type UpdateMePreferencesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update preferences for the current user
+ */
+export const useUpdateMePreferences = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMePreferences>>,
+    TError,
+    { data: BodyType<UpdateMePreferencesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateMePreferences>>,
+  TError,
+  { data: BodyType<UpdateMePreferencesInput> },
+  TContext
+> => {
+  return useMutation(getUpdateMePreferencesMutationOptions(options));
 };
 
 /**
