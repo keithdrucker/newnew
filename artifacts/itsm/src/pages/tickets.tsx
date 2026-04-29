@@ -1075,6 +1075,7 @@ export default function Tickets() {
                 <TableHead>Title</TableHead>
                 <TableHead className="w-[160px]">User</TableHead>
                 <TableHead className="w-[80px]">Level</TableHead>
+                <TableHead className="w-[160px]">Agent</TableHead>
                 <TableHead className="w-[140px]">Category</TableHead>
                 <TableHead className="w-[110px]">Created</TableHead>
                 <TableHead className="w-[110px]">Last Update</TableHead>
@@ -1162,6 +1163,24 @@ export default function Tickets() {
                     </TableCell>
                     <TableCell>
                       <LevelBadge level={ticket.supportLevel ?? 1} />
+                    </TableCell>
+                    <TableCell>
+                      {ticket.assigneeName ? (
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback className="text-[10px]">
+                              {initials(ticket.assigneeName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm text-foreground/80">
+                            {ticket.assigneeName}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/60">
+                          Unassigned
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {ticket.category ?? (
