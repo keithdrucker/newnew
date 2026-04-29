@@ -676,6 +676,77 @@ export const DeleteTicketParams = zod.object({
 });
 
 /**
+ * @summary List internal time entries for a ticket (admin/agent only)
+ */
+export const ListTicketTimeEntriesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListTicketTimeEntriesResponseItem = zod.object({
+  id: zod.number(),
+  ticketId: zod.number(),
+  ticketKey: zod.string(),
+  ticketTitle: zod.string(),
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  userId: zod.number(),
+  userName: zod.string(),
+  startAt: zod.coerce.date(),
+  endAt: zod.coerce.date(),
+  durationMinutes: zod.number(),
+  note: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListTicketTimeEntriesResponse = zod.array(
+  ListTicketTimeEntriesResponseItem,
+);
+
+/**
+ * @summary Log an internal time entry against a ticket
+ */
+export const CreateTicketTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateTicketTimeEntryBody = zod.object({
+  startAt: zod.coerce.date(),
+  endAt: zod.coerce.date(),
+  note: zod.string(),
+});
+
+/**
+ * @summary List the current user's time entries within a date range
+ */
+export const ListTimeEntriesQueryParams = zod.object({
+  from: zod.date(),
+  to: zod.date(),
+});
+
+export const ListTimeEntriesResponseItem = zod.object({
+  id: zod.number(),
+  ticketId: zod.number(),
+  ticketKey: zod.string(),
+  ticketTitle: zod.string(),
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  userId: zod.number(),
+  userName: zod.string(),
+  startAt: zod.coerce.date(),
+  endAt: zod.coerce.date(),
+  durationMinutes: zod.number(),
+  note: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListTimeEntriesResponse = zod.array(ListTimeEntriesResponseItem);
+
+/**
+ * @summary Delete a time entry (owner or admin)
+ */
+export const DeleteTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Add a comment to a ticket
  */
 export const AddTicketCommentParams = zod.object({

@@ -24,6 +24,7 @@ import {
   KnowledgeBaseList,
   KnowledgeBaseDetail,
 } from "@/pages/knowledge-base";
+import Timesheet from "@/pages/timesheet";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ function Router() {
         </Route>
         <Route path="/knowledge-base" component={KnowledgeBaseList} />
         <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
+        <Route path="/timesheet" component={Timesheet} />
         <Route path="/assets" component={Assets} />
         <Route path="/applications" component={Applications} />
         <Route path="/vendors" component={Vendors} />

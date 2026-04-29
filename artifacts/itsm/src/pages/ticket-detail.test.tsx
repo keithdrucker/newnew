@@ -23,6 +23,19 @@ vi.mock("@workspace/api-client-react", () => ({
   useUpdateTicket: () => useUpdateTicketMock(),
   useAddTicketComment: () => useAddTicketCommentMock(),
   useGetSession: () => useGetSessionMock(),
+  // The Time Entries card under the ticket calls these; tests don't
+  // exercise the card, so stub with empty results + no-op mutations.
+  useListTicketTimeEntries: () => ({ data: [], isLoading: false }),
+  useCreateTicketTimeEntry: () => ({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
+  useDeleteTimeEntry: () => ({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
+  getListTicketTimeEntriesQueryKey: () => ["time-entries", "ticket"],
+  getListTimeEntriesQueryKey: () => ["time-entries"],
 }));
 
 import TicketDetail from "./ticket-detail";

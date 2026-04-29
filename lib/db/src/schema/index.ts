@@ -11,3 +11,4 @@ export * from "./applications";
 export * from "./vendors";
 export * from "./projects";
 export * from "./riskRules";
+export * from "./timeEntries";

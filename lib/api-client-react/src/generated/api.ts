@@ -35,6 +35,7 @@ import type {
   CreateRiskRuleInput,
   CreateTicketInput,
   CreateTicketViewInput,
+  CreateTimeEntryInput,
   CreateVendorInput,
   DashboardOverview,
   DashboardTimeseries,
@@ -55,6 +56,7 @@ import type {
   ListPeopleParams,
   ListProjectsParams,
   ListTicketsParams,
+  ListTimeEntriesParams,
   ListVendorsParams,
   Person,
   ProjectComment,
@@ -67,6 +69,7 @@ import type {
   TicketComment,
   TicketDetail,
   TicketView,
+  TimeEntry,
   UpdateAgentInput,
   UpdateApplicationInput,
   UpdateAssetInput,
@@ -2151,6 +2154,359 @@ export const useDeleteTicket = <
   TContext
 > => {
   return useMutation(getDeleteTicketMutationOptions(options));
+};
+
+/**
+ * @summary List internal time entries for a ticket (admin/agent only)
+ */
+export const getListTicketTimeEntriesUrl = (id: number) => {
+  return `/api/tickets/${id}/time-entries`;
+};
+
+export const listTicketTimeEntries = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TimeEntry[]> => {
+  return customFetch<TimeEntry[]>(getListTicketTimeEntriesUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTicketTimeEntriesQueryKey = (id: number) => {
+  return [`/api/tickets/${id}/time-entries`] as const;
+};
+
+export const getListTicketTimeEntriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTicketTimeEntries>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTicketTimeEntries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListTicketTimeEntriesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTicketTimeEntries>>
+  > = ({ signal }) => listTicketTimeEntries(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTicketTimeEntries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTicketTimeEntriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTicketTimeEntries>>
+>;
+export type ListTicketTimeEntriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List internal time entries for a ticket (admin/agent only)
+ */
+
+export function useListTicketTimeEntries<
+  TData = Awaited<ReturnType<typeof listTicketTimeEntries>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTicketTimeEntries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTicketTimeEntriesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Log an internal time entry against a ticket
+ */
+export const getCreateTicketTimeEntryUrl = (id: number) => {
+  return `/api/tickets/${id}/time-entries`;
+};
+
+export const createTicketTimeEntry = async (
+  id: number,
+  createTimeEntryInput: CreateTimeEntryInput,
+  options?: RequestInit,
+): Promise<TimeEntry> => {
+  return customFetch<TimeEntry>(getCreateTicketTimeEntryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createTimeEntryInput),
+  });
+};
+
+export const getCreateTicketTimeEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTicketTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<CreateTimeEntryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTicketTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<CreateTimeEntryInput> },
+  TContext
+> => {
+  const mutationKey = ["createTicketTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTicketTimeEntry>>,
+    { id: number; data: BodyType<CreateTimeEntryInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createTicketTimeEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTicketTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTicketTimeEntry>>
+>;
+export type CreateTicketTimeEntryMutationBody = BodyType<CreateTimeEntryInput>;
+export type CreateTicketTimeEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Log an internal time entry against a ticket
+ */
+export const useCreateTicketTimeEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTicketTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<CreateTimeEntryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createTicketTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<CreateTimeEntryInput> },
+  TContext
+> => {
+  return useMutation(getCreateTicketTimeEntryMutationOptions(options));
+};
+
+/**
+ * @summary List the current user's time entries within a date range
+ */
+export const getListTimeEntriesUrl = (params: ListTimeEntriesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/time-entries?${stringifiedParams}`
+    : `/api/time-entries`;
+};
+
+export const listTimeEntries = async (
+  params: ListTimeEntriesParams,
+  options?: RequestInit,
+): Promise<TimeEntry[]> => {
+  return customFetch<TimeEntry[]>(getListTimeEntriesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTimeEntriesQueryKey = (params?: ListTimeEntriesParams) => {
+  return [`/api/time-entries`, ...(params ? [params] : [])] as const;
+};
+
+export const getListTimeEntriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTimeEntries>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListTimeEntriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTimeEntries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTimeEntriesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listTimeEntries>>> = ({
+    signal,
+  }) => listTimeEntries(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTimeEntries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTimeEntriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTimeEntries>>
+>;
+export type ListTimeEntriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List the current user's time entries within a date range
+ */
+
+export function useListTimeEntries<
+  TData = Awaited<ReturnType<typeof listTimeEntries>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListTimeEntriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTimeEntries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTimeEntriesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete a time entry (owner or admin)
+ */
+export const getDeleteTimeEntryUrl = (id: number) => {
+  return `/api/time-entries/${id}`;
+};
+
+export const deleteTimeEntry = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteTimeEntryUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteTimeEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTimeEntry>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTimeEntry>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTimeEntry>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteTimeEntry(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTimeEntry>>
+>;
+
+export type DeleteTimeEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a time entry (owner or admin)
+ */
+export const useDeleteTimeEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTimeEntry>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTimeEntry>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteTimeEntryMutationOptions(options));
 };
 
 /**

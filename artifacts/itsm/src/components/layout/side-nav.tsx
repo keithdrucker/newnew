@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Layers,
   KanbanSquare,
+  Clock,
 } from "lucide-react";
 import sidekickLogo from "@assets/sidekick_logo_dark.png";
 import {
@@ -74,6 +75,15 @@ const WORKSPACE: NavItem[] = [
     label: "Knowledge",
     icon: BookOpen,
     matchPrefix: "/knowledge-base",
+  },
+  // Personal time-tracking view. Hidden from end users (they don't log
+  // time and shouldn't see internal effort).
+  {
+    href: "/timesheet",
+    label: "Timesheet",
+    icon: Clock,
+    matchPrefix: "/timesheet",
+    endUserHidden: true,
   },
 ];
 

@@ -968,6 +968,28 @@ export interface AddTicketCommentInput {
   body: string;
 }
 
+export interface TimeEntry {
+  id: number;
+  ticketId: number;
+  ticketKey: string;
+  ticketTitle: string;
+  departmentId: number;
+  departmentName: string;
+  userId: number;
+  userName: string;
+  startAt: string;
+  endAt: string;
+  durationMinutes: number;
+  note: string;
+  createdAt: string;
+}
+
+export interface CreateTimeEntryInput {
+  startAt: string;
+  endAt: string;
+  note: string;
+}
+
 export interface Person {
   id: number;
   name: string;
@@ -1604,6 +1626,11 @@ export const ListTicketsSlaStatus = {
   on_track: "on_track",
   breached: "breached",
 } as const;
+
+export type ListTimeEntriesParams = {
+  from: string;
+  to: string;
+};
 
 export type ListPeopleParams = {
   departmentId?: number;

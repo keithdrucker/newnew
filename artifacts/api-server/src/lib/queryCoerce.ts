@@ -8,6 +8,8 @@ const DATE_KEYS = new Set([
   "createdBefore",
   "updatedAfter",
   "updatedBefore",
+  "from",
+  "to",
 ]);
 // Repeatable query params (OpenAPI `style: form, explode: true`). Express
 // gives us a string when the param appears once (e.g. ?status=new) and

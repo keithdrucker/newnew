@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { AlertCircle, CheckCircle2, ShieldAlert } from "lucide-react";
 import { SlaCountdown } from "@/components/sla-countdown";
+import { TicketTimeEntries } from "@/components/ticket-time-entries";
 
 const STATUS_LABEL = {
   new: "New",
@@ -244,6 +245,16 @@ export default function TicketDetail() {
             ))}
           </div>
         </div>
+
+        {canTriage && session?.userId != null && (
+          <div className="px-6">
+            <TicketTimeEntries
+              ticketId={ticketId}
+              currentUserId={session.userId}
+              isAdmin={session.role === "admin"}
+            />
+          </div>
+        )}
 
         <div className="p-4 border-t bg-muted/40">
           <div className="space-y-3">
