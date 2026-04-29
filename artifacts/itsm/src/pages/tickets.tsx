@@ -51,7 +51,7 @@ import {
   X,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -330,6 +330,10 @@ export default function Tickets() {
   }
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  // Snapshot of the status filter taken right before the user enters
+  // closed-only mode, so toggling back restores their prior selection
+  // (e.g. a saved view) instead of clobbering it with the default set.
+  const preClosedStatusRef = useRef<string[] | null>(null);
   const [sort, setSort] = useState<{ field: SortField; dir: SortDir }>({
     field: "created",
     dir: "desc",
@@ -560,6 +564,16 @@ export default function Tickets() {
     createdAfter: rangeToAfter(filters.createdRange),
     updatedAfter: rangeToAfter(filters.updatedRange),
   });
+
+  // Separate small query that always counts closed tickets in the current
+  // department, regardless of the active filter set. Powers the badge on
+  // the "Show closed" toggle so users can see how many closed tickets
+  // they're hiding.
+  const { data: closedTickets } = useListTickets({
+    departmentId: dept?.id,
+    status: ["closed"],
+  });
+  const closedCount = closedTickets?.length ?? 0;
 
   const sortedTickets = useMemo(() => {
     const list = [...(tickets ?? [])];
@@ -1091,36 +1105,52 @@ export default function Tickets() {
             )}
           </div>
 
-          {/* Quick toggle: Closed tickets are hidden by default. One
-              click adds "closed" to whatever's currently selected;
-              another click removes it. Resolved is part of the default
-              filter set, so it stays visible regardless. */}
+          {/* Quick toggle: Closed tickets are hidden by default. Clicking
+              this swaps the status filter to "closed only" so the table
+              shows just closed tickets; clicking again restores whatever
+              status set was active beforehand (preserving saved-view or
+              custom selections). The badge surfaces the total number of
+              closed tickets in this department so users can see how many
+              they're hiding. */}
           {(() => {
-            const showingClosed = filters.status.includes("closed");
+            const closedOnly =
+              filters.status.length === 1 && filters.status[0] === "closed";
             return (
               <Button
-                variant={showingClosed ? "secondary" : "outline"}
+                variant={closedOnly ? "secondary" : "outline"}
                 size="sm"
                 className="h-9 gap-2"
                 onClick={() => {
-                  if (showingClosed) {
-                    setFilter(
-                      "status",
-                      filters.status.filter((s) => s !== "closed") as never,
-                    );
+                  if (closedOnly) {
+                    // Restore the previously-saved status snapshot if
+                    // we have one; otherwise fall back to the default.
+                    const restore =
+                      preClosedStatusRef.current ??
+                      (DEFAULT_FILTERS.status as string[]);
+                    preClosedStatusRef.current = null;
+                    setFilter("status", restore as never);
                   } else {
-                    setFilter(
-                      "status",
-                      Array.from(
-                        new Set([...filters.status, "closed"]),
-                      ) as never,
-                    );
+                    // Snapshot the current status set so we can restore
+                    // it when the user toggles back off.
+                    preClosedStatusRef.current = [...filters.status];
+                    setFilter("status", ["closed"] as never);
                   }
                 }}
                 data-testid="button-toggle-closed"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                {showingClosed ? "Hide closed" : "Show closed"}
+                {closedOnly ? "Hide closed" : "Show closed"}
+                <span
+                  className={
+                    "ml-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-medium " +
+                    (closedOnly
+                      ? "bg-background/80 text-foreground"
+                      : "bg-muted text-muted-foreground")
+                  }
+                  data-testid="badge-closed-count"
+                >
+                  {closedCount}
+                </span>
               </Button>
             );
           })()}
