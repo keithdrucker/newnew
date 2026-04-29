@@ -63,23 +63,17 @@ const RISK_LABEL = {
 export default function TicketDetail() {
   const [, params] = useRoute("/tickets/:id");
   const ticketId = Number(params?.id);
-  // Two independent composers — one anchored at the bottom of each
-  // activity column (Teams-chat style). End users only see the reply
-  // composer in the Conversation column; agents/admins additionally see
-  // the internal-note composer in the Technical Notes column.
+  // Reply composer state — anchored at the bottom of the Conversation
+  // column (Teams-chat style). The Technical Notes column no longer
+  // accepts free-form prose: time entries ARE the technical record.
   const [replyBody, setReplyBody] = useState("");
-  const [noteBody, setNoteBody] = useState("");
 
   const { data: ticket, isLoading } = useGetTicket(ticketId);
   const { data: session } = useGetSession();
   const canTriage = session?.role === "admin" || session?.role === "agent";
 
   const updateTicket = useUpdateTicket();
-  // Two separate mutation instances so a pending reply doesn't disable
-  // the internal-note submit button (and vice versa). Both hit the same
-  // endpoint — only the local pending state is decoupled.
   const addReply = useAddTicketComment();
-  const addNote = useAddTicketComment();
   const queryClient = useQueryClient();
 
   // The generated mutation hooks don't invalidate queries on their own,
@@ -223,64 +217,30 @@ export default function TicketDetail() {
                 />
               }
             />
-            {canTriage && (
-              <ActivityColumn
-                title="Technical Notes"
-                subtitle="Internal — hidden from the requester"
-                tone="internal"
-                comments={(ticket.comments ?? []).filter(
-                  (c) => c.kind === "internal_note",
-                )}
-                emptyText="No internal notes yet."
-                footer={
-                  <div className="space-y-4">
-                    <CommentComposer
-                      kind="internal_note"
-                      body={noteBody}
-                      setBody={setNoteBody}
-                      isSending={addNote.isPending}
-                      testId="input-internal-note"
-                      placeholder="Add an internal note (only your team will see this)…"
-                      buttonLabel="Save Note"
-                      onSubmit={() => {
-                        if (!noteBody.trim()) return;
-                        addNote.mutate(
-                          {
-                            id: ticketId,
-                            data: {
-                              body: noteBody,
-                              kind: "internal_note",
-                            },
-                          },
-                          {
-                            onSuccess: async () => {
-                              setNoteBody("");
-                              await Promise.all([
-                                queryClient.invalidateQueries({
-                                  queryKey: getGetTicketQueryKey(ticketId),
-                                }),
-                                queryClient.invalidateQueries({
-                                  queryKey: getListTicketsQueryKey(),
-                                }),
-                              ]);
-                            },
-                          },
-                        );
-                      }}
-                    />
-                    {session?.userId != null && (
-                      <div className="pt-4 border-t">
-                        <TicketTimeEntries
-                          ticketId={ticketId}
-                          currentUserId={session.userId}
-                          isAdmin={session.role === "admin"}
-                          embedded
-                        />
-                      </div>
-                    )}
-                  </div>
-                }
-              />
+            {canTriage && session?.userId != null && (
+              // Technical Notes column — time entries ARE the technical
+              // record. We dropped the free-form internal-note composer
+              // because it duplicated what the time log already captures
+              // (who worked on what, when, and the note describing it).
+              <div
+                className="bg-muted/30 rounded-lg border overflow-hidden"
+                data-testid="activity-column-internal"
+              >
+                <div className="px-4 py-2 border-b bg-amber-50 text-amber-900 border-amber-200 flex items-baseline justify-between">
+                  <span className="font-medium text-sm">Technical Notes</span>
+                  <span className="text-[11px] opacity-80">
+                    Internal — hidden from the requester
+                  </span>
+                </div>
+                <div className="p-4">
+                  <TicketTimeEntries
+                    ticketId={ticketId}
+                    currentUserId={session.userId}
+                    isAdmin={session.role === "admin"}
+                    embedded
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>
