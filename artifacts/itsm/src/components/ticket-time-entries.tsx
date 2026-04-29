@@ -159,54 +159,11 @@ export function TicketTimeEntries({
         )}
       </div>
 
-      {/* Compact log-time form */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
-            Start
-          </label>
-          <Input
-            type="datetime-local"
-            step={900 /* 15 minutes */}
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            data-testid="input-time-entry-start"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
-            End
-          </label>
-          <Input
-            type="datetime-local"
-            step={900}
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-            data-testid="input-time-entry-end"
-          />
-        </div>
-      </div>
-      <Textarea
-        placeholder="What did you work on? (private to your team)"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        className="min-h-[64px]"
-        data-testid="input-time-entry-note"
-      />
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <div className="flex justify-end">
-        <Button
-          size="sm"
-          onClick={handleSubmit}
-          disabled={create.isPending}
-          data-testid="button-log-time"
-        >
-          {create.isPending ? "Logging…" : "Log time"}
-        </Button>
-      </div>
-
-      {/* Existing entries */}
-      <div className="space-y-2 pt-2 border-t">
+      {/*
+        Existing entries first — chat-style ordering. The user reads the
+        log, then composes the next entry below it.
+      */}
+      <div className="space-y-2">
         {isLoading && (
           <p className="text-xs text-muted-foreground">Loading entries…</p>
         )}
@@ -280,6 +237,58 @@ export function TicketTimeEntries({
             </div>
           );
         })}
+      </div>
+
+      {/*
+        Compact log-time form — anchored at the bottom so the workflow
+        mirrors a chat composer: scan the existing log above, then add
+        the next entry below it.
+      */}
+      <div className="space-y-3 pt-3 border-t">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              Start
+            </label>
+            <Input
+              type="datetime-local"
+              step={900 /* 15 minutes */}
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              data-testid="input-time-entry-start"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              End
+            </label>
+            <Input
+              type="datetime-local"
+              step={900}
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              data-testid="input-time-entry-end"
+            />
+          </div>
+        </div>
+        <Textarea
+          placeholder="What did you work on? (private to your team)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="min-h-[64px]"
+          data-testid="input-time-entry-note"
+        />
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={create.isPending}
+            data-testid="button-log-time"
+          >
+            {create.isPending ? "Logging…" : "Log time"}
+          </Button>
+        </div>
       </div>
     </div>
   );

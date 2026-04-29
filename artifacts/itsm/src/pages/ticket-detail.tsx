@@ -63,20 +63,23 @@ const RISK_LABEL = {
 export default function TicketDetail() {
   const [, params] = useRoute("/tickets/:id");
   const ticketId = Number(params?.id);
-  const [commentBody, setCommentBody] = useState("");
-  // Agents/admins choose whether the next entry is a customer-facing
-  // reply or a private internal note. End users have no toggle (the
-  // reply box is always a `reply`).
-  const [commentKind, setCommentKind] = useState<"reply" | "internal_note">(
-    "reply",
-  );
+  // Two independent composers — one anchored at the bottom of each
+  // activity column (Teams-chat style). End users only see the reply
+  // composer in the Conversation column; agents/admins additionally see
+  // the internal-note composer in the Technical Notes column.
+  const [replyBody, setReplyBody] = useState("");
+  const [noteBody, setNoteBody] = useState("");
 
   const { data: ticket, isLoading } = useGetTicket(ticketId);
   const { data: session } = useGetSession();
   const canTriage = session?.role === "admin" || session?.role === "agent";
 
   const updateTicket = useUpdateTicket();
-  const addComment = useAddTicketComment();
+  // Two separate mutation instances so a pending reply doesn't disable
+  // the internal-note submit button (and vice versa). Both hit the same
+  // endpoint — only the local pending state is decoupled.
+  const addReply = useAddTicketComment();
+  const addNote = useAddTicketComment();
   const queryClient = useQueryClient();
 
   // The generated mutation hooks don't invalidate queries on their own,
@@ -186,6 +189,39 @@ export default function TicketDetail() {
                 (c) => c.kind !== "internal_note",
               )}
               emptyText="No replies yet."
+              footer={
+                <CommentComposer
+                  kind="reply"
+                  body={replyBody}
+                  setBody={setReplyBody}
+                  isSending={addReply.isPending}
+                  testId="input-ticket-reply"
+                  placeholder="Type your reply to the requester…"
+                  buttonLabel="Send Reply"
+                  onSubmit={() => {
+                    if (!replyBody.trim()) return;
+                    addReply.mutate(
+                      {
+                        id: ticketId,
+                        data: { body: replyBody, kind: "reply" },
+                      },
+                      {
+                        onSuccess: async () => {
+                          setReplyBody("");
+                          await Promise.all([
+                            queryClient.invalidateQueries({
+                              queryKey: getGetTicketQueryKey(ticketId),
+                            }),
+                            queryClient.invalidateQueries({
+                              queryKey: getListTicketsQueryKey(),
+                            }),
+                          ]);
+                        },
+                      },
+                    );
+                  }}
+                />
+              }
             />
             {canTriage && (
               <ActivityColumn
@@ -197,14 +233,52 @@ export default function TicketDetail() {
                 )}
                 emptyText="No internal notes yet."
                 footer={
-                  session?.userId != null ? (
-                    <TicketTimeEntries
-                      ticketId={ticketId}
-                      currentUserId={session.userId}
-                      isAdmin={session.role === "admin"}
-                      embedded
+                  <div className="space-y-4">
+                    <CommentComposer
+                      kind="internal_note"
+                      body={noteBody}
+                      setBody={setNoteBody}
+                      isSending={addNote.isPending}
+                      testId="input-internal-note"
+                      placeholder="Add an internal note (only your team will see this)…"
+                      buttonLabel="Save Note"
+                      onSubmit={() => {
+                        if (!noteBody.trim()) return;
+                        addNote.mutate(
+                          {
+                            id: ticketId,
+                            data: {
+                              body: noteBody,
+                              kind: "internal_note",
+                            },
+                          },
+                          {
+                            onSuccess: async () => {
+                              setNoteBody("");
+                              await Promise.all([
+                                queryClient.invalidateQueries({
+                                  queryKey: getGetTicketQueryKey(ticketId),
+                                }),
+                                queryClient.invalidateQueries({
+                                  queryKey: getListTicketsQueryKey(),
+                                }),
+                              ]);
+                            },
+                          },
+                        );
+                      }}
                     />
-                  ) : null
+                    {session?.userId != null && (
+                      <div className="pt-4 border-t">
+                        <TicketTimeEntries
+                          ticketId={ticketId}
+                          currentUserId={session.userId}
+                          isAdmin={session.role === "admin"}
+                          embedded
+                        />
+                      </div>
+                    )}
+                  </div>
                 }
               />
             )}
@@ -274,96 +348,6 @@ export default function TicketDetail() {
           </div>
         </div>
 
-        <div className="p-4 border-t bg-muted/40">
-          <div className="space-y-3">
-            {canTriage && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCommentKind("reply")}
-                  className={
-                    "px-3 py-1 text-xs font-medium rounded-full border transition-colors " +
-                    (commentKind === "reply"
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-card text-muted-foreground hover:text-foreground")
-                  }
-                  data-testid="toggle-reply-kind-reply"
-                >
-                  Reply to user
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCommentKind("internal_note")}
-                  className={
-                    "px-3 py-1 text-xs font-medium rounded-full border transition-colors " +
-                    (commentKind === "internal_note"
-                      ? "bg-amber-500 text-white border-amber-500"
-                      : "bg-card text-muted-foreground hover:text-foreground")
-                  }
-                  data-testid="toggle-reply-kind-internal"
-                >
-                  Internal note
-                </button>
-                {commentKind === "internal_note" && (
-                  <span className="text-xs text-amber-700">
-                    Only your team will see this.
-                  </span>
-                )}
-              </div>
-            )}
-            <Textarea
-              placeholder={
-                commentKind === "internal_note"
-                  ? "Add an internal note (only your team will see this)…"
-                  : "Type your reply to the requester…"
-              }
-              value={commentBody}
-              onChange={(e) => setCommentBody(e.target.value)}
-              className={
-                "min-h-[100px] " +
-                (commentKind === "internal_note"
-                  ? "bg-amber-50 border-amber-200"
-                  : "bg-card")
-              }
-              data-testid="input-ticket-reply"
-            />
-            <div className="flex justify-end">
-              <Button
-                onClick={() => {
-                  if (!commentBody.trim()) return;
-                  addComment.mutate(
-                    {
-                      id: ticketId,
-                      data: { body: commentBody, kind: commentKind },
-                    },
-                    {
-                      // Clear the textarea, then refresh both the
-                      // detail view (so the new comment appears in the
-                      // thread) and the tickets list (its preview /
-                      // status may have shifted, e.g. an end-user
-                      // reply on a resolved ticket flips it back to
-                      // in_progress on the server).
-                      onSuccess: async () => {
-                        setCommentBody("");
-                        await Promise.all([
-                          queryClient.invalidateQueries({
-                            queryKey: getGetTicketQueryKey(ticketId),
-                          }),
-                          queryClient.invalidateQueries({
-                            queryKey: getListTicketsQueryKey(),
-                          }),
-                        ]);
-                      },
-                    },
-                  );
-                }}
-                disabled={!commentBody.trim() || addComment.isPending}
-              >
-                {commentKind === "internal_note" ? "Save Note" : "Send Reply"}
-              </Button>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Sidebar */}
@@ -616,6 +600,71 @@ export function RiskLevelBadge({ level }: { level: string | null | undefined }) 
     >
       {label} risk
     </Badge>
+  );
+}
+
+// Inline composer rendered at the bottom of an ActivityColumn. Mirrors
+// a Teams/Slack chat composer: read the thread above, type the next
+// message below it. The two callers (Conversation reply / Technical
+// Notes internal note) reuse the same shape with kind-specific styling.
+function CommentComposer({
+  kind,
+  body,
+  setBody,
+  isSending,
+  testId,
+  placeholder,
+  buttonLabel,
+  onSubmit,
+}: {
+  kind: "reply" | "internal_note";
+  body: string;
+  setBody: (v: string) => void;
+  isSending: boolean;
+  testId: string;
+  placeholder: string;
+  buttonLabel: string;
+  onSubmit: () => void;
+}) {
+  const isNote = kind === "internal_note";
+  return (
+    <div className="space-y-2">
+      <Textarea
+        placeholder={placeholder}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        className={
+          "min-h-[80px] " +
+          (isNote ? "bg-amber-50 border-amber-200" : "bg-card")
+        }
+        data-testid={testId}
+      />
+      <div className="flex items-center justify-between">
+        <span
+          className={
+            "text-[11px] " +
+            (isNote ? "text-amber-700" : "text-muted-foreground")
+          }
+        >
+          {isNote
+            ? "Only your team will see this."
+            : "Visible to the requester."}
+        </span>
+        <Button
+          size="sm"
+          onClick={onSubmit}
+          disabled={!body.trim() || isSending}
+          data-testid={`button-submit-${testId}`}
+          className={
+            isNote
+              ? "bg-amber-600 hover:bg-amber-700 text-white"
+              : undefined
+          }
+        >
+          {buttonLabel}
+        </Button>
+      </div>
+    </div>
   );
 }
 

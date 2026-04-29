@@ -1,8 +1,18 @@
 import { useMemo, useState } from "react";
 import { Link, Redirect } from "wouter";
-import { format, startOfWeek, endOfWeek, addDays, addWeeks } from "date-fns";
+import {
+  format,
+  startOfWeek,
+  endOfWeek,
+  startOfDay,
+  endOfDay,
+  addDays,
+  addWeeks,
+  isSameDay,
+} from "date-fns";
 import {
   useGetSession,
+  getListTimeEntriesQueryKey,
   useListTimeEntries,
   useListTimesheetVisibleUsers,
 } from "@workspace/api-client-react";
@@ -13,7 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, ChevronLeft, ChevronRight } from "lucide-react";
 
 // Monday-anchored week boundaries. We compute three windows up front
 // (this week, last week, plus a single combined query covering both)
@@ -53,7 +64,18 @@ function DayBlock({
   entries: Entry[];
   isToday: boolean;
 }) {
-  const total = entries.reduce((acc, e) => acc + e.durationMinutes, 0);
+  // Always render entries in chronological order (earliest start
+  // first). The API doesn't promise an order, so we sort here so both
+  // day and week views read top-to-bottom by time.
+  const sortedEntries = useMemo(
+    () =>
+      [...entries].sort(
+        (a, b) =>
+          new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+      ),
+    [entries],
+  );
+  const total = sortedEntries.reduce((acc, e) => acc + e.durationMinutes, 0);
   return (
     <div
       className="bg-card rounded-lg border shadow-sm p-4 space-y-3"
@@ -73,11 +95,11 @@ function DayBlock({
         </div>
         <span className="text-sm font-medium">{formatDuration(total)}</span>
       </div>
-      {entries.length === 0 ? (
+      {sortedEntries.length === 0 ? (
         <p className="text-xs text-muted-foreground">No time logged.</p>
       ) : (
         <ul className="space-y-2">
-          {entries.map((e) => (
+          {sortedEntries.map((e) => (
             <li key={e.id} className="text-sm">
               <div className="flex items-center justify-between gap-3">
                 <Link
@@ -181,6 +203,14 @@ export default function Timesheet() {
   // initialize once `visibleUsers` resolves below.
   const [viewingUserId, setViewingUserId] = useState<number | null>(null);
 
+  // View mode toggle. Week view shows a paired Mon–Sun grid (current
+  // behavior). Day view drills down to a single day with prev/next
+  // navigation so users can audit one shift at a time.
+  const [viewMode, setViewMode] = useState<"day" | "week">("week");
+  const [selectedDay, setSelectedDay] = useState<Date>(() =>
+    startOfDay(new Date()),
+  );
+
   // Fetched once per page load so the picker has the full list of
   // teammates the caller may audit. End users / unauthenticated
   // visitors will simply get a 401/403 here but the early redirect
@@ -194,8 +224,10 @@ export default function Timesheet() {
     return <Redirect to="/" />;
   }
 
-  // We pull a 14-day window in one shot and slice on the client to
-  // avoid two parallel hits on the same endpoint.
+  // The week summary tiles always reflect this week + last week, so
+  // we keep that 14-day query stable regardless of view mode. This
+  // bounds the main payload tightly and avoids huge ranges when the
+  // user navigates the day picker far backward or forward.
   const now = new Date();
   const thisWeek = weekBounds(now);
   const lastWeek = weekBounds(addWeeks(now, -1));
@@ -209,11 +241,38 @@ export default function Timesheet() {
   // explicitly — keeps the cache key stable for the common case).
   const isViewingSelf =
     viewingUserId == null || viewingUserId === session.userId;
+  const userIdParam = isViewingSelf ? {} : { userId: viewingUserId! };
+
   const { data, isLoading } = useListTimeEntries({
     from: lastWeek.start.toISOString(),
     to: upperBound.toISOString(),
-    ...(isViewingSelf ? {} : { userId: viewingUserId! }),
+    ...userIdParam,
   });
+
+  // When the day picker lands OUTSIDE the 14-day window, fire a
+  // second tightly-scoped query for just that day. This keeps the
+  // request size bounded (one day, not "today minus N months") and
+  // sits in its own cache slot so navigating between far-back days
+  // doesn't constantly re-pull the wide range.
+  const dayOutsideDefaultWindow =
+    viewMode === "day" &&
+    (selectedDay < lastWeek.start || selectedDay > thisWeek.end);
+  const dayFrom = startOfDay(selectedDay);
+  const dayTo = new Date(endOfDay(selectedDay).getTime() + 1);
+  const dayOnlyParams = {
+    from: dayFrom.toISOString(),
+    to: dayTo.toISOString(),
+    ...userIdParam,
+  };
+  const { data: dayOnlyData, isLoading: dayOnlyLoading } = useListTimeEntries(
+    dayOnlyParams,
+    {
+      query: {
+        enabled: dayOutsideDefaultWindow,
+        queryKey: getListTimeEntriesQueryKey(dayOnlyParams),
+      },
+    },
+  );
 
   const teammateOptions = (visibleUsers ?? []).filter((u) => !u.isSelf);
   const canSwitchUser = teammateOptions.length > 0;
@@ -231,6 +290,14 @@ export default function Timesheet() {
     const t = new Date(e.startAt).getTime();
     return t >= lastWeek.start.getTime() && t <= lastWeek.end.getTime();
   });
+  // For the day view, prefer the wide-window data when the day is
+  // inside it; otherwise fall back to the day-specific query.
+  const dayEntriesSource = dayOutsideDefaultWindow
+    ? ((dayOnlyData ?? []) as Entry[])
+    : entries;
+  const selectedDayEntries = dayEntriesSource.filter((e) =>
+    isSameDay(new Date(e.startAt), selectedDay),
+  );
 
   const todayKey = format(now, "yyyy-MM-dd");
   const todayMinutes = thisWeekEntries
@@ -262,39 +329,74 @@ export default function Timesheet() {
               : "Time you've logged on tickets. Visible only to you and your team."}
           </p>
         </div>
-        {canSwitchUser && (
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Day | Week toggle. Lives next to the user picker so all
+              the view-shaping controls cluster in one row. */}
           <div
-            className="flex items-center gap-2"
-            data-testid="timesheet-user-picker"
+            className="inline-flex rounded-md border bg-card p-0.5"
+            data-testid="timesheet-view-toggle"
           >
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <Select
-              value={String(viewingUserId ?? session.userId)}
-              onValueChange={(v) => {
-                const id = Number(v);
-                setViewingUserId(id === session.userId ? null : id);
-              }}
+            <button
+              type="button"
+              onClick={() => setViewMode("day")}
+              className={
+                "px-3 py-1 text-xs font-medium rounded transition-colors " +
+                (viewMode === "day"
+                  ? "bg-blue-600 text-white"
+                  : "text-muted-foreground hover:text-foreground")
+              }
+              data-testid="toggle-view-day"
             >
-              <SelectTrigger
-                className="h-8 w-[220px]"
-                data-testid="select-timesheet-user"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(visibleUsers ?? []).map((u) => (
-                  <SelectItem
-                    key={u.id}
-                    value={String(u.id)}
-                    data-testid={`option-timesheet-user-${u.id}`}
-                  >
-                    {u.isSelf ? `${u.name} (me)` : u.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              Day
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("week")}
+              className={
+                "px-3 py-1 text-xs font-medium rounded transition-colors " +
+                (viewMode === "week"
+                  ? "bg-blue-600 text-white"
+                  : "text-muted-foreground hover:text-foreground")
+              }
+              data-testid="toggle-view-week"
+            >
+              Week
+            </button>
           </div>
-        )}
+          {canSwitchUser && (
+            <div
+              className="flex items-center gap-2"
+              data-testid="timesheet-user-picker"
+            >
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <Select
+                value={String(viewingUserId ?? session.userId)}
+                onValueChange={(v) => {
+                  const id = Number(v);
+                  setViewingUserId(id === session.userId ? null : id);
+                }}
+              >
+                <SelectTrigger
+                  className="h-8 w-[220px]"
+                  data-testid="select-timesheet-user"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(visibleUsers ?? []).map((u) => (
+                    <SelectItem
+                      key={u.id}
+                      value={String(u.id)}
+                      data-testid={`option-timesheet-user-${u.id}`}
+                    >
+                      {u.isSelf ? `${u.name} (me)` : u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -318,8 +420,62 @@ export default function Timesheet() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading || (viewMode === "day" && dayOnlyLoading) ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : viewMode === "day" ? (
+        <section className="space-y-3" data-testid="timesheet-day-view">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">
+                {isSameDay(selectedDay, now)
+                  ? "Today"
+                  : isSameDay(selectedDay, addDays(now, -1))
+                    ? "Yesterday"
+                    : format(selectedDay, "EEEE")}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {format(selectedDay, "MMMM d, yyyy")}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8"
+                onClick={() => setSelectedDay((d) => addDays(d, -1))}
+                aria-label="Previous day"
+                data-testid="button-prev-day"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => setSelectedDay(startOfDay(new Date()))}
+                disabled={isSameDay(selectedDay, now)}
+                data-testid="button-today"
+              >
+                Today
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8"
+                onClick={() => setSelectedDay((d) => addDays(d, 1))}
+                aria-label="Next day"
+                data-testid="button-next-day"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <DayBlock
+            day={selectedDay}
+            entries={selectedDayEntries}
+            isToday={isSameDay(selectedDay, now)}
+          />
+        </section>
       ) : (
         <>
           <WeekSection
