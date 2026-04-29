@@ -1,0 +1,80 @@
+Update ticket statuses, automation rules, default filters, and SLA behavior.
+
+Ticket Statuses:
+Use the following statuses only:
+- New (Pending Assignment)
+- In Progress
+- With User
+- With Vendor
+- On Hold
+- Scheduled
+- Resolved
+- Closed
+
+Status Definitions:
+- New (Pending Assignment): Ticket created, not yet assigned.
+- In Progress: Agent actively working the ticket.
+- With User: Waiting on end-user response or action.
+- With Vendor: Waiting on third-party/vendor.
+- On Hold: Internally blocked (not user- or vendor-caused).
+- Scheduled: Approved work scheduled for a future date or window.
+- Resolved: Technical work completed; service restored.
+- Closed: Final archival state; no further action allowed.
+
+SLA Behavior:
+- SLA includes both Response and Resolution.
+- Before first agent response:
+  - Track Response SLA.
+- After first response:
+  - Mark Response SLA as met.
+  - Automatically switch to tracking Resolution SLA.
+- Resolution SLA pauses while status is:
+  - With User
+  - With Vendor
+  - On Hold
+  - Scheduled
+- SLA stops completely when status is Resolved or Closed.
+
+Resolve → Close Automation:
+- When a ticket enters Resolved:
+  - Leave the ticket in Resolved for 24 hours.
+  - If the user does not respond within 24 hours:
+    - Automatically change status to Closed.
+- If the user responds during the 24-hour window:
+  - Reopen the ticket and return it to In Progress.
+
+With User Automation:
+- When a ticket enters With User:
+  - After 3 days in this status:
+    - Automatically send a reminder update to the user.
+  - After an additional 1 day (total 4 days With User) with no user response:
+    - Automatically close the ticket.
+- When auto-closed from With User:
+  - Record closure reason as “No user response”.
+
+Default Ticket List Filters:
+- Default view must show only:
+  - Active statuses: New, In Progress
+  - Waiting statuses: With User, With Vendor, On Hold, Scheduled
+- Resolved and Closed must be unchecked by default.
+- Users must manually enable filters to view Resolved or Closed tickets.
+
+Ticket List View:
+- Keep a single column labeled “SLA Status”.
+- Do NOT add separate Response SLA or Resolution SLA columns.
+- SLA Status must always represent the currently active SLA obligation.
+- Display the SLA phase explicitly.
+
+Examples:
+- “⏱ 9m left — Response”
+- “⏱ 1h 12m left — Resolution”
+- “🔴 Breached — Resolution”
+- “On Track”
+
+Dashboard Alignment:
+- Dashboards must continue to report Response SLA and Resolution SLA separately.
+- SLA Score remains based on Resolution compliance.
+- Breached SLA metrics should distinguish Response vs Resolution breaches.
+
+Do not add additional statuses.
+Do not change unrelated ticket fields or dashboards.

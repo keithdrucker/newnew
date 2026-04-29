@@ -43,24 +43,128 @@ import {
   roleAtLeast,
   visibleDepartmentIds,
 } from "../lib/board-access";
+// Shared SLA primitives (also used by dashboard.ts) — keeping the math in
+// one place prevents drift between the list/detail rendering and the
+// dashboard counts.
+import {
+  PAUSED_STATUSES,
+  HOUR_MS,
+  DAY_MS,
+  slaState,
+  deriveSlaStatus,
+} from "../lib/sla";
 
 const router: IRouter = Router();
 
 type TicketRow = typeof ticketsTable.$inferSelect;
 
-function deriveSlaStatus(r: TicketRow): "on_track" | "breached" {
-  if (r.slaBreached) return "breached";
-  const now = Date.now();
-  const unresolved = r.status !== "resolved" && r.status !== "closed";
-  if (unresolved && r.resolutionDueAt && r.resolutionDueAt.getTime() < now)
-    return "breached";
-  if (
-    !r.firstResponseAt &&
-    r.responseDueAt &&
-    r.responseDueAt.getTime() < now
-  )
-    return "breached";
-  return "on_track";
+/** Find a user we can use as the author of a system-generated comment.
+ *  Prefers the ticket's assignee; falls back to any admin so reminder
+ *  comments still get attributed to a real account. Returns null if
+ *  neither exists (in which case we'll skip writing the comment). */
+async function pickSystemAuthorId(ticket: TicketRow): Promise<number | null> {
+  if (ticket.assigneeId != null) return ticket.assigneeId;
+  const [admin] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.role, "admin"))
+    .limit(1);
+  return admin?.id ?? null;
+}
+
+/** Lazy SLA + lifecycle automations that run before every list/single
+ *  read. Keeps the system cron-free: any time someone looks at a ticket
+ *  we push it through the necessary state changes. Returns the rows in
+ *  their post-automation form (re-reads from DB if anything changed). */
+async function applyAutomations(rows: TicketRow[]): Promise<TicketRow[]> {
+  const nowMs = Date.now();
+  const now = new Date(nowMs);
+  const changedIds: number[] = [];
+
+  for (const r of rows) {
+    // Resolved → Close after 24h grace period.
+    if (
+      r.status === "resolved" &&
+      r.resolvedAt &&
+      nowMs - r.resolvedAt.getTime() >= 24 * HOUR_MS
+    ) {
+      await db
+        .update(ticketsTable)
+        .set({ status: "closed", closureReason: "auto_resolved_timeout" })
+        .where(eq(ticketsTable.id, r.id));
+      changedIds.push(r.id);
+      continue;
+    }
+
+    // With User → 4-day auto-close (no_user_response).
+    if (
+      r.status === "with_user" &&
+      r.withUserSince &&
+      nowMs - r.withUserSince.getTime() >= 4 * DAY_MS
+    ) {
+      // Accumulate the pause time spent in with_user, then close.
+      const running = r.slaPausedAt ? nowMs - r.slaPausedAt.getTime() : 0;
+      await db
+        .update(ticketsTable)
+        .set({
+          status: "closed",
+          closureReason: "no_user_response",
+          resolvedAt: r.resolvedAt ?? now,
+          withUserSince: null,
+          slaPausedAt: null,
+          slaAccumulatedPauseMs:
+            (r.slaAccumulatedPauseMs ?? 0) + (running > 0 ? running : 0),
+        })
+        .where(eq(ticketsTable.id, r.id));
+      changedIds.push(r.id);
+      continue;
+    }
+
+    // With User → 3-day reminder (only once per with_user spell).
+    // Atomicity: do a conditional UPDATE that only writes when no
+    // reminder has been sent yet, then check the returning rows. Only
+    // the writer that won the race inserts the comment, so concurrent
+    // readers can't emit duplicate reminders.
+    if (
+      r.status === "with_user" &&
+      r.withUserSince &&
+      nowMs - r.withUserSince.getTime() >= 3 * DAY_MS &&
+      !r.withUserReminderSentAt
+    ) {
+      const claimed = await db
+        .update(ticketsTable)
+        .set({ withUserReminderSentAt: now })
+        .where(
+          and(
+            eq(ticketsTable.id, r.id),
+            isNull(ticketsTable.withUserReminderSentAt),
+            eq(ticketsTable.status, "with_user"),
+          ),
+        )
+        .returning({ id: ticketsTable.id });
+      if (claimed.length > 0) {
+        const authorId = await pickSystemAuthorId(r);
+        if (authorId != null) {
+          await db.insert(ticketCommentsTable).values({
+            ticketId: r.id,
+            authorId,
+            body: "[Automated reminder] This ticket has been waiting on your reply for 3 days. It will close automatically in 24 hours if we don't hear back.",
+          });
+        }
+        changedIds.push(r.id);
+      }
+    }
+  }
+
+  if (changedIds.length === 0) return rows;
+  // Re-read just the rows we touched and merge them back into the
+  // original order so callers don't see stale data.
+  const refreshed = await db
+    .select()
+    .from(ticketsTable)
+    .where(inArray(ticketsTable.id, changedIds));
+  const refreshedMap = new Map(refreshed.map((r) => [r.id, r]));
+  return rows.map((r) => refreshedMap.get(r.id) ?? r);
 }
 
 async function hydrate(rows: TicketRow[]) {
@@ -88,44 +192,64 @@ async function hydrate(rows: TicketRow[]) {
   const deptMap = new Map(depts.map((d) => [d.id, d]));
   const userMap = new Map(users.map((u) => [u.id, u]));
 
-  return rows.map((r) => ({
-    id: r.id,
-    ticketKey: r.ticketKey,
-    title: r.title,
-    description: r.description,
-    type: r.type as "incident" | "request",
-    priority: r.priority as "low" | "medium" | "high" | "urgent",
-    status: r.status as "open" | "pending" | "resolved" | "closed",
-    source: r.source as "portal" | "email" | "phone" | "chat" | "walk_in",
-    supportLevel: (r.supportLevel ?? 1) as 1 | 2 | 3,
-    departmentId: r.departmentId,
-    departmentName: deptMap.get(r.departmentId)?.name ?? "—",
-    reporterId: r.reporterId,
-    reporterName: userMap.get(r.reporterId)?.name ?? "—",
-    assigneeId: r.assigneeId ?? null,
-    assigneeName:
-      r.assigneeId != null ? userMap.get(r.assigneeId)?.name ?? null : null,
-    location: r.location ?? null,
-    team: r.team ?? null,
-    category: r.category ?? null,
-    riskLevel: (r.riskLevel ?? "low") as
-      | "low"
-      | "medium"
-      | "high"
-      | "critical",
-    rootCause: r.rootCause ?? null,
-    resolution: r.resolution ?? null,
-    slaBreached: r.slaBreached,
-    // Derived: "breached" if the boolean was raised OR an unmet due date is in
-    // the past. Lets the UI render a single column without re-deriving.
-    slaStatus: deriveSlaStatus(r),
-    responseDueAt: r.responseDueAt ? r.responseDueAt.toISOString() : null,
-    resolutionDueAt: r.resolutionDueAt ? r.resolutionDueAt.toISOString() : null,
-    firstResponseAt: r.firstResponseAt ? r.firstResponseAt.toISOString() : null,
-    resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : null,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  return rows.map((r) => {
+    const state = slaState(r);
+    return {
+      id: r.id,
+      ticketKey: r.ticketKey,
+      title: r.title,
+      description: r.description,
+      type: r.type as "incident" | "request",
+      priority: r.priority as "low" | "medium" | "high" | "urgent",
+      status: r.status as
+        | "new"
+        | "in_progress"
+        | "with_user"
+        | "with_vendor"
+        | "on_hold"
+        | "scheduled"
+        | "resolved"
+        | "closed",
+      source: r.source as "portal" | "email" | "phone" | "chat" | "walk_in",
+      supportLevel: (r.supportLevel ?? 1) as 1 | 2 | 3,
+      departmentId: r.departmentId,
+      departmentName: deptMap.get(r.departmentId)?.name ?? "—",
+      reporterId: r.reporterId,
+      reporterName: userMap.get(r.reporterId)?.name ?? "—",
+      assigneeId: r.assigneeId ?? null,
+      assigneeName:
+        r.assigneeId != null ? userMap.get(r.assigneeId)?.name ?? null : null,
+      location: r.location ?? null,
+      team: r.team ?? null,
+      category: r.category ?? null,
+      riskLevel: (r.riskLevel ?? "low") as
+        | "low"
+        | "medium"
+        | "high"
+        | "critical",
+      rootCause: r.rootCause ?? null,
+      resolution: r.resolution ?? null,
+      slaBreached: r.slaBreached,
+      responseSlaBreached: r.responseSlaBreached,
+      // Derived: paused | breached | on_track. Paused wins over on_track
+      // so the UI can render the pause badge.
+      slaStatus: deriveSlaStatus(r, state),
+      slaPhase: state.phase,
+      slaPaused: state.paused,
+      slaActiveDueAt: state.dueAt ? state.dueAt.toISOString() : null,
+      responseDueAt: r.responseDueAt ? r.responseDueAt.toISOString() : null,
+      resolutionDueAt: r.resolutionDueAt ? r.resolutionDueAt.toISOString() : null,
+      firstResponseAt: r.firstResponseAt ? r.firstResponseAt.toISOString() : null,
+      resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : null,
+      withUserSince: r.withUserSince ? r.withUserSince.toISOString() : null,
+      lastUserReplyAt: r.lastUserReplyAt
+        ? r.lastUserReplyAt.toISOString()
+        : null,
+      closureReason: r.closureReason ?? null,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    };
+  });
 }
 
 router.get("/tickets", async (req, res): Promise<void> => {
@@ -138,8 +262,8 @@ router.get("/tickets", async (req, res): Promise<void> => {
   const conds: Array<any> = [];
   if (params.data.departmentId != null)
     conds.push(eq(ticketsTable.departmentId, params.data.departmentId));
-  if (params.data.status)
-    conds.push(eq(ticketsTable.status, params.data.status));
+  if (params.data.status && params.data.status.length > 0)
+    conds.push(inArray(ticketsTable.status, params.data.status));
   if (params.data.priority)
     conds.push(eq(ticketsTable.priority, params.data.priority));
   if (params.data.supportLevel != null)
@@ -188,10 +312,14 @@ router.get("/tickets", async (req, res): Promise<void> => {
   const rows = await (where ? query.where(where) : query)
     .orderBy(desc(ticketsTable.createdAt));
 
-  let filtered = rows;
+  // Run lazy automations *before* hydration / SLA derivation so the
+  // results are already up-to-date.
+  const automated = await applyAutomations(rows);
+
+  let filtered = automated;
   if (params.data.q) {
     const needle = params.data.q.toLowerCase();
-    filtered = rows.filter(
+    filtered = filtered.filter(
       (r) =>
         r.title.toLowerCase().includes(needle) ||
         r.ticketKey.toLowerCase().includes(needle) ||
@@ -283,7 +411,8 @@ router.post("/tickets", async (req, res): Promise<void> => {
       description: parsed.data.description,
       type: parsed.data.type,
       priority: parsed.data.priority,
-      status: "open",
+      // 8-state workflow starts at "new"; agents move it forward.
+      status: "new",
       source: parsed.data.source,
       departmentId: parsed.data.departmentId,
       reporterId,
@@ -329,7 +458,10 @@ router.get("/tickets/:id", async (req, res): Promise<void> => {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const [hydrated] = await hydrate([row]);
+
+  // Run lazy automations on the single row before hydration.
+  const [automated] = await applyAutomations([row]);
+  const [hydrated] = await hydrate([automated]);
 
   const commentRows = await db
     .select()
@@ -394,8 +526,66 @@ router.patch("/tickets/:id", async (req, res): Promise<void> => {
   // parsed.data already includes riskLevel/rootCause/resolution from the
   // generated zod schema, so spreading is safe.
   const updates: Partial<typeof ticketsTable.$inferInsert> = { ...parsed.data };
-  if (parsed.data.status === "resolved" || parsed.data.status === "closed") {
-    if (!existing.resolvedAt) updates.resolvedAt = new Date();
+
+  // ---- Status transition side effects --------------------------------
+  if (parsed.data.status && parsed.data.status !== existing.status) {
+    const now = new Date();
+    const wasPaused = PAUSED_STATUSES.has(existing.status);
+    const willBePaused = PAUSED_STATUSES.has(parsed.data.status);
+
+    // Pause bookkeeping only applies during the resolution phase. While
+    // we're still pre-firstResponseAt, the response clock is what's
+    // active and it doesn't pause for waiting-on-user/vendor states.
+    // Tracking pause time here would inflate slaAccumulatedPauseMs and
+    // later push the resolution due date forward incorrectly.
+    const inResolutionPhase = !!existing.firstResponseAt;
+
+    if (inResolutionPhase) {
+      // Entering a paused state — stamp the pause start. (Skip if
+      // somehow already stamped, e.g. a manual override.)
+      if (!wasPaused && willBePaused) {
+        updates.slaPausedAt = now;
+      }
+      // Leaving a paused state — fold the elapsed pause into the
+      // accumulator and clear the start stamp.
+      if (wasPaused && !willBePaused) {
+        const running = existing.slaPausedAt
+          ? now.getTime() - existing.slaPausedAt.getTime()
+          : 0;
+        updates.slaAccumulatedPauseMs =
+          (existing.slaAccumulatedPauseMs ?? 0) + (running > 0 ? running : 0);
+        updates.slaPausedAt = null;
+      }
+    }
+
+    // With User bookkeeping (separate from generic pause to drive the
+    // 3d/4d automations).
+    if (existing.status !== "with_user" && parsed.data.status === "with_user") {
+      updates.withUserSince = now;
+      updates.withUserReminderSentAt = null;
+    }
+    if (existing.status === "with_user" && parsed.data.status !== "with_user") {
+      updates.withUserSince = null;
+    }
+
+    // Resolved bookkeeping — set resolvedAt on entry, clear on exit so a
+    // re-resolve restarts the 24h auto-close grace period.
+    if (
+      (parsed.data.status === "resolved" || parsed.data.status === "closed") &&
+      !existing.resolvedAt
+    ) {
+      updates.resolvedAt = now;
+    }
+    if (existing.status === "resolved" && parsed.data.status !== "resolved" &&
+        parsed.data.status !== "closed") {
+      updates.resolvedAt = null;
+    }
+
+    // Manual closure clears any prior automated closure-reason unless the
+    // caller explicitly set one.
+    if (parsed.data.status !== "closed" && existing.closureReason) {
+      updates.closureReason = null;
+    }
   }
 
   const [row] = await db
@@ -475,10 +665,59 @@ router.post("/tickets/:id/comments", async (req, res): Promise<void> => {
     })
     .returning();
 
-  if (!ticket.firstResponseAt && (user.role === "admin" || user.role === "agent")) {
+  // ---- Side effects driven by who replied ----------------------------
+  const now = new Date();
+  const ticketUpdates: Partial<typeof ticketsTable.$inferInsert> = {};
+
+  // First agent response stamps firstResponseAt (kicks the resolution
+  // clock off).
+  if (
+    !ticket.firstResponseAt &&
+    (user.role === "admin" || user.role === "agent")
+  ) {
+    ticketUpdates.firstResponseAt = now;
+  }
+
+  // End-user reply on a resolved ticket → reopen to in_progress.
+  // End-user reply while waiting on the user → resume to in_progress.
+  // Closed is terminal — end-user comments do not reopen closed tickets.
+  if (user.role === "end_user") {
+    ticketUpdates.lastUserReplyAt = now;
+
+    const reopens = ticket.status === "resolved";
+    const resumes = ticket.status === "with_user";
+
+    if (reopens || resumes) {
+      ticketUpdates.status = "in_progress";
+
+      if (reopens) {
+        ticketUpdates.resolvedAt = null;
+        ticketUpdates.closureReason = null;
+      }
+
+      // Accumulate any in-flight pause (with_user case) and clear the
+      // pause stamp so the resolution clock resumes immediately. Only
+      // applies post-firstResponseAt; pre-response there's no pause to
+      // accumulate.
+      if (ticket.firstResponseAt && PAUSED_STATUSES.has(ticket.status)) {
+        const running = ticket.slaPausedAt
+          ? now.getTime() - ticket.slaPausedAt.getTime()
+          : 0;
+        ticketUpdates.slaAccumulatedPauseMs =
+          (ticket.slaAccumulatedPauseMs ?? 0) + (running > 0 ? running : 0);
+        ticketUpdates.slaPausedAt = null;
+      }
+
+      if (ticket.status === "with_user") {
+        ticketUpdates.withUserSince = null;
+      }
+    }
+  }
+
+  if (Object.keys(ticketUpdates).length > 0) {
     await db
       .update(ticketsTable)
-      .set({ firstResponseAt: new Date() })
+      .set(ticketUpdates)
       .where(eq(ticketsTable.id, ticket.id));
   }
 

@@ -9,8 +9,12 @@
 export type TicketStatus = (typeof TicketStatus)[keyof typeof TicketStatus];
 
 export const TicketStatus = {
-  open: "open",
-  pending: "pending",
+  new: "new",
+  in_progress: "in_progress",
+  with_user: "with_user",
+  with_vendor: "with_vendor",
+  on_hold: "on_hold",
+  scheduled: "scheduled",
   resolved: "resolved",
   closed: "closed",
 } as const;

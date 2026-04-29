@@ -7,6 +7,7 @@
  */
 import type { TicketPriority } from "./ticketPriority";
 import type { TicketRiskLevel } from "./ticketRiskLevel";
+import type { TicketSlaPhase } from "./ticketSlaPhase";
 import type { TicketSlaStatus } from "./ticketSlaStatus";
 import type { TicketSource } from "./ticketSource";
 import type { TicketStatus } from "./ticketStatus";
@@ -43,7 +44,27 @@ export interface Ticket {
   /** @nullable */
   resolution?: string | null;
   slaBreached: boolean;
+  responseSlaBreached: boolean;
   slaStatus: TicketSlaStatus;
+  /** Which SLA clock is currently being tracked.
+* `response` — before the first agent response.
+* `resolution` — after the first agent response, while the
+  ticket is in an active state.
+* `none` — ticket is resolved/closed; SLA has stopped.
+ */
+  slaPhase: TicketSlaPhase;
+  /** True when the resolution SLA is currently paused (status is
+with_user, with_vendor, on_hold, or scheduled).
+ */
+  slaPaused: boolean;
+  /**
+   * Effective deadline of the *currently active* SLA, taking
+accumulated pause time into account. Null when slaPhase is
+`none` or the ticket has no due date.
+
+   * @nullable
+   */
+  slaActiveDueAt?: Date | null;
   /** @nullable */
   responseDueAt?: Date | null;
   /** @nullable */
@@ -52,6 +73,12 @@ export interface Ticket {
   firstResponseAt?: Date | null;
   /** @nullable */
   resolvedAt?: Date | null;
+  /** @nullable */
+  withUserSince?: Date | null;
+  /** @nullable */
+  lastUserReplyAt?: Date | null;
+  /** @nullable */
+  closureReason?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

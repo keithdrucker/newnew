@@ -29,4 +29,6 @@ export interface UpdateTicketInput {
   rootCause?: string | null;
   /** @nullable */
   resolution?: string | null;
+  /** @nullable */
+  closureReason?: string | null;
 }

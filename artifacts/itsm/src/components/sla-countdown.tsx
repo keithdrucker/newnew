@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, Clock } from "lucide-react";
+import { AlertCircle, Clock, Pause } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
+type Phase = "response" | "resolution" | "none";
+
 type Props = {
   slaStatus: string | null | undefined;
+  /** Effective deadline of the active SLA (preferred). Falls back to
+   *  resolutionDueAt when the server hasn't supplied it (older payloads). */
+  slaActiveDueAt?: string | null | undefined;
+  slaPhase?: Phase | null | undefined;
+  slaPaused?: boolean | null | undefined;
   resolutionDueAt: string | null | undefined;
   resolvedAt?: string | null;
   size?: "sm" | "md";
@@ -23,67 +30,110 @@ function formatRemaining(ms: number): string {
   return `${seconds}s`;
 }
 
+function phaseLabel(phase: Phase | null | undefined): string {
+  if (phase === "response") return "Response";
+  if (phase === "resolution") return "Resolution";
+  return "";
+}
+
 /**
- * Live SLA indicator. Shows "Breached" when the backend already marked the
- * ticket breached, "Resolved" when there's no active deadline, otherwise
- * counts down toward `resolutionDueAt` and re-renders every second.
+ * Live SLA indicator. Renders one of four states keyed off `slaPhase`:
+ *  - "On Track" (no active phase or no due date)
+ *  - "Paused — <Phase>" (resolution clock paused while waiting on user/vendor/etc.)
+ *  - "⏱ <remaining> — <Phase>" (active countdown, color by urgency)
+ *  - "Breached — <Phase>" (deadline elapsed)
+ *
+ * Re-renders every second so the countdown stays live without re-fetching.
  */
 export function SlaCountdown({
   slaStatus,
+  slaActiveDueAt,
+  slaPhase,
+  slaPaused,
   resolutionDueAt,
   resolvedAt,
   size = "sm",
   className,
 }: Props) {
-  // Re-render every second so the countdown stays live without re-fetching
-  // the ticket. We only need wall-clock now; we don't store it.
+  // Prefer the server-provided active due date (accounts for pause time);
+  // fall back to resolutionDueAt when missing.
+  const activeDue = slaActiveDueAt ?? resolutionDueAt ?? null;
+  const phase: Phase = slaPhase ?? (resolvedAt ? "none" : "resolution");
+
   const [, force] = useState(0);
   useEffect(() => {
-    if (slaStatus === "breached" || resolvedAt || !resolutionDueAt) return;
+    if (
+      slaStatus === "breached" ||
+      slaPaused ||
+      phase === "none" ||
+      !activeDue
+    )
+      return;
     const id = setInterval(() => force((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, [slaStatus, resolvedAt, resolutionDueAt]);
+  }, [slaStatus, slaPaused, phase, activeDue]);
 
   const textSize = size === "sm" ? "text-xs" : "text-sm";
+  const phaseSuffix = phaseLabel(phase) ? ` — ${phaseLabel(phase)}` : "";
 
+  // Breached wins over paused (server signals breach via slaStatus).
   if (slaStatus === "breached") {
     return (
       <Badge
         variant="secondary"
         className={cn("bg-amber-100 text-amber-800", className)}
+        data-testid="sla-badge-breached"
       >
         <AlertCircle className="h-3 w-3 mr-1" />
-        Breached
+        Breached{phaseSuffix}
       </Badge>
     );
   }
 
-  if (resolvedAt || !resolutionDueAt) {
+  // Paused — slate badge so it's visually distinct from active countdown.
+  if (slaPaused) {
     return (
-      <span className={cn(textSize, "text-muted-foreground/70", className)}>
-        On track
+      <Badge
+        variant="secondary"
+        className={cn("bg-slate-100 text-slate-700", className)}
+        data-testid="sla-badge-paused"
+      >
+        <Pause className="h-3 w-3 mr-1" />
+        Paused{phaseSuffix}
+      </Badge>
+    );
+  }
+
+  // No active SLA (resolved/closed or no due date) — quiet "On Track".
+  if (phase === "none" || !activeDue) {
+    return (
+      <span
+        className={cn(textSize, "text-muted-foreground/70", className)}
+        data-testid="sla-on-track"
+      >
+        On Track
       </span>
     );
   }
 
-  const remainingMs = new Date(resolutionDueAt).getTime() - Date.now();
+  const remainingMs = new Date(activeDue).getTime() - Date.now();
 
   // Defensive: due date already passed but backend hasn't recomputed yet.
-  // Treat as breached visually so the UI isn't misleading.
   if (remainingMs <= 0) {
     return (
       <Badge
         variant="secondary"
         className={cn("bg-amber-100 text-amber-800", className)}
+        data-testid="sla-badge-breached"
       >
         <AlertCircle className="h-3 w-3 mr-1" />
-        Breached
+        Breached{phaseSuffix}
       </Badge>
     );
   }
 
   // Color the badge by urgency: <1h critical (red), <4h warning (orange),
-  // otherwise on-track (green/emerald).
+  // otherwise on-track (emerald).
   const oneHour = 60 * 60 * 1000;
   const fourHours = 4 * oneHour;
   const tone =
@@ -97,10 +147,11 @@ export function SlaCountdown({
     <Badge
       variant="secondary"
       className={cn(tone, "tabular-nums", className)}
-      title={`Due ${new Date(resolutionDueAt).toLocaleString()}`}
+      title={`Due ${new Date(activeDue).toLocaleString()}`}
+      data-testid="sla-badge-active"
     >
       <Clock className="h-3 w-3 mr-1" />
-      {formatRemaining(remainingMs)} left
+      {formatRemaining(remainingMs)} left{phaseSuffix}
     </Badge>
   );
 }

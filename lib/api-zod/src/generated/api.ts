@@ -361,7 +361,23 @@ export const DeleteRiskRuleParams = zod.object({
  */
 export const ListTicketsQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
-  status: zod.enum(["open", "pending", "resolved", "closed"]).optional(),
+  status: zod
+    .array(
+      zod.enum([
+        "new",
+        "in_progress",
+        "with_user",
+        "with_vendor",
+        "on_hold",
+        "scheduled",
+        "resolved",
+        "closed",
+      ]),
+    )
+    .optional()
+    .describe(
+      "Filter by status. Repeatable — pass `?status=new&status=in_progress`\nto match any of the listed statuses.\n",
+    ),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   supportLevel: zod
     .union([zod.literal(1), zod.literal(2), zod.literal(3)])
@@ -387,7 +403,16 @@ export const ListTicketsResponseItem = zod.object({
   description: zod.string(),
   type: zod.enum(["incident", "request"]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
-  status: zod.enum(["open", "pending", "resolved", "closed"]),
+  status: zod.enum([
+    "new",
+    "in_progress",
+    "with_user",
+    "with_vendor",
+    "on_hold",
+    "scheduled",
+    "resolved",
+    "closed",
+  ]),
   source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
   supportLevel: zod
     .union([zod.literal(1), zod.literal(2), zod.literal(3)])
@@ -405,11 +430,31 @@ export const ListTicketsResponseItem = zod.object({
   rootCause: zod.string().nullish(),
   resolution: zod.string().nullish(),
   slaBreached: zod.boolean(),
-  slaStatus: zod.enum(["on_track", "breached"]),
+  responseSlaBreached: zod.boolean(),
+  slaStatus: zod.enum(["on_track", "breached", "paused"]),
+  slaPhase: zod
+    .enum(["response", "resolution", "none"])
+    .describe(
+      "Which SLA clock is currently being tracked.\n\* `response` — before the first agent response.\n\* `resolution` — after the first agent response, while the\n  ticket is in an active state.\n\* `none` — ticket is resolved\/closed; SLA has stopped.\n",
+    ),
+  slaPaused: zod
+    .boolean()
+    .describe(
+      "True when the resolution SLA is currently paused (status is\nwith_user, with_vendor, on_hold, or scheduled).\n",
+    ),
+  slaActiveDueAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Effective deadline of the \*currently active\* SLA, taking\naccumulated pause time into account. Null when slaPhase is\n`none` or the ticket has no due date.\n",
+    ),
   responseDueAt: zod.coerce.date().nullish(),
   resolutionDueAt: zod.coerce.date().nullish(),
   firstResponseAt: zod.coerce.date().nullish(),
   resolvedAt: zod.coerce.date().nullish(),
+  withUserSince: zod.coerce.date().nullish(),
+  lastUserReplyAt: zod.coerce.date().nullish(),
+  closureReason: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -453,7 +498,16 @@ export const GetTicketResponse = zod
     description: zod.string(),
     type: zod.enum(["incident", "request"]),
     priority: zod.enum(["low", "medium", "high", "urgent"]),
-    status: zod.enum(["open", "pending", "resolved", "closed"]),
+    status: zod.enum([
+      "new",
+      "in_progress",
+      "with_user",
+      "with_vendor",
+      "on_hold",
+      "scheduled",
+      "resolved",
+      "closed",
+    ]),
     source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
     supportLevel: zod
       .union([zod.literal(1), zod.literal(2), zod.literal(3)])
@@ -471,11 +525,31 @@ export const GetTicketResponse = zod
     rootCause: zod.string().nullish(),
     resolution: zod.string().nullish(),
     slaBreached: zod.boolean(),
-    slaStatus: zod.enum(["on_track", "breached"]),
+    responseSlaBreached: zod.boolean(),
+    slaStatus: zod.enum(["on_track", "breached", "paused"]),
+    slaPhase: zod
+      .enum(["response", "resolution", "none"])
+      .describe(
+        "Which SLA clock is currently being tracked.\n\* `response` — before the first agent response.\n\* `resolution` — after the first agent response, while the\n  ticket is in an active state.\n\* `none` — ticket is resolved\/closed; SLA has stopped.\n",
+      ),
+    slaPaused: zod
+      .boolean()
+      .describe(
+        "True when the resolution SLA is currently paused (status is\nwith_user, with_vendor, on_hold, or scheduled).\n",
+      ),
+    slaActiveDueAt: zod.coerce
+      .date()
+      .nullish()
+      .describe(
+        "Effective deadline of the \*currently active\* SLA, taking\naccumulated pause time into account. Null when slaPhase is\n`none` or the ticket has no due date.\n",
+      ),
     responseDueAt: zod.coerce.date().nullish(),
     resolutionDueAt: zod.coerce.date().nullish(),
     firstResponseAt: zod.coerce.date().nullish(),
     resolvedAt: zod.coerce.date().nullish(),
+    withUserSince: zod.coerce.date().nullish(),
+    lastUserReplyAt: zod.coerce.date().nullish(),
+    closureReason: zod.string().nullish(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -505,7 +579,18 @@ export const UpdateTicketBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
-  status: zod.enum(["open", "pending", "resolved", "closed"]).optional(),
+  status: zod
+    .enum([
+      "new",
+      "in_progress",
+      "with_user",
+      "with_vendor",
+      "on_hold",
+      "scheduled",
+      "resolved",
+      "closed",
+    ])
+    .optional(),
   supportLevel: zod
     .union([zod.literal(1), zod.literal(2), zod.literal(3)])
     .optional(),
@@ -516,6 +601,7 @@ export const UpdateTicketBody = zod.object({
   riskLevel: zod.enum(["low", "medium", "high", "critical"]).optional(),
   rootCause: zod.string().nullish(),
   resolution: zod.string().nullish(),
+  closureReason: zod.string().nullish(),
 });
 
 export const UpdateTicketResponse = zod.object({
@@ -525,7 +611,16 @@ export const UpdateTicketResponse = zod.object({
   description: zod.string(),
   type: zod.enum(["incident", "request"]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
-  status: zod.enum(["open", "pending", "resolved", "closed"]),
+  status: zod.enum([
+    "new",
+    "in_progress",
+    "with_user",
+    "with_vendor",
+    "on_hold",
+    "scheduled",
+    "resolved",
+    "closed",
+  ]),
   source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
   supportLevel: zod
     .union([zod.literal(1), zod.literal(2), zod.literal(3)])
@@ -543,11 +638,31 @@ export const UpdateTicketResponse = zod.object({
   rootCause: zod.string().nullish(),
   resolution: zod.string().nullish(),
   slaBreached: zod.boolean(),
-  slaStatus: zod.enum(["on_track", "breached"]),
+  responseSlaBreached: zod.boolean(),
+  slaStatus: zod.enum(["on_track", "breached", "paused"]),
+  slaPhase: zod
+    .enum(["response", "resolution", "none"])
+    .describe(
+      "Which SLA clock is currently being tracked.\n\* `response` — before the first agent response.\n\* `resolution` — after the first agent response, while the\n  ticket is in an active state.\n\* `none` — ticket is resolved\/closed; SLA has stopped.\n",
+    ),
+  slaPaused: zod
+    .boolean()
+    .describe(
+      "True when the resolution SLA is currently paused (status is\nwith_user, with_vendor, on_hold, or scheduled).\n",
+    ),
+  slaActiveDueAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Effective deadline of the \*currently active\* SLA, taking\naccumulated pause time into account. Null when slaPhase is\n`none` or the ticket has no due date.\n",
+    ),
   responseDueAt: zod.coerce.date().nullish(),
   resolutionDueAt: zod.coerce.date().nullish(),
   firstResponseAt: zod.coerce.date().nullish(),
   resolvedAt: zod.coerce.date().nullish(),
+  withUserSince: zod.coerce.date().nullish(),
+  lastUserReplyAt: zod.coerce.date().nullish(),
+  closureReason: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -581,14 +696,22 @@ export const ListTicketViewsResponseItem = zod.object({
   config: zod.object({
     search: zod.string().nullish(),
     status: zod
-      .union([
-        zod.literal("open"),
-        zod.literal("pending"),
-        zod.literal("resolved"),
-        zod.literal("closed"),
-        zod.literal(null),
-      ])
-      .nullish(),
+      .array(
+        zod.enum([
+          "new",
+          "in_progress",
+          "with_user",
+          "with_vendor",
+          "on_hold",
+          "scheduled",
+          "resolved",
+          "closed",
+        ]),
+      )
+      .nullish()
+      .describe(
+        'Multi-select status filter. Each entry must be one of the 8\nworkflow statuses; `null` means \"no status filter\".\n',
+      ),
     priority: zod
       .union([
         zod.literal("low"),
@@ -660,14 +783,22 @@ export const CreateTicketViewBody = zod.object({
   config: zod.object({
     search: zod.string().nullish(),
     status: zod
-      .union([
-        zod.literal("open"),
-        zod.literal("pending"),
-        zod.literal("resolved"),
-        zod.literal("closed"),
-        zod.literal(null),
-      ])
-      .nullish(),
+      .array(
+        zod.enum([
+          "new",
+          "in_progress",
+          "with_user",
+          "with_vendor",
+          "on_hold",
+          "scheduled",
+          "resolved",
+          "closed",
+        ]),
+      )
+      .nullish()
+      .describe(
+        'Multi-select status filter. Each entry must be one of the 8\nworkflow statuses; `null` means \"no status filter\".\n',
+      ),
     priority: zod
       .union([
         zod.literal("low"),
@@ -742,14 +873,22 @@ export const UpdateTicketViewBody = zod.object({
     .object({
       search: zod.string().nullish(),
       status: zod
-        .union([
-          zod.literal("open"),
-          zod.literal("pending"),
-          zod.literal("resolved"),
-          zod.literal("closed"),
-          zod.literal(null),
-        ])
-        .nullish(),
+        .array(
+          zod.enum([
+            "new",
+            "in_progress",
+            "with_user",
+            "with_vendor",
+            "on_hold",
+            "scheduled",
+            "resolved",
+            "closed",
+          ]),
+        )
+        .nullish()
+        .describe(
+          'Multi-select status filter. Each entry must be one of the 8\nworkflow statuses; `null` means \"no status filter\".\n',
+        ),
       priority: zod
         .union([
           zod.literal("low"),
@@ -820,14 +959,22 @@ export const UpdateTicketViewResponse = zod.object({
   config: zod.object({
     search: zod.string().nullish(),
     status: zod
-      .union([
-        zod.literal("open"),
-        zod.literal("pending"),
-        zod.literal("resolved"),
-        zod.literal("closed"),
-        zod.literal(null),
-      ])
-      .nullish(),
+      .array(
+        zod.enum([
+          "new",
+          "in_progress",
+          "with_user",
+          "with_vendor",
+          "on_hold",
+          "scheduled",
+          "resolved",
+          "closed",
+        ]),
+      )
+      .nullish()
+      .describe(
+        'Multi-select status filter. Each entry must be one of the 8\nworkflow statuses; `null` means \"no status filter\".\n',
+      ),
     priority: zod
       .union([
         zod.literal("low"),
@@ -2001,10 +2148,18 @@ export const GetDashboardOverviewResponse = zod.object({
   slaResponseCompliance: zod.number(),
   slaResolutionCompliance: zod.number(),
   ticketsBreachedSla: zod.number(),
+  responseBreachedCount: zod.number(),
+  resolutionBreachedCount: zod.number(),
   openTickets: zod.number(),
   closedTickets: zod.number(),
   pendingTickets: zod.number(),
   resolvedTickets: zod.number(),
+  newTickets: zod.number(),
+  inProgressTickets: zod.number(),
+  withUserTickets: zod.number(),
+  withVendorTickets: zod.number(),
+  onHoldTickets: zod.number(),
+  scheduledTickets: zod.number(),
   totalTickets: zod.number(),
   averageSatisfactionScore: zod.number(),
   estimatedTimeSavedHours: zod.number(),
@@ -2068,7 +2223,16 @@ export const GetBreachedTicketsResponseItem = zod.object({
   description: zod.string(),
   type: zod.enum(["incident", "request"]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
-  status: zod.enum(["open", "pending", "resolved", "closed"]),
+  status: zod.enum([
+    "new",
+    "in_progress",
+    "with_user",
+    "with_vendor",
+    "on_hold",
+    "scheduled",
+    "resolved",
+    "closed",
+  ]),
   source: zod.enum(["portal", "email", "phone", "chat", "walk_in"]),
   supportLevel: zod
     .union([zod.literal(1), zod.literal(2), zod.literal(3)])
@@ -2086,11 +2250,31 @@ export const GetBreachedTicketsResponseItem = zod.object({
   rootCause: zod.string().nullish(),
   resolution: zod.string().nullish(),
   slaBreached: zod.boolean(),
-  slaStatus: zod.enum(["on_track", "breached"]),
+  responseSlaBreached: zod.boolean(),
+  slaStatus: zod.enum(["on_track", "breached", "paused"]),
+  slaPhase: zod
+    .enum(["response", "resolution", "none"])
+    .describe(
+      "Which SLA clock is currently being tracked.\n\* `response` — before the first agent response.\n\* `resolution` — after the first agent response, while the\n  ticket is in an active state.\n\* `none` — ticket is resolved\/closed; SLA has stopped.\n",
+    ),
+  slaPaused: zod
+    .boolean()
+    .describe(
+      "True when the resolution SLA is currently paused (status is\nwith_user, with_vendor, on_hold, or scheduled).\n",
+    ),
+  slaActiveDueAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Effective deadline of the \*currently active\* SLA, taking\naccumulated pause time into account. Null when slaPhase is\n`none` or the ticket has no due date.\n",
+    ),
   responseDueAt: zod.coerce.date().nullish(),
   resolutionDueAt: zod.coerce.date().nullish(),
   firstResponseAt: zod.coerce.date().nullish(),
   resolvedAt: zod.coerce.date().nullish(),
+  withUserSince: zod.coerce.date().nullish(),
+  lastUserReplyAt: zod.coerce.date().nullish(),
+  closureReason: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });

@@ -9,15 +9,20 @@ import type { TicketViewConfigCreatedRange } from "./ticketViewConfigCreatedRang
 import type { TicketViewConfigPriority } from "./ticketViewConfigPriority";
 import type { TicketViewConfigRiskLevel } from "./ticketViewConfigRiskLevel";
 import type { TicketViewConfigSlaStatus } from "./ticketViewConfigSlaStatus";
-import type { TicketViewConfigStatus } from "./ticketViewConfigStatus";
+import type { TicketViewConfigStatusItem } from "./ticketViewConfigStatusItem";
 import type { TicketViewConfigSupportLevel } from "./ticketViewConfigSupportLevel";
 import type { TicketViewConfigUpdatedRange } from "./ticketViewConfigUpdatedRange";
 
 export interface TicketViewConfig {
   /** @nullable */
   search?: string | null;
-  /** @nullable */
-  status?: TicketViewConfigStatus;
+  /**
+   * Multi-select status filter. Each entry must be one of the 8
+workflow statuses; `null` means "no status filter".
+
+   * @nullable
+   */
+  status?: TicketViewConfigStatusItem[] | null;
   /** @nullable */
   priority?: TicketViewConfigPriority;
   /** @nullable */

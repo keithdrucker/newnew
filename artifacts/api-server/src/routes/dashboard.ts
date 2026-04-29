@@ -17,6 +17,7 @@ import {
 import { getCurrentUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
 import { visibleDepartmentIds } from "../lib/board-access";
+import { slaState, deriveSlaStatus, TERMINAL_STATUSES } from "../lib/sla";
 
 const router: IRouter = Router();
 
@@ -79,11 +80,43 @@ router.get("/dashboard/overview", async (req, res): Promise<void> => {
   const tickets = await db.select().from(ticketsTable).where(where);
 
   const totalTickets = tickets.length;
-  const openTickets = tickets.filter((t) => t.status === "open").length;
-  const pendingTickets = tickets.filter((t) => t.status === "pending").length;
+  // 8-state workflow counts.
+  const newTickets = tickets.filter((t) => t.status === "new").length;
+  const inProgressTickets = tickets.filter(
+    (t) => t.status === "in_progress",
+  ).length;
+  const withUserTickets = tickets.filter((t) => t.status === "with_user").length;
+  const withVendorTickets = tickets.filter(
+    (t) => t.status === "with_vendor",
+  ).length;
+  const onHoldTickets = tickets.filter((t) => t.status === "on_hold").length;
+  const scheduledTickets = tickets.filter((t) => t.status === "scheduled").length;
   const resolvedTickets = tickets.filter((t) => t.status === "resolved").length;
   const closedTickets = tickets.filter((t) => t.status === "closed").length;
-  const ticketsBreachedSla = tickets.filter((t) => t.slaBreached).length;
+
+  // Legacy aliases — Overview tiles still use these names. We keep them
+  // pointing at the closest 8-state equivalents so existing UI doesn't
+  // need to change shape.
+  const openTickets = newTickets;
+  const pendingTickets = inProgressTickets;
+
+  // Split breach counts so dashboards can show Response vs Resolution
+  // breaches separately. We derive these on the fly via slaState() rather
+  // than relying on the persisted slaBreached/responseSlaBreached flags
+  // (which the route does not currently re-stamp on every state
+  // transition), so the counts always reflect the live SLA position.
+  const slaStates = tickets.map((t) => ({ t, s: slaState(t) }));
+  const responseBreachedCount = slaStates.filter(
+    ({ t, s }) =>
+      (s.phase === "response" && s.breached) || t.responseSlaBreached,
+  ).length;
+  const resolutionBreachedCount = slaStates.filter(
+    ({ t, s }) =>
+      (s.phase === "resolution" && s.breached) || t.slaBreached,
+  ).length;
+  const ticketsBreachedSla = slaStates.filter(
+    ({ t, s }) => s.breached || t.slaBreached || t.responseSlaBreached,
+  ).length;
 
   const respondedTickets = tickets.filter((t) => t.firstResponseAt);
   const responseSecondsList = respondedTickets.map((t) =>
@@ -136,8 +169,12 @@ router.get("/dashboard/overview", async (req, res): Promise<void> => {
     : 1;
 
   const statusBreakdown = [
-    { status: "open", count: openTickets },
-    { status: "pending", count: pendingTickets },
+    { status: "new", count: newTickets },
+    { status: "in_progress", count: inProgressTickets },
+    { status: "with_user", count: withUserTickets },
+    { status: "with_vendor", count: withVendorTickets },
+    { status: "on_hold", count: onHoldTickets },
+    { status: "scheduled", count: scheduledTickets },
     { status: "resolved", count: resolvedTickets },
     { status: "closed", count: closedTickets },
   ];
@@ -175,10 +212,18 @@ router.get("/dashboard/overview", async (req, res): Promise<void> => {
     slaResponseCompliance: Math.round(slaResponseCompliance * 1000) / 1000,
     slaResolutionCompliance: Math.round(slaResolutionCompliance * 1000) / 1000,
     ticketsBreachedSla,
+    responseBreachedCount,
+    resolutionBreachedCount,
     openTickets,
     closedTickets,
     pendingTickets,
     resolvedTickets,
+    newTickets,
+    inProgressTickets,
+    withUserTickets,
+    withVendorTickets,
+    onHoldTickets,
+    scheduledTickets,
     totalTickets,
     averageSatisfactionScore: 4.6,
     estimatedTimeSavedHours: Math.round(totalTickets * 0.42 * 10) / 10,
@@ -293,9 +338,12 @@ router.get("/dashboard/breached", async (req, res): Promise<void> => {
     params.data.departmentId,
   );
 
+  // Pull every non-terminal ticket in range; we'll filter to "currently
+  // breached" via slaState() below so we catch resolution-phase breaches
+  // that weren't yet stamped into slaBreached, plus response-phase
+  // breaches that the persisted flag doesn't represent at all.
   const conds: Array<ReturnType<typeof eq>> = [
     gte(ticketsTable.createdAt, since),
-    eq(ticketsTable.slaBreached, true),
   ];
   if (allowedDeptIds != null) {
     if (allowedDeptIds.length === 0) {
@@ -308,7 +356,18 @@ router.get("/dashboard/breached", async (req, res): Promise<void> => {
     conds.push(eq(ticketsTable.assigneeId, params.data.assigneeId));
   if (user.role === "end_user") conds.push(eq(ticketsTable.reporterId, user.id));
 
-  const rows = await db.select().from(ticketsTable).where(and(...conds));
+  const allRows = await db.select().from(ticketsTable).where(and(...conds));
+  // Drop terminal tickets first (resolved/closed are off the SLA clock,
+  // even if they have a stale slaBreached=true flag from history), then
+  // keep the rest whose live SLA state is breached — falling back to the
+  // persisted flags for non-terminal tickets so we don't miss seeded
+  // data that hasn't been re-evaluated yet.
+  const rows = allRows.filter((r) => {
+    if (TERMINAL_STATUSES.has(r.status)) return false;
+    const s = slaState(r);
+    return s.breached || r.slaBreached || r.responseSlaBreached;
+  });
+
   // Hydrate similar to /tickets by inlining minimal logic
   const deptIds = Array.from(new Set(rows.map((r) => r.departmentId)));
   const userIds = Array.from(
@@ -333,33 +392,66 @@ router.get("/dashboard/breached", async (req, res): Promise<void> => {
   const deptMap = new Map(deptRows.map((d) => [d.id, d.name]));
   const userMap = new Map(userRows.map((u) => [u.id, u.name]));
 
-  const data = rows.map((r) => ({
-    id: r.id,
-    ticketKey: r.ticketKey,
-    title: r.title,
-    description: r.description,
-    type: r.type as "incident" | "request",
-    priority: r.priority as "low" | "medium" | "high" | "urgent",
-    status: r.status as "open" | "pending" | "resolved" | "closed",
-    source: r.source as "portal" | "email" | "phone" | "chat" | "walk_in",
-    departmentId: r.departmentId,
-    departmentName: deptMap.get(r.departmentId) ?? "—",
-    reporterId: r.reporterId,
-    reporterName: userMap.get(r.reporterId) ?? "—",
-    assigneeId: r.assigneeId ?? null,
-    assigneeName:
-      r.assigneeId != null ? userMap.get(r.assigneeId) ?? null : null,
-    location: r.location ?? null,
-    team: r.team ?? null,
-    category: r.category ?? null,
-    slaBreached: r.slaBreached,
-    responseDueAt: r.responseDueAt ? r.responseDueAt.toISOString() : null,
-    resolutionDueAt: r.resolutionDueAt ? r.resolutionDueAt.toISOString() : null,
-    firstResponseAt: r.firstResponseAt ? r.firstResponseAt.toISOString() : null,
-    resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : null,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  const data = rows.map((r) => {
+    const s = slaState(r);
+    return {
+      id: r.id,
+      ticketKey: r.ticketKey,
+      title: r.title,
+      description: r.description,
+      type: r.type as "incident" | "request",
+      priority: r.priority as "low" | "medium" | "high" | "urgent",
+      status: r.status as
+        | "new"
+        | "in_progress"
+        | "with_user"
+        | "with_vendor"
+        | "on_hold"
+        | "scheduled"
+        | "resolved"
+        | "closed",
+      source: r.source as "portal" | "email" | "phone" | "chat" | "walk_in",
+      supportLevel: (r.supportLevel ?? 1) as 1 | 2 | 3,
+      departmentId: r.departmentId,
+      departmentName: deptMap.get(r.departmentId) ?? "—",
+      reporterId: r.reporterId,
+      reporterName: userMap.get(r.reporterId) ?? "—",
+      assigneeId: r.assigneeId ?? null,
+      assigneeName:
+        r.assigneeId != null ? userMap.get(r.assigneeId) ?? null : null,
+      location: r.location ?? null,
+      team: r.team ?? null,
+      category: r.category ?? null,
+      riskLevel: (r.riskLevel ?? "low") as
+        | "low"
+        | "medium"
+        | "high"
+        | "critical",
+      rootCause: r.rootCause ?? null,
+      resolution: r.resolution ?? null,
+      slaBreached: r.slaBreached,
+      responseSlaBreached: r.responseSlaBreached,
+      slaStatus: deriveSlaStatus(r, s),
+      slaPhase: s.phase,
+      slaPaused: s.paused,
+      slaActiveDueAt: s.dueAt ? s.dueAt.toISOString() : null,
+      responseDueAt: r.responseDueAt ? r.responseDueAt.toISOString() : null,
+      resolutionDueAt: r.resolutionDueAt
+        ? r.resolutionDueAt.toISOString()
+        : null,
+      firstResponseAt: r.firstResponseAt
+        ? r.firstResponseAt.toISOString()
+        : null,
+      resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : null,
+      withUserSince: r.withUserSince ? r.withUserSince.toISOString() : null,
+      lastUserReplyAt: r.lastUserReplyAt
+        ? r.lastUserReplyAt.toISOString()
+        : null,
+      closureReason: r.closureReason ?? null,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    };
+  });
 
   res.json(GetBreachedTicketsResponse.parse(data));
 });

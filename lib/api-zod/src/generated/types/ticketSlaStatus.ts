@@ -12,4 +12,5 @@ export type TicketSlaStatus =
 export const TicketSlaStatus = {
   on_track: "on_track",
   breached: "breached",
+  paused: "paused",
 } as const;

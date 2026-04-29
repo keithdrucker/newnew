@@ -64,7 +64,7 @@ function makeTicketDetail(
     description: "A description",
     type: "incident",
     priority: "medium",
-    status: "open",
+    status: "new",
     source: "portal",
     supportLevel: 1,
     departmentId: 1,
@@ -178,7 +178,7 @@ describe("TicketDetail page — role-scoped rendering", () => {
         title: "My laptop is broken",
         reporterId: 3,
         reporterName: "Eve End-User",
-        status: "pending",
+        status: "in_progress",
         priority: "high",
         comments: [
           {
@@ -218,7 +218,7 @@ describe("TicketDetail page — role-scoped rendering", () => {
     ).not.toBeInTheDocument();
     // Read-only chips render the current values instead
     expect(screen.getByTestId("text-ticket-status")).toHaveTextContent(
-      "Pending",
+      "In Progress",
     );
     expect(screen.getByTestId("text-ticket-priority")).toHaveTextContent(
       "High",
@@ -298,7 +298,7 @@ describe("TicketDetail page — role-scoped rendering", () => {
     // for what will eventually be an admin session.
     useGetSessionMock.mockReturnValue({ data: undefined });
     useGetTicketMock.mockReturnValue({
-      data: makeTicketDetail({ status: "open", priority: "medium" }),
+      data: makeTicketDetail({ status: "new", priority: "medium" }),
       isLoading: false,
       isError: false,
     });

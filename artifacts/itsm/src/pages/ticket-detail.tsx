@@ -24,11 +24,23 @@ import { AlertCircle, CheckCircle2, ShieldAlert } from "lucide-react";
 import { SlaCountdown } from "@/components/sla-countdown";
 
 const STATUS_LABEL = {
-  open: "Open",
-  pending: "Pending",
+  new: "New",
+  in_progress: "In Progress",
+  with_user: "With User",
+  with_vendor: "With Vendor",
+  on_hold: "On Hold",
+  scheduled: "Scheduled",
   resolved: "Resolved",
   closed: "Closed",
 } as const;
+
+// Human-readable labels for the closure reasons the backend writes when a
+// ticket auto-closes (24h after resolved, or 4d after with_user).
+const CLOSURE_REASON_LABEL: Record<string, string> = {
+  manual: "Manual close",
+  auto_resolved_timeout: "Auto-closed after 24h",
+  no_user_response: "Closed — no user response",
+};
 
 const PRIORITY_LABEL = {
   low: "Low",
@@ -269,8 +281,12 @@ export default function TicketDetail() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="new">New</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="with_user">With User</SelectItem>
+                    <SelectItem value="with_vendor">With Vendor</SelectItem>
+                    <SelectItem value="on_hold">On Hold</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
                     <SelectItem value="resolved">Resolved</SelectItem>
                     <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
@@ -284,6 +300,18 @@ export default function TicketDetail() {
                     ticket.status}
                 </div>
               )}
+              {/* Surface the closure reason next to the status when a ticket
+                  has been auto- or manually closed. Hidden for non-closed
+                  tickets so it doesn't add noise. */}
+              {ticket.status === "closed" && ticket.closureReason ? (
+                <div
+                  className="text-xs text-muted-foreground"
+                  data-testid="text-closure-reason"
+                >
+                  {CLOSURE_REASON_LABEL[ticket.closureReason] ??
+                    ticket.closureReason}
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-1.5">

@@ -42,6 +42,7 @@ import {
   Filter as FilterIcon,
   Inbox,
   MoreHorizontal,
+  Pause,
   Plus,
   RefreshCw,
   Search,
@@ -163,9 +164,34 @@ const COLUMN_DEFS_META: Record<
 type DateRange = "all" | "today" | "week" | "month";
 type TriState = "all" | "yes" | "no";
 
+// 8-state ticket workflow. The four "active" statuses (new..scheduled) plus
+// the two terminal ones (resolved, closed). Default views hide resolved /
+// closed so agents land on a focused work queue.
+const ALL_STATUSES = [
+  "new",
+  "in_progress",
+  "with_user",
+  "with_vendor",
+  "on_hold",
+  "scheduled",
+  "resolved",
+  "closed",
+] as const;
+const ACTIVE_STATUSES: readonly string[] = [
+  "new",
+  "in_progress",
+  "with_user",
+  "with_vendor",
+  "on_hold",
+  "scheduled",
+];
+
 type Filters = {
   search: string;
-  status: string; // "all" | open | pending | resolved | closed
+  // Multi-select: array of status strings. Empty array = no status filter
+  // (i.e. show every status). DEFAULT_FILTERS pre-populates with the six
+  // active statuses so resolved/closed are hidden by default.
+  status: string[];
   priority: string; // "all" | low | medium | high | urgent
   riskLevel: string; // "all" | low | medium | high | critical
   supportLevel: string; // "all" | "1" | "2" | "3"
@@ -180,7 +206,7 @@ type Filters = {
 
 const DEFAULT_FILTERS: Filters = {
   search: "",
-  status: "all",
+  status: [...ACTIVE_STATUSES],
   priority: "all",
   riskLevel: "all",
   supportLevel: "all",
@@ -191,6 +217,25 @@ const DEFAULT_FILTERS: Filters = {
   hasResolution: "all",
   createdRange: "all",
   updatedRange: "all",
+};
+
+// Compare two arrays of statuses as sets, since order doesn't matter for
+// filter equivalence checks (chip strip, dirty detection).
+function sameStatusSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a);
+  return b.every((x) => sa.has(x));
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  new: "New",
+  in_progress: "In Progress",
+  with_user: "With User",
+  with_vendor: "With Vendor",
+  on_hold: "On Hold",
+  scheduled: "Scheduled",
+  resolved: "Resolved",
+  closed: "Closed",
 };
 
 const PRIORITY_RANK: Record<string, number> = {
@@ -366,9 +411,17 @@ export default function Tickets() {
     const v = views?.find((x) => x.id === viewId);
     if (!v) return;
     const c = v.config ?? {};
+    // Tolerate legacy single-value status saved by older clients — coerce
+    // anything non-array into an array so the filter UI still works.
+    const rawStatus = c.status as unknown;
+    const statusArr: string[] = Array.isArray(rawStatus)
+      ? (rawStatus as string[])
+      : typeof rawStatus === "string" && rawStatus
+        ? [rawStatus]
+        : [];
     setFilters({
       search: c.search ?? "",
-      status: c.status ?? "all",
+      status: statusArr,
       priority: c.priority ?? "all",
       riskLevel: c.riskLevel ?? "all",
       supportLevel:
@@ -408,10 +461,22 @@ export default function Tickets() {
   const { data: tickets, isLoading } = useListTickets({
     departmentId: dept?.id,
     q: filters.search || undefined,
+    // Multi-select: empty array means "no status filter" (let server return
+    // every status). Otherwise pass the array; orval generates a repeated
+    // ?status=... query string.
     status:
-      filters.status === "all"
+      filters.status.length === 0
         ? undefined
-        : (filters.status as "open" | "pending" | "resolved" | "closed"),
+        : (filters.status as Array<
+            | "new"
+            | "in_progress"
+            | "with_user"
+            | "with_vendor"
+            | "on_hold"
+            | "scheduled"
+            | "resolved"
+            | "closed"
+          >),
     priority:
       filters.priority === "all"
         ? undefined
@@ -522,8 +587,18 @@ export default function Tickets() {
     const t = tickets ?? [];
     return {
       total: t.length,
-      open: t.filter((x) => x.status === "open").length,
-      pending: t.filter((x) => x.status === "pending").length,
+      // Replaces the previous open/pending tiles with the new entry-state
+      // counts. Active = anything not resolved/closed.
+      newCount: t.filter((x) => x.status === "new").length,
+      inProgress: t.filter((x) => x.status === "in_progress").length,
+      active: t.filter(
+        (x) => x.status !== "resolved" && x.status !== "closed",
+      ).length,
+      waiting: t.filter((x) =>
+        ["with_user", "with_vendor", "on_hold", "scheduled"].includes(x.status),
+      ).length,
+      resolved: t.filter((x) => x.status === "resolved").length,
+      closed: t.filter((x) => x.status === "closed").length,
       breached: t.filter((x) => x.slaStatus === "breached").length,
     };
   }, [tickets]);
@@ -568,12 +643,10 @@ export default function Tickets() {
   ): { value: string; label: string }[] {
     switch (key) {
       case "status":
-        return [
-          { value: "open", label: "Open" },
-          { value: "pending", label: "Pending" },
-          { value: "resolved", label: "Resolved" },
-          { value: "closed", label: "Closed" },
-        ];
+        return ALL_STATUSES.map((s) => ({
+          value: s,
+          label: STATUS_LABEL[s] ?? s,
+        }));
       case "priority":
         return [
           { value: "urgent", label: "Urgent" },
@@ -634,13 +707,36 @@ export default function Tickets() {
     return opt?.label ?? value;
   }
 
-  const activeFilterChips = FILTER_CATEGORIES.filter(
-    (c) => filters[c.key] !== DEFAULT_FILTERS[c.key],
-  ).map((c) => ({
-    key: c.key,
-    categoryLabel: c.label,
-    valueLabel: labelForFilterValue(c.key, filters[c.key] as string),
-  }));
+  // Status is a multi-select array; everything else is a single string.
+  // For chip purposes, status renders as "Status: A, B, C" when its set
+  // differs from the default (active-statuses) set. Single-value categories
+  // chip on simple inequality with their default.
+  type FilterChip = {
+    key: FilterKey;
+    categoryLabel: string;
+    valueLabel: string;
+  };
+  const activeFilterChips: FilterChip[] = [];
+  for (const c of FILTER_CATEGORIES) {
+    if (c.key === "status") {
+      if (sameStatusSet(filters.status, DEFAULT_FILTERS.status)) continue;
+      const labels = filters.status
+        .map((s) => STATUS_LABEL[s] ?? s)
+        .join(", ");
+      activeFilterChips.push({
+        key: c.key,
+        categoryLabel: c.label,
+        valueLabel: labels || "(none)",
+      });
+      continue;
+    }
+    if (filters[c.key] === DEFAULT_FILTERS[c.key]) continue;
+    activeFilterChips.push({
+      key: c.key,
+      categoryLabel: c.label,
+      valueLabel: labelForFilterValue(c.key, filters[c.key] as string),
+    });
+  }
 
   const filtersDirty =
     activeFilterChips.length > 0 || filters.search !== DEFAULT_FILTERS.search;
@@ -654,8 +750,20 @@ export default function Tickets() {
   function buildConfigFromFilters() {
     return {
       search: filters.search ? filters.search : null,
+      // Persist multi-select status as an array. Null = no filter.
       status:
-        filters.status === "all" ? null : (filters.status as never),
+        filters.status.length === 0
+          ? null
+          : (filters.status as Array<
+              | "new"
+              | "in_progress"
+              | "with_user"
+              | "with_vendor"
+              | "on_hold"
+              | "scheduled"
+              | "resolved"
+              | "closed"
+            >),
       priority:
         filters.priority === "all" ? null : (filters.priority as never),
       riskLevel:
@@ -906,13 +1014,18 @@ export default function Tickets() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="px-2 py-1 rounded bg-blue-50 text-blue-700">
-              {summary.open} open
+              {summary.newCount} new
             </span>
-            <span className="px-2 py-1 rounded bg-orange-50 text-orange-700">
-              {summary.pending} pending
+            <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">
+              {summary.inProgress} in progress
             </span>
+            {summary.waiting > 0 && (
+              <span className="px-2 py-1 rounded bg-slate-100 text-slate-700">
+                {summary.waiting} waiting
+              </span>
+            )}
             {summary.breached > 0 && (
-              <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">
+              <span className="px-2 py-1 rounded bg-red-50 text-red-700">
                 {summary.breached} breached
               </span>
             )}
@@ -1031,8 +1144,15 @@ export default function Tickets() {
                             .includes(optionSearch.toLowerCase()),
                         )
                         .map((opt) => {
+                          // Status is multi-select: checked iff present in
+                          // the filters.status array. All other categories
+                          // are single-value, so checked iff the value
+                          // matches.
                           const checked =
-                            (filters[activeCategory] as string) === opt.value;
+                            activeCategory === "status"
+                              ? filters.status.includes(opt.value)
+                              : (filters[activeCategory] as string) ===
+                                opt.value;
                           return (
                             <label
                               key={opt.value}
@@ -1042,6 +1162,24 @@ export default function Tickets() {
                               <Checkbox
                                 checked={checked}
                                 onCheckedChange={(v) => {
+                                  if (activeCategory === "status") {
+                                    // Toggle membership in the array.
+                                    const next = v
+                                      ? Array.from(
+                                          new Set([
+                                            ...filters.status,
+                                            opt.value,
+                                          ]),
+                                        )
+                                      : filters.status.filter(
+                                          (s) => s !== opt.value,
+                                        );
+                                    setFilter(
+                                      "status",
+                                      next as never,
+                                    );
+                                    return;
+                                  }
                                   setFilter(
                                     activeCategory,
                                     (v
@@ -1430,10 +1568,18 @@ function LevelBadge({ level }: { level: number }) {
 
 function statusIcon(status: string) {
   switch (status) {
-    case "open":
+    case "new":
       return <Inbox className="h-4 w-4 text-blue-500" />;
-    case "pending":
-      return <Clock className="h-4 w-4 text-orange-500" />;
+    case "in_progress":
+      return <Clock className="h-4 w-4 text-amber-500" />;
+    case "with_user":
+      return <Clock className="h-4 w-4 text-purple-500" />;
+    case "with_vendor":
+      return <Clock className="h-4 w-4 text-indigo-500" />;
+    case "on_hold":
+      return <Pause className="h-4 w-4 text-slate-500" />;
+    case "scheduled":
+      return <Clock className="h-4 w-4 text-cyan-500" />;
     case "resolved":
       return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
     case "closed":
@@ -1478,9 +1624,11 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
       return <RiskBadge level={ticket.riskLevel} />;
     case "status":
       return (
-        <div className="flex items-center gap-2 capitalize">
+        <div className="flex items-center gap-2">
           {statusIcon(ticket.status)}
-          <span className="text-sm font-medium">{ticket.status}</span>
+          <span className="text-sm font-medium">
+            {STATUS_LABEL[ticket.status] ?? ticket.status}
+          </span>
         </div>
       );
     case "title":
@@ -1540,6 +1688,9 @@ function renderTicketCell(key: ColumnKey, ticket: Ticket): ReactNode {
       return (
         <SlaCountdown
           slaStatus={ticket.slaStatus}
+          slaPhase={ticket.slaPhase}
+          slaPaused={ticket.slaPaused}
+          slaActiveDueAt={ticket.slaActiveDueAt}
           resolutionDueAt={ticket.resolutionDueAt}
           resolvedAt={ticket.resolvedAt}
         />

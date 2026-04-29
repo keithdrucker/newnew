@@ -371,9 +371,24 @@ paths:
           schema: { type: integer }
         - in: query
           name: status
+          description: |
+            Filter by status. Repeatable — pass `?status=new&status=in_progress`
+            to match any of the listed statuses.
+          style: form
+          explode: true
           schema:
-            type: string
-            enum: [open, pending, resolved, closed]
+            type: array
+            items:
+              type: string
+              enum:
+                - new
+                - in_progress
+                - with_user
+                - with_vendor
+                - on_hold
+                - scheduled
+                - resolved
+                - closed
         - in: query
           name: priority
           schema:
@@ -1528,7 +1543,15 @@ components:
           enum: [low, medium, high, urgent]
         status:
           type: string
-          enum: [open, pending, resolved, closed]
+          enum:
+            - new
+            - in_progress
+            - with_user
+            - with_vendor
+            - on_hold
+            - scheduled
+            - resolved
+            - closed
         source:
           type: string
           enum: [portal, email, phone, chat, walk_in]
@@ -1557,9 +1580,31 @@ components:
         resolution:
           type: ["string", "null"]
         slaBreached: { type: boolean }
+        responseSlaBreached: { type: boolean }
         slaStatus:
           type: string
-          enum: [on_track, breached]
+          enum: [on_track, breached, paused]
+        slaPhase:
+          type: string
+          description: |
+            Which SLA clock is currently being tracked.
+            * `response` — before the first agent response.
+            * `resolution` — after the first agent response, while the
+              ticket is in an active state.
+            * `none` — ticket is resolved/closed; SLA has stopped.
+          enum: [response, resolution, none]
+        slaPaused:
+          type: boolean
+          description: |
+            True when the resolution SLA is currently paused (status is
+            with_user, with_vendor, on_hold, or scheduled).
+        slaActiveDueAt:
+          type: ["string", "null"]
+          format: date-time
+          description: |
+            Effective deadline of the *currently active* SLA, taking
+            accumulated pause time into account. Null when slaPhase is
+            `none` or the ticket has no due date.
         responseDueAt:
           type: ["string", "null"]
           format: date-time
@@ -1572,6 +1617,14 @@ components:
         resolvedAt:
           type: ["string", "null"]
           format: date-time
+        withUserSince:
+          type: ["string", "null"]
+          format: date-time
+        lastUserReplyAt:
+          type: ["string", "null"]
+          format: date-time
+        closureReason:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -1592,7 +1645,10 @@ components:
         - reporterId
         - reporterName
         - slaBreached
+        - responseSlaBreached
         - slaStatus
+        - slaPhase
+        - slaPaused
         - riskLevel
         - createdAt
         - updatedAt
@@ -1666,7 +1722,15 @@ components:
           enum: [low, medium, high, urgent]
         status:
           type: string
-          enum: [open, pending, resolved, closed]
+          enum:
+            - new
+            - in_progress
+            - with_user
+            - with_vendor
+            - on_hold
+            - scheduled
+            - resolved
+            - closed
         supportLevel:
           type: integer
           enum: [1, 2, 3]
@@ -1685,6 +1749,8 @@ components:
           type: ["string", "null"]
         resolution:
           type: ["string", "null"]
+        closureReason:
+          type: ["string", "null"]
 
     TicketViewConfig:
       type: object
@@ -1692,8 +1758,21 @@ components:
         search:
           type: ["string", "null"]
         status:
-          type: ["string", "null"]
-          enum: [open, pending, resolved, closed, null]
+          type: ["array", "null"]
+          description: |
+            Multi-select status filter. Each entry must be one of the 8
+            workflow statuses; `null` means "no status filter".
+          items:
+            type: string
+            enum:
+              - new
+              - in_progress
+              - with_user
+              - with_vendor
+              - on_hold
+              - scheduled
+              - resolved
+              - closed
         priority:
           type: ["string", "null"]
           enum: [low, medium, high, urgent, null]
@@ -2222,11 +2301,27 @@ components:
         averageResolutionSeconds: { type: integer }
         slaResponseCompliance: { type: number }
         slaResolutionCompliance: { type: number }
+        # SLA Score reflects Resolution compliance (per spec). The legacy
+        # `ticketsBreachedSla` keeps the total breach count; the new
+        # `responseBreachedCount` / `resolutionBreachedCount` split lets
+        # dashboards distinguish Response vs Resolution breaches.
         ticketsBreachedSla: { type: integer }
+        responseBreachedCount: { type: integer }
+        resolutionBreachedCount: { type: integer }
+        # Legacy aliases — `openTickets` now counts `new`, and
+        # `pendingTickets` now counts `in_progress`. They stay so the
+        # existing Overview tiles keep working without UI churn.
         openTickets: { type: integer }
         closedTickets: { type: integer }
         pendingTickets: { type: integer }
         resolvedTickets: { type: integer }
+        # New per-status counts for the 8-state workflow.
+        newTickets: { type: integer }
+        inProgressTickets: { type: integer }
+        withUserTickets: { type: integer }
+        withVendorTickets: { type: integer }
+        onHoldTickets: { type: integer }
+        scheduledTickets: { type: integer }
         totalTickets: { type: integer }
         averageSatisfactionScore: { type: number }
         estimatedTimeSavedHours: { type: number }
@@ -2244,10 +2339,18 @@ components:
         - slaResponseCompliance
         - slaResolutionCompliance
         - ticketsBreachedSla
+        - responseBreachedCount
+        - resolutionBreachedCount
         - openTickets
         - closedTickets
         - pendingTickets
         - resolvedTickets
+        - newTickets
+        - inProgressTickets
+        - withUserTickets
+        - withVendorTickets
+        - onHoldTickets
+        - scheduledTickets
         - totalTickets
         - averageSatisfactionScore
         - estimatedTimeSavedHours

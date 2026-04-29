@@ -8,12 +8,17 @@
 import type { ListTicketsPriority } from "./listTicketsPriority";
 import type { ListTicketsRiskLevel } from "./listTicketsRiskLevel";
 import type { ListTicketsSlaStatus } from "./listTicketsSlaStatus";
-import type { ListTicketsStatus } from "./listTicketsStatus";
+import type { ListTicketsStatusItem } from "./listTicketsStatusItem";
 import type { ListTicketsSupportLevel } from "./listTicketsSupportLevel";
 
 export type ListTicketsParams = {
   departmentId?: number;
-  status?: ListTicketsStatus;
+  /**
+ * Filter by status. Repeatable — pass `?status=new&status=in_progress`
+to match any of the listed statuses.
+
+ */
+  status?: ListTicketsStatusItem[];
   priority?: ListTicketsPriority;
   supportLevel?: ListTicketsSupportLevel;
   assigneeId?: number;

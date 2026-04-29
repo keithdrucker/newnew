@@ -17,10 +17,18 @@ export interface DashboardOverview {
   slaResponseCompliance: number;
   slaResolutionCompliance: number;
   ticketsBreachedSla: number;
+  responseBreachedCount: number;
+  resolutionBreachedCount: number;
   openTickets: number;
   closedTickets: number;
   pendingTickets: number;
   resolvedTickets: number;
+  newTickets: number;
+  inProgressTickets: number;
+  withUserTickets: number;
+  withVendorTickets: number;
+  onHoldTickets: number;
+  scheduledTickets: number;
   totalTickets: number;
   averageSatisfactionScore: number;
   estimatedTimeSavedHours: number;

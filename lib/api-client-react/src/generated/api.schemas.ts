@@ -181,8 +181,12 @@ export const TicketPriority = {
 export type TicketStatus = (typeof TicketStatus)[keyof typeof TicketStatus];
 
 export const TicketStatus = {
-  open: "open",
-  pending: "pending",
+  new: "new",
+  in_progress: "in_progress",
+  with_user: "with_user",
+  with_vendor: "with_vendor",
+  on_hold: "on_hold",
+  scheduled: "scheduled",
   resolved: "resolved",
   closed: "closed",
 } as const;
@@ -222,6 +226,24 @@ export type TicketSlaStatus =
 export const TicketSlaStatus = {
   on_track: "on_track",
   breached: "breached",
+  paused: "paused",
+} as const;
+
+/**
+ * Which SLA clock is currently being tracked.
+* `response` — before the first agent response.
+* `resolution` — after the first agent response, while the
+  ticket is in an active state.
+* `none` — ticket is resolved/closed; SLA has stopped.
+
+ */
+export type TicketSlaPhase =
+  (typeof TicketSlaPhase)[keyof typeof TicketSlaPhase];
+
+export const TicketSlaPhase = {
+  response: "response",
+  resolution: "resolution",
+  none: "none",
 } as const;
 
 export interface Ticket {
@@ -254,7 +276,27 @@ export interface Ticket {
   /** @nullable */
   resolution?: string | null;
   slaBreached: boolean;
+  responseSlaBreached: boolean;
   slaStatus: TicketSlaStatus;
+  /** Which SLA clock is currently being tracked.
+* `response` — before the first agent response.
+* `resolution` — after the first agent response, while the
+  ticket is in an active state.
+* `none` — ticket is resolved/closed; SLA has stopped.
+ */
+  slaPhase: TicketSlaPhase;
+  /** True when the resolution SLA is currently paused (status is
+with_user, with_vendor, on_hold, or scheduled).
+ */
+  slaPaused: boolean;
+  /**
+   * Effective deadline of the *currently active* SLA, taking
+accumulated pause time into account. Null when slaPhase is
+`none` or the ticket has no due date.
+
+   * @nullable
+   */
+  slaActiveDueAt?: string | null;
   /** @nullable */
   responseDueAt?: string | null;
   /** @nullable */
@@ -263,6 +305,12 @@ export interface Ticket {
   firstResponseAt?: string | null;
   /** @nullable */
   resolvedAt?: string | null;
+  /** @nullable */
+  withUserSince?: string | null;
+  /** @nullable */
+  lastUserReplyAt?: string | null;
+  /** @nullable */
+  closureReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -366,8 +414,12 @@ export type UpdateTicketInputStatus =
   (typeof UpdateTicketInputStatus)[keyof typeof UpdateTicketInputStatus];
 
 export const UpdateTicketInputStatus = {
-  open: "open",
-  pending: "pending",
+  new: "new",
+  in_progress: "in_progress",
+  with_user: "with_user",
+  with_vendor: "with_vendor",
+  on_hold: "on_hold",
+  scheduled: "scheduled",
   resolved: "resolved",
   closed: "closed",
 } as const;
@@ -410,18 +462,20 @@ export interface UpdateTicketInput {
   rootCause?: string | null;
   /** @nullable */
   resolution?: string | null;
+  /** @nullable */
+  closureReason?: string | null;
 }
 
-/**
- * @nullable
- */
-export type TicketViewConfigStatus =
-  | (typeof TicketViewConfigStatus)[keyof typeof TicketViewConfigStatus]
-  | null;
+export type TicketViewConfigStatusItem =
+  (typeof TicketViewConfigStatusItem)[keyof typeof TicketViewConfigStatusItem];
 
-export const TicketViewConfigStatus = {
-  open: "open",
-  pending: "pending",
+export const TicketViewConfigStatusItem = {
+  new: "new",
+  in_progress: "in_progress",
+  with_user: "with_user",
+  with_vendor: "with_vendor",
+  on_hold: "on_hold",
+  scheduled: "scheduled",
   resolved: "resolved",
   closed: "closed",
 } as const;
@@ -510,8 +564,13 @@ export const TicketViewConfigUpdatedRange = {
 export interface TicketViewConfig {
   /** @nullable */
   search?: string | null;
-  /** @nullable */
-  status?: TicketViewConfigStatus;
+  /**
+   * Multi-select status filter. Each entry must be one of the 8
+workflow statuses; `null` means "no status filter".
+
+   * @nullable
+   */
+  status?: TicketViewConfigStatusItem[] | null;
   /** @nullable */
   priority?: TicketViewConfigPriority;
   /** @nullable */
@@ -1189,10 +1248,18 @@ export interface DashboardOverview {
   slaResponseCompliance: number;
   slaResolutionCompliance: number;
   ticketsBreachedSla: number;
+  responseBreachedCount: number;
+  resolutionBreachedCount: number;
   openTickets: number;
   closedTickets: number;
   pendingTickets: number;
   resolvedTickets: number;
+  newTickets: number;
+  inProgressTickets: number;
+  withUserTickets: number;
+  withVendorTickets: number;
+  onHoldTickets: number;
+  scheduledTickets: number;
   totalTickets: number;
   averageSatisfactionScore: number;
   estimatedTimeSavedHours: number;
@@ -1406,7 +1473,12 @@ export const ListDepartmentsScope = {
 
 export type ListTicketsParams = {
   departmentId?: number;
-  status?: ListTicketsStatus;
+  /**
+ * Filter by status. Repeatable — pass `?status=new&status=in_progress`
+to match any of the listed statuses.
+
+ */
+  status?: ListTicketsStatusItem[];
   priority?: ListTicketsPriority;
   supportLevel?: ListTicketsSupportLevel;
   assigneeId?: number;
@@ -1423,12 +1495,16 @@ export type ListTicketsParams = {
   q?: string;
 };
 
-export type ListTicketsStatus =
-  (typeof ListTicketsStatus)[keyof typeof ListTicketsStatus];
+export type ListTicketsStatusItem =
+  (typeof ListTicketsStatusItem)[keyof typeof ListTicketsStatusItem];
 
-export const ListTicketsStatus = {
-  open: "open",
-  pending: "pending",
+export const ListTicketsStatusItem = {
+  new: "new",
+  in_progress: "in_progress",
+  with_user: "with_user",
+  with_vendor: "with_vendor",
+  on_hold: "on_hold",
+  scheduled: "scheduled",
   resolved: "resolved",
   closed: "closed",
 } as const;

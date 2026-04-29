@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateTicketInputStatus =
-  (typeof UpdateTicketInputStatus)[keyof typeof UpdateTicketInputStatus];
+export type TicketViewConfigStatusItem =
+  (typeof TicketViewConfigStatusItem)[keyof typeof TicketViewConfigStatusItem];
 
-export const UpdateTicketInputStatus = {
+export const TicketViewConfigStatusItem = {
   new: "new",
   in_progress: "in_progress",
   with_user: "with_user",
