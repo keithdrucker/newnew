@@ -2142,7 +2142,16 @@ components:
         departmentName:
           type: ["string", "null"]
         ticketsAssigned: { type: integer }
-      required: [id, name, email, role, ticketsAssigned]
+        # Full set of department ids the agent can work tickets on:
+        # their home department (legacy implicit "modify") plus any
+        # explicit board_members rows. Admins receive every department
+        # id since they have access to all boards. Clients use this to
+        # restrict the assignee dropdown to agents who can actually
+        # access a given ticket's board.
+        boardDepartmentIds:
+          type: array
+          items: { type: integer }
+      required: [id, name, email, role, ticketsAssigned, boardDepartmentIds]
 
     CreateAgentInput:
       type: object

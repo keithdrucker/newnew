@@ -2119,7 +2119,14 @@ function renderTicketCell(
   ctx?: {
     canEdit: boolean;
     onPatch: (id: number, data: Record<string, unknown>) => void;
-    agents: { id: number; name: string }[];
+    agents: {
+      id: number;
+      name: string;
+      // Departments the agent can work tickets on. The cell renderer
+      // uses this to hide assignees that lack access to the row's
+      // board (mirroring the server-side rule on PATCH).
+      boardDepartmentIds: number[];
+    }[];
     people: { id: number; name: string }[];
     categoryOptions: string[];
   },
@@ -2289,12 +2296,20 @@ function renderTicketCell(
       ) : (
         <span className="text-xs text-muted-foreground/60">Unassigned</span>
       );
+      // Restrict the assignee dropdown to agents who actually have
+      // access to this ticket's board. The server enforces the same
+      // rule on PATCH (rejecting unauthorized assignees with 400), so
+      // showing all agents would just expose options that fail to
+      // save. Admins are included on every board (the server returns
+      // every department id in their `boardDepartmentIds`).
       const agentOpts = [
         { value: "__unset__", label: "Unassigned" },
-        ...(ctx?.agents ?? []).map((a) => ({
-          value: String(a.id),
-          label: a.name,
-        })),
+        ...(ctx?.agents ?? [])
+          .filter((a) => a.boardDepartmentIds.includes(ticket.departmentId))
+          .map((a) => ({
+            value: String(a.id),
+            label: a.name,
+          })),
       ];
       return (
         <EditablePopoverCell

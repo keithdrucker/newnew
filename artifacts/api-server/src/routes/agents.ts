@@ -5,6 +5,7 @@ import {
   usersTable,
   departmentsTable,
   ticketsTable,
+  boardMembersTable,
 } from "@workspace/db";
 import {
   ListAgentsQueryParams,
@@ -47,16 +48,62 @@ async function hydrateAgents(rows: (typeof usersTable.$inferSelect)[]) {
     counts.map((c) => [c.assigneeId as number, c.count]),
   );
 
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    email: r.email,
-    role: r.role as "admin" | "agent" | "end_user",
-    title: r.title ?? null,
-    departmentId: r.departmentId ?? null,
-    departmentName: r.departmentId ? deptMap.get(r.departmentId)?.name ?? null : null,
-    ticketsAssigned: countMap.get(r.id) ?? 0,
-  }));
+  // Resolve which boards each agent can actually work on so the UI
+  // can hide assignees that lack access to a given ticket's board.
+  // Sources of access (mirrors `getBoardRole` / `visibleDepartmentIds`):
+  //   1. Admins: every department.
+  //   2. Agents: their `users.departmentId` (legacy implicit "modify")
+  //      plus any explicit `board_members` rows.
+  const userIds = rows.map((r) => r.id);
+  const memberRows = userIds.length
+    ? await db
+        .select({
+          userId: boardMembersTable.userId,
+          departmentId: boardMembersTable.departmentId,
+        })
+        .from(boardMembersTable)
+        .where(inArray(boardMembersTable.userId, userIds))
+    : [];
+  const membershipMap = new Map<number, Set<number>>();
+  for (const m of memberRows) {
+    if (!membershipMap.has(m.userId)) membershipMap.set(m.userId, new Set());
+    membershipMap.get(m.userId)!.add(m.departmentId);
+  }
+
+  // Admins get the full department list so the client can treat the
+  // membership check uniformly. We only run this query when at least
+  // one row in the result set is an admin to avoid the extra round-trip
+  // for the common agents-only listings.
+  const hasAdmin = rows.some((r) => r.role === "admin");
+  const allDeptIds = hasAdmin
+    ? (await db.select({ id: departmentsTable.id }).from(departmentsTable)).map(
+        (d) => d.id,
+      )
+    : [];
+
+  return rows.map((r) => {
+    let boardDepartmentIds: number[];
+    if (r.role === "admin") {
+      boardDepartmentIds = allDeptIds;
+    } else {
+      const set = new Set<number>(membershipMap.get(r.id) ?? []);
+      if (r.departmentId != null) set.add(r.departmentId);
+      boardDepartmentIds = Array.from(set);
+    }
+    return {
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      role: r.role as "admin" | "agent" | "end_user",
+      title: r.title ?? null,
+      departmentId: r.departmentId ?? null,
+      departmentName: r.departmentId
+        ? deptMap.get(r.departmentId)?.name ?? null
+        : null,
+      ticketsAssigned: countMap.get(r.id) ?? 0,
+      boardDepartmentIds,
+    };
+  });
 }
 
 router.get("/agents", async (req, res): Promise<void> => {

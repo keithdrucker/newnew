@@ -19,4 +19,5 @@ export interface Agent {
   /** @nullable */
   departmentName?: string | null;
   ticketsAssigned: number;
+  boardDepartmentIds: number[];
 }

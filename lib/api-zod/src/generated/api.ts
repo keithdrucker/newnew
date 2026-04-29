@@ -1334,6 +1334,7 @@ export const ListAgentsResponseItem = zod.object({
   departmentId: zod.number().nullish(),
   departmentName: zod.string().nullish(),
   ticketsAssigned: zod.number(),
+  boardDepartmentIds: zod.array(zod.number()),
 });
 export const ListAgentsResponse = zod.array(ListAgentsResponseItem);
 
@@ -1372,6 +1373,7 @@ export const UpdateAgentResponse = zod.object({
   departmentId: zod.number().nullish(),
   departmentName: zod.string().nullish(),
   ticketsAssigned: zod.number(),
+  boardDepartmentIds: zod.array(zod.number()),
 });
 
 /**

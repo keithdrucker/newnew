@@ -56,7 +56,6 @@ export function CreateTicketDialog({
   const createTicket = useCreateTicket();
 
   const departmentOptions = departments ?? [];
-  const agentOptions = agents ?? [];
 
   const defaultDeptId = useMemo(() => {
     if (defaultDepartmentSlug) {
@@ -82,6 +81,27 @@ export function CreateTicketDialog({
   const [supportLevel, setSupportLevel] = useState<SupportLevel>(1);
   const [departmentId, setDepartmentId] = useState<number>(defaultDeptId);
   const [assigneeId, setAssigneeId] = useState<number | null>(null);
+
+  // Restrict the assignee dropdown to agents that can actually work
+  // the chosen board. The server uses the same membership rule
+  // (`boardDepartmentIds` mirrors `getBoardRole`) and rejects POSTs
+  // with an out-of-board assignee, so showing all agents would just
+  // expose options that 400 on submit.
+  const agentOptions = useMemo(() => {
+    const list = agents ?? [];
+    if (!departmentId) return list;
+    return list.filter((a) => a.boardDepartmentIds.includes(departmentId));
+  }, [agents, departmentId]);
+
+  // If the chosen assignee no longer has access after the user picks a
+  // different board, drop the selection so the form doesn't silently
+  // submit a now-invalid id.
+  useEffect(() => {
+    if (assigneeId == null) return;
+    if (!agentOptions.some((a) => a.id === assigneeId)) {
+      setAssigneeId(null);
+    }
+  }, [agentOptions, assigneeId]);
   const [location, setLocation] = useState("");
   const [team, setTeam] = useState("");
   const [category, setCategory] = useState("");

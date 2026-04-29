@@ -21,6 +21,7 @@ import {
   usersTable,
   departmentSettingsTable,
   riskRulesTable,
+  boardMembersTable,
 } from "@workspace/db";
 import {
   ListTicketsQueryParams,
@@ -348,6 +349,43 @@ async function nextTicketKey(type: "incident" | "request"): Promise<string> {
   return `${prefix}-${String(next).padStart(3, "0")}`;
 }
 
+// Validates that an assignee actually has access to the given board.
+// Admins are accepted everywhere; agents must either be the board's
+// home-department member or have a board_members row for it. Returns
+// `null` if the assignee is allowed (or no assignee was provided);
+// otherwise returns an HTTP-400-shaped error message that the caller
+// should surface verbatim. Mirrors the access logic in
+// `lib/board-access.ts` and `hydrateAgents` so the assignee dropdown
+// the client renders and the rule the server enforces stay in sync.
+async function validateAssigneeBoardAccess(
+  assigneeId: number | null | undefined,
+  departmentId: number,
+): Promise<string | null> {
+  if (assigneeId == null) return null;
+  const [assignee] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, assigneeId));
+  if (!assignee) return "Assignee not found";
+  if (assignee.role === "end_user") {
+    return "Assignee must be an agent or admin";
+  }
+  if (assignee.role === "admin") return null;
+  if (assignee.departmentId === departmentId) return null;
+  const [member] = await db
+    .select({ role: boardMembersTable.role })
+    .from(boardMembersTable)
+    .where(
+      and(
+        eq(boardMembersTable.userId, assigneeId),
+        eq(boardMembersTable.departmentId, departmentId),
+      ),
+    )
+    .limit(1);
+  if (member) return null;
+  return "Assignee does not have access to this board";
+}
+
 router.post("/tickets", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
   const parsed = CreateTicketBody.safeParse(req.body);
@@ -361,6 +399,14 @@ router.post("/tickets", async (req, res): Promise<void> => {
       res.status(403).json({ error: "Read-only on this board" });
       return;
     }
+  }
+  const assigneeError = await validateAssigneeBoardAccess(
+    parsed.data.assigneeId ?? null,
+    parsed.data.departmentId,
+  );
+  if (assigneeError) {
+    res.status(400).json({ error: assigneeError });
+    return;
   }
   // Always bind reporter to the authenticated user. The schema accepts a
   // `reporterId` field for spec compatibility, but we never trust the client
@@ -519,6 +565,21 @@ router.patch("/tickets/:id", async (req, res): Promise<void> => {
     const role = await getBoardRole(user, existing.departmentId);
     if (!roleAtLeast(role, "modify")) {
       res.status(403).json({ error: "Read-only on this board" });
+      return;
+    }
+  }
+
+  // If the caller is changing the assignee, make sure the target user
+  // can actually work this board. We use `"assigneeId" in parsed.data`
+  // (rather than a truthy check) so an explicit `null` clears the
+  // assignment without tripping the validator.
+  if ("assigneeId" in parsed.data) {
+    const assigneeError = await validateAssigneeBoardAccess(
+      parsed.data.assigneeId ?? null,
+      existing.departmentId,
+    );
+    if (assigneeError) {
+      res.status(400).json({ error: assigneeError });
       return;
     }
   }
