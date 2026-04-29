@@ -196,20 +196,20 @@ export default function TicketDetail() {
                   (c) => c.kind === "internal_note",
                 )}
                 emptyText="No internal notes yet."
+                footer={
+                  session?.userId != null ? (
+                    <TicketTimeEntries
+                      ticketId={ticketId}
+                      currentUserId={session.userId}
+                      isAdmin={session.role === "admin"}
+                      embedded
+                    />
+                  ) : null
+                }
               />
             )}
           </div>
         </div>
-
-        {canTriage && session?.userId != null && (
-          <div className="px-6">
-            <TicketTimeEntries
-              ticketId={ticketId}
-              currentUserId={session.userId}
-              isAdmin={session.role === "admin"}
-            />
-          </div>
-        )}
 
         {/*
           Root Cause + Resolution panel — placed below the activity stream
@@ -637,12 +637,17 @@ function ActivityColumn({
   tone,
   comments,
   emptyText,
+  footer,
 }: {
   title: string;
   subtitle: string;
   tone: "conversation" | "internal";
   comments: ActivityComment[];
   emptyText: string;
+  // Optional content rendered at the bottom of the column body, after
+  // the comments. Used to nest Time Entries inside the Technical Notes
+  // column since both are internal-only.
+  footer?: React.ReactNode;
 }) {
   const headerTone =
     tone === "internal"
@@ -697,6 +702,7 @@ function ActivityColumn({
             </div>
           ))
         )}
+        {footer && <div className="pt-2 border-t">{footer}</div>}
       </div>
     </div>
   );

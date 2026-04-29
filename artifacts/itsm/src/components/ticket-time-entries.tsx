@@ -46,10 +46,14 @@ export function TicketTimeEntries({
   ticketId,
   currentUserId,
   isAdmin,
+  embedded = false,
 }: {
   ticketId: number;
   currentUserId: number;
   isAdmin: boolean;
+  // When true, drops the outer card chrome so the component slots
+  // cleanly inside another container (e.g. the Technical Notes column).
+  embedded?: boolean;
 }) {
   const qc = useQueryClient();
   const { data: entries, isLoading } = useListTicketTimeEntries(ticketId);
@@ -127,15 +131,23 @@ export function TicketTimeEntries({
     await refreshEntryQueries();
   }
 
+  const wrapperClass = embedded
+    ? "space-y-3"
+    : "bg-card rounded-lg border shadow-sm p-5 space-y-4";
+
   return (
-    <div className="bg-card rounded-lg border shadow-sm p-5 space-y-4" data-testid="time-entries-section">
+    <div className={wrapperClass} data-testid="time-entries-section">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+          {!embedded && (
+            <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
           <h3 className="font-medium text-sm">Time Entries</h3>
-          <span className="text-xs text-muted-foreground">
-            Internal — not visible to the requester
-          </span>
+          {!embedded && (
+            <span className="text-xs text-muted-foreground">
+              Internal — not visible to the requester
+            </span>
+          )}
         </div>
         {(entries?.length ?? 0) > 0 && (
           <span className="text-xs text-muted-foreground">
