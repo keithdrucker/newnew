@@ -2181,7 +2181,7 @@ function renderTicketCell(
           variant="secondary"
           className={priorityColor(ticket.priority)}
         >
-          {ticket.priority}
+          {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}
         </Badge>
       );
       return (
