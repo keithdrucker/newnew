@@ -154,6 +154,7 @@ export * from "./updateTicketInputRiskLevel";
 export * from "./updateTicketInputStatus";
 export * from "./updateTicketInputSupportLevel";
 export * from "./updateTicketViewInput";
+export * from "./updateTimeEntryInput";
 export * from "./updateVendorInput";
 export * from "./updateVendorInputCategory";
 export * from "./updateVendorInputStatus";

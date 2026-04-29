@@ -572,6 +572,26 @@ paths:
                 items: { $ref: "#/components/schemas/TimeEntry" }
 
   /time-entries/{id}:
+    patch:
+      operationId: updateTimeEntry
+      tags: [tickets]
+      summary: Update a time entry's start/end/note (owner or admin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTimeEntryInput" }
+      responses:
+        "200":
+          description: Updated entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimeEntry" }
     delete:
       operationId: deleteTimeEntry
       tags: [tickets]
@@ -2200,6 +2220,17 @@ components:
         endAt: { type: string, format: date-time }
         note: { type: string }
       required: [startAt, endAt, note]
+
+    UpdateTimeEntryInput:
+      type: object
+      description: |
+        Patch any subset of {startAt, endAt, note}. Server re-snaps the
+        timestamps to the nearest 15-minute boundary and re-derives
+        durationMinutes.
+      properties:
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        note: { type: string }
 
     Person:
       type: object

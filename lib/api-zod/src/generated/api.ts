@@ -741,6 +741,39 @@ export const ListTimeEntriesResponseItem = zod.object({
 export const ListTimeEntriesResponse = zod.array(ListTimeEntriesResponseItem);
 
 /**
+ * @summary Update a time entry's start/end/note (owner or admin)
+ */
+export const UpdateTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTimeEntryBody = zod
+  .object({
+    startAt: zod.coerce.date().optional(),
+    endAt: zod.coerce.date().optional(),
+    note: zod.string().optional(),
+  })
+  .describe(
+    "Patch any subset of {startAt, endAt, note}. Server re-snaps the\ntimestamps to the nearest 15-minute boundary and re-derives\ndurationMinutes.\n",
+  );
+
+export const UpdateTimeEntryResponse = zod.object({
+  id: zod.number(),
+  ticketId: zod.number(),
+  ticketKey: zod.string(),
+  ticketTitle: zod.string(),
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  userId: zod.number(),
+  userName: zod.string(),
+  startAt: zod.coerce.date(),
+  endAt: zod.coerce.date(),
+  durationMinutes: zod.number(),
+  note: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary Delete a time entry (owner or admin)
  */
 export const DeleteTimeEntryParams = zod.object({

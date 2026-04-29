@@ -84,6 +84,7 @@ import type {
   UpdateRiskRuleInput,
   UpdateTicketInput,
   UpdateTicketViewInput,
+  UpdateTimeEntryInput,
   UpdateVendorInput,
   Vendor,
 } from "./api.schemas";
@@ -2424,6 +2425,93 @@ export function useListTimeEntries<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update a time entry's start/end/note (owner or admin)
+ */
+export const getUpdateTimeEntryUrl = (id: number) => {
+  return `/api/time-entries/${id}`;
+};
+
+export const updateTimeEntry = async (
+  id: number,
+  updateTimeEntryInput: UpdateTimeEntryInput,
+  options?: RequestInit,
+): Promise<TimeEntry> => {
+  return customFetch<TimeEntry>(getUpdateTimeEntryUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateTimeEntryInput),
+  });
+};
+
+export const getUpdateTimeEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<UpdateTimeEntryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<UpdateTimeEntryInput> },
+  TContext
+> => {
+  const mutationKey = ["updateTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTimeEntry>>,
+    { id: number; data: BodyType<UpdateTimeEntryInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateTimeEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTimeEntry>>
+>;
+export type UpdateTimeEntryMutationBody = BodyType<UpdateTimeEntryInput>;
+export type UpdateTimeEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a time entry's start/end/note (owner or admin)
+ */
+export const useUpdateTimeEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<UpdateTimeEntryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<UpdateTimeEntryInput> },
+  TContext
+> => {
+  return useMutation(getUpdateTimeEntryMutationOptions(options));
+};
 
 /**
  * @summary Delete a time entry (owner or admin)

@@ -4,14 +4,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useListTicketTimeEntries,
   useCreateTicketTimeEntry,
+  useUpdateTimeEntry,
   useDeleteTimeEntry,
   getListTicketTimeEntriesQueryKey,
   getListTimeEntriesQueryKey,
 } from "@workspace/api-client-react";
+import type { TimeEntry } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Lock, Trash2 } from "lucide-react";
+import { Lock, Pencil, Trash2, Check, X } from "lucide-react";
 
 // Snap a Date to the nearest 15-minute boundary so the input control
 // always emits a "round" value the server will accept verbatim. This
@@ -52,7 +54,20 @@ export function TicketTimeEntries({
   const qc = useQueryClient();
   const { data: entries, isLoading } = useListTicketTimeEntries(ticketId);
   const create = useCreateTicketTimeEntry();
+  const update = useUpdateTimeEntry();
   const remove = useDeleteTimeEntry();
+  // Track which entry (if any) is currently in inline-edit mode. Only
+  // one edit row at a time keeps the UI predictable.
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  async function refreshEntryQueries() {
+    await Promise.all([
+      qc.invalidateQueries({
+        queryKey: getListTicketTimeEntriesQueryKey(ticketId),
+      }),
+      qc.invalidateQueries({ queryKey: getListTimeEntriesQueryKey() }),
+    ]);
+  }
 
   // Default the form to "right now, rounded to the previous 15 mins"
   // for start, and start + 15 minutes for end. This is what users
@@ -100,12 +115,7 @@ export function TicketTimeEntries({
         },
       });
       // Refresh both this ticket's list and the timesheet page query.
-      await Promise.all([
-        qc.invalidateQueries({
-          queryKey: getListTicketTimeEntriesQueryKey(ticketId),
-        }),
-        qc.invalidateQueries({ queryKey: getListTimeEntriesQueryKey() }),
-      ]);
+      await refreshEntryQueries();
       setNote("");
     } catch (e) {
       setError((e as Error).message ?? "Failed to log time.");
@@ -114,12 +124,7 @@ export function TicketTimeEntries({
 
   async function handleDelete(id: number) {
     await remove.mutateAsync({ id });
-    await Promise.all([
-      qc.invalidateQueries({
-        queryKey: getListTicketTimeEntriesQueryKey(ticketId),
-      }),
-      qc.invalidateQueries({ queryKey: getListTimeEntriesQueryKey() }),
-    ]);
+    await refreshEntryQueries();
   }
 
   return (
@@ -199,7 +204,22 @@ export function TicketTimeEntries({
           </p>
         )}
         {entries?.map((e) => {
-          const canDelete = isAdmin || e.userId === currentUserId;
+          const canMutate = isAdmin || e.userId === currentUserId;
+          if (editingId === e.id && canMutate) {
+            return (
+              <EditTimeEntryRow
+                key={e.id}
+                entry={e}
+                isSaving={update.isPending}
+                onCancel={() => setEditingId(null)}
+                onSave={async (patch) => {
+                  await update.mutateAsync({ id: e.id, data: patch });
+                  await refreshEntryQueries();
+                  setEditingId(null);
+                }}
+              />
+            );
+          }
           return (
             <div
               key={e.id}
@@ -223,20 +243,143 @@ export function TicketTimeEntries({
                   </p>
                 )}
               </div>
-              {canDelete && (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(e.id)}
-                  className="text-muted-foreground hover:text-red-600 shrink-0"
-                  aria-label="Delete entry"
-                  data-testid={`button-delete-time-entry-${e.id}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+              {canMutate && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(e.id)}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Edit entry"
+                    data-testid={`button-edit-time-entry-${e.id}`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(e.id)}
+                    className="text-muted-foreground hover:text-red-600"
+                    aria-label="Delete entry"
+                    data-testid={`button-delete-time-entry-${e.id}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               )}
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// Inline edit row used when an entry is in edit mode. Lives inside the
+// list so the user can update start/end/note without leaving context.
+function EditTimeEntryRow({
+  entry,
+  isSaving,
+  onSave,
+  onCancel,
+}: {
+  entry: TimeEntry;
+  isSaving: boolean;
+  onSave: (patch: {
+    startAt: string;
+    endAt: string;
+    note: string;
+  }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [start, setStart] = useState(toLocalInput(new Date(entry.startAt)));
+  const [end, setEnd] = useState(toLocalInput(new Date(entry.endAt)));
+  const [note, setNote] = useState(entry.note);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setError(null);
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      setError("Enter valid start and end times.");
+      return;
+    }
+    if (endDate <= startDate) {
+      setError("End time must be after start time.");
+      return;
+    }
+    if (!note.trim()) {
+      setError("Add a note describing what you worked on.");
+      return;
+    }
+    try {
+      await onSave({
+        startAt: startDate.toISOString(),
+        endAt: endDate.toISOString(),
+        note: note.trim(),
+      });
+    } catch (e) {
+      setError((e as Error).message ?? "Failed to update entry.");
+    }
+  }
+
+  return (
+    <div
+      className="rounded-md border bg-muted/30 p-3 space-y-2"
+      data-testid={`time-entry-edit-${entry.id}`}
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-muted-foreground">
+            Start
+          </label>
+          <Input
+            type="datetime-local"
+            step={900}
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            data-testid={`input-edit-time-entry-start-${entry.id}`}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-muted-foreground">
+            End
+          </label>
+          <Input
+            type="datetime-local"
+            step={900}
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            data-testid={`input-edit-time-entry-end-${entry.id}`}
+          />
+        </div>
+      </div>
+      <Textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        className="min-h-[56px] text-sm"
+        data-testid={`input-edit-time-entry-note-${entry.id}`}
+      />
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onCancel}
+          disabled={isSaving}
+          data-testid={`button-cancel-edit-time-entry-${entry.id}`}
+        >
+          <X className="h-3.5 w-3.5 mr-1" />
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={isSaving}
+          data-testid={`button-save-edit-time-entry-${entry.id}`}
+        >
+          <Check className="h-3.5 w-3.5 mr-1" />
+          {isSaving ? "Saving…" : "Save"}
+        </Button>
       </div>
     </div>
   );

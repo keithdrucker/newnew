@@ -13,6 +13,8 @@ import {
   CreateTicketTimeEntryBody,
   ListTimeEntriesQueryParams,
   DeleteTimeEntryParams,
+  UpdateTimeEntryParams,
+  UpdateTimeEntryBody,
 } from "@workspace/api-zod";
 import { getCurrentUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
@@ -210,6 +212,74 @@ router.get("/time-entries", async (req, res): Promise<void> => {
     )
     .orderBy(desc(timeEntriesTable.startAt));
   res.json(await hydrate(rows));
+});
+
+// ────────────────────────────────────────────────────────────────────
+// PATCH /time-entries/:id — owner or admin can edit start/end/note
+// ────────────────────────────────────────────────────────────────────
+router.patch("/time-entries/:id", async (req, res): Promise<void> => {
+  const user = await getCurrentUser(req);
+  if (user.role === "end_user") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const params = UpdateTimeEntryParams.safeParse(req.params);
+  const body = UpdateTimeEntryBody.safeParse(req.body);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(timeEntriesTable)
+    .where(eq(timeEntriesTable.id, params.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "Time entry not found" });
+    return;
+  }
+  // Same authorization rule as DELETE: owner or admin only. Prevents
+  // an agent on the same board from rewriting somebody else's history.
+  if (existing.userId !== user.id && user.role !== "admin") {
+    res.status(403).json({ error: "Cannot edit another user's entry" });
+    return;
+  }
+
+  const nextStart = body.data.startAt
+    ? round15(new Date(body.data.startAt))
+    : existing.startAt;
+  const nextEnd = body.data.endAt
+    ? round15(new Date(body.data.endAt))
+    : existing.endAt;
+  if (!(nextEnd.getTime() > nextStart.getTime())) {
+    res.status(400).json({ error: "End time must be after start time" });
+    return;
+  }
+  const nextNote =
+    body.data.note !== undefined ? body.data.note.trim() : existing.note;
+  if (!nextNote) {
+    res.status(400).json({ error: "Note is required" });
+    return;
+  }
+  const durationMinutes = Math.round(
+    (nextEnd.getTime() - nextStart.getTime()) / 60000,
+  );
+
+  const [row] = await db
+    .update(timeEntriesTable)
+    .set({
+      startAt: nextStart,
+      endAt: nextEnd,
+      note: nextNote,
+      durationMinutes,
+    })
+    .where(eq(timeEntriesTable.id, existing.id))
+    .returning();
+  const [hydrated] = await hydrate([row]);
+  res.json(hydrated);
 });
 
 // ────────────────────────────────────────────────────────────────────

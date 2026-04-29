@@ -30,6 +30,10 @@ vi.mock("@workspace/api-client-react", () => ({
     mutateAsync: vi.fn().mockResolvedValue(undefined),
     isPending: false,
   }),
+  useUpdateTimeEntry: () => ({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
   useDeleteTimeEntry: () => ({
     mutateAsync: vi.fn().mockResolvedValue(undefined),
     isPending: false,

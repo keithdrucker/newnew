@@ -1008,6 +1008,18 @@ export interface CreateTimeEntryInput {
   note: string;
 }
 
+/**
+ * Patch any subset of {startAt, endAt, note}. Server re-snaps the
+timestamps to the nearest 15-minute boundary and re-derives
+durationMinutes.
+
+ */
+export interface UpdateTimeEntryInput {
+  startAt?: string;
+  endAt?: string;
+  note?: string;
+}
+
 export interface Person {
   id: number;
   name: string;
