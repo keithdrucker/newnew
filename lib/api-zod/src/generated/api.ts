@@ -595,6 +595,7 @@ export const UpdateTicketBody = zod.object({
     .union([zod.literal(1), zod.literal(2), zod.literal(3)])
     .optional(),
   assigneeId: zod.number().nullish(),
+  reporterId: zod.number().optional(),
   location: zod.string().nullish(),
   team: zod.string().nullish(),
   category: zod.string().nullish(),

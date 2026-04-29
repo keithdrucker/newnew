@@ -451,6 +451,7 @@ export interface UpdateTicketInput {
   supportLevel?: UpdateTicketInputSupportLevel;
   /** @nullable */
   assigneeId?: number | null;
+  reporterId?: number;
   /** @nullable */
   location?: string | null;
   /** @nullable */

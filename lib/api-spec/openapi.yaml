@@ -1736,6 +1736,8 @@ components:
           enum: [1, 2, 3]
         assigneeId:
           type: ["integer", "null"]
+        reporterId:
+          type: integer
         location:
           type: ["string", "null"]
         team:

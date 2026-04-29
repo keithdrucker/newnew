@@ -386,6 +386,22 @@ async function validateAssigneeBoardAccess(
   return "Assignee does not have access to this board";
 }
 
+// Validates a `reporterId` change. Reporters are end users who own the
+// ticket; they don't need board access, but they must exist. Returns
+// `null` when valid (or when no reporter change was requested),
+// otherwise an HTTP-400-shaped message the caller surfaces verbatim.
+async function validateReporterChange(
+  reporterId: number | null | undefined,
+): Promise<string | null> {
+  if (reporterId == null) return null;
+  const [reporter] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.id, reporterId));
+  if (!reporter) return "Reporter not found";
+  return null;
+}
+
 router.post("/tickets", async (req, res): Promise<void> => {
   const user = await getCurrentUser(req);
   const parsed = CreateTicketBody.safeParse(req.body);
@@ -580,6 +596,17 @@ router.patch("/tickets/:id", async (req, res): Promise<void> => {
     );
     if (assigneeError) {
       res.status(400).json({ error: assigneeError });
+      return;
+    }
+  }
+
+  // Same key-presence pattern as assigneeId: only validate when the
+  // caller actually included `reporterId`, so omitting it doesn't get
+  // misread as a clear request.
+  if ("reporterId" in parsed.data) {
+    const reporterError = await validateReporterChange(parsed.data.reporterId);
+    if (reporterError) {
+      res.status(400).json({ error: reporterError });
       return;
     }
   }
