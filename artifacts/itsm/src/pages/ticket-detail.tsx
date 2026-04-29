@@ -161,8 +161,63 @@ export default function TicketDetail() {
           </div>
         </div>
 
-        {/* Root Cause + Resolution panel — visible to everyone, editable by triage */}
-        <div className="border-b grid grid-cols-1 md:grid-cols-2 gap-px bg-border">
+        {/*
+          Activity is split into two streams:
+            • Conversation — what the user sees (agent ↔ user replies,
+              and eventually AI assistant turns).
+            • Technical Notes — internal-only chatter between agents.
+              End users never see this column; the API also strips it
+              server-side as a defense-in-depth measure.
+        */}
+        <div className="flex-1 overflow-auto p-6 space-y-4">
+          <h3 className="font-medium text-sm">Activity</h3>
+          <div
+            className={
+              canTriage
+                ? "grid grid-cols-1 lg:grid-cols-2 gap-4"
+                : "grid grid-cols-1 gap-4"
+            }
+          >
+            <ActivityColumn
+              title="Conversation"
+              subtitle="Visible to the requester"
+              tone="conversation"
+              comments={(ticket.comments ?? []).filter(
+                (c) => c.kind !== "internal_note",
+              )}
+              emptyText="No replies yet."
+            />
+            {canTriage && (
+              <ActivityColumn
+                title="Technical Notes"
+                subtitle="Internal — hidden from the requester"
+                tone="internal"
+                comments={(ticket.comments ?? []).filter(
+                  (c) => c.kind === "internal_note",
+                )}
+                emptyText="No internal notes yet."
+              />
+            )}
+          </div>
+        </div>
+
+        {canTriage && session?.userId != null && (
+          <div className="px-6">
+            <TicketTimeEntries
+              ticketId={ticketId}
+              currentUserId={session.userId}
+              isAdmin={session.role === "admin"}
+            />
+          </div>
+        )}
+
+        {/*
+          Root Cause + Resolution panel — placed below the activity stream
+          because these are typically captured *after* the conversation has
+          played out and the issue is understood. Visible to everyone,
+          editable by triage roles only.
+        */}
+        <div className="border-t grid grid-cols-1 md:grid-cols-2 gap-px bg-border mt-6">
           <div className="bg-card p-5 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <ShieldAlert className="h-4 w-4 text-amber-500" />
@@ -218,56 +273,6 @@ export default function TicketDetail() {
             )}
           </div>
         </div>
-
-        {/*
-          Activity is split into two streams:
-            • Conversation — what the user sees (agent ↔ user replies,
-              and eventually AI assistant turns).
-            • Technical Notes — internal-only chatter between agents.
-              End users never see this column; the API also strips it
-              server-side as a defense-in-depth measure.
-        */}
-        <div className="flex-1 overflow-auto p-6 space-y-4">
-          <h3 className="font-medium text-sm">Activity</h3>
-          <div
-            className={
-              canTriage
-                ? "grid grid-cols-1 lg:grid-cols-2 gap-4"
-                : "grid grid-cols-1 gap-4"
-            }
-          >
-            <ActivityColumn
-              title="Conversation"
-              subtitle="Visible to the requester"
-              tone="conversation"
-              comments={(ticket.comments ?? []).filter(
-                (c) => c.kind !== "internal_note",
-              )}
-              emptyText="No replies yet."
-            />
-            {canTriage && (
-              <ActivityColumn
-                title="Technical Notes"
-                subtitle="Internal — hidden from the requester"
-                tone="internal"
-                comments={(ticket.comments ?? []).filter(
-                  (c) => c.kind === "internal_note",
-                )}
-                emptyText="No internal notes yet."
-              />
-            )}
-          </div>
-        </div>
-
-        {canTriage && session?.userId != null && (
-          <div className="px-6">
-            <TicketTimeEntries
-              ticketId={ticketId}
-              currentUserId={session.userId}
-              isAdmin={session.role === "admin"}
-            />
-          </div>
-        )}
 
         <div className="p-4 border-t bg-muted/40">
           <div className="space-y-3">
