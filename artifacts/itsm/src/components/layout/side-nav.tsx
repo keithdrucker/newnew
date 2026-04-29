@@ -424,7 +424,7 @@ function TicketsNavItem({
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           <span>All Tickets</span>
         </Link>
-        {departments?.map((dept) => {
+        {Array.isArray(departments) && departments.map((dept) => {
           const DeptIcon = DEPT_ICON_MAP[dept.icon] ?? Layers;
           const active = activeDeptSlug === dept.slug;
           return (
@@ -521,7 +521,7 @@ function ProjectsNavItem({
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           <span>All Projects</span>
         </Link>
-        {departments?.map((dept) => {
+        {Array.isArray(departments) && departments.map((dept) => {
           const DeptIcon = DEPT_ICON_MAP[dept.icon] ?? Layers;
           const active = activeDeptSlug === dept.slug;
           return (
@@ -565,7 +565,7 @@ function SessionFooter({ session }: { session: Session }) {
           >
             <Avatar className="h-8 w-8 ring-1 ring-white/15">
               <AvatarFallback className="bg-sidebar-accent text-white text-[11px] font-semibold">
-                {session.name.substring(0, 2).toUpperCase()}
+                {(session.name ?? "").substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0 leading-tight">
