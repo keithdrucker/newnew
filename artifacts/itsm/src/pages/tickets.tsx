@@ -677,11 +677,20 @@ export default function Tickets() {
           return (
             (a.assigneeName ?? "~").localeCompare(b.assigneeName ?? "~") * dir
           );
-        case "status":
+        case "status": {
           // Lifecycle order, not alphabetical: see STATUS_RANK above.
+          const statusDelta =
+            ((STATUS_RANK[a.status] ?? 0) - (STATUS_RANK[b.status] ?? 0)) * dir;
+          if (statusDelta !== 0) return statusDelta;
+          // Tie-break within a status by priority (highest first). The
+          // tie-break ignores `dir` so flipping the column toggles status
+          // grouping order while keeping urgent/high at the top of each
+          // group — which matches what users actually want when they
+          // sort by status.
           return (
-            ((STATUS_RANK[a.status] ?? 0) - (STATUS_RANK[b.status] ?? 0)) * dir
+            (PRIORITY_RANK[b.priority] ?? 0) - (PRIORITY_RANK[a.priority] ?? 0)
           );
+        }
         case "updated":
           return (
             (new Date(a.updatedAt).getTime() -
