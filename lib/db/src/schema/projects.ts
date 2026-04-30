@@ -121,9 +121,22 @@ export const projectsTable = pgTable(
     holdNotes: text("hold_notes").notNull().default(""),
     revisitDate: date("revisit_date"),
 
-    // ---- Phase 5: Completed ----
+    // ---- Phase 3 (re-estimate): set when In Progress reveals
+    //      the original `endDate` is no longer accurate. Stored
+    //      separately so the original target is preserved for
+    //      reporting/history. Display: "Updated completion date".
+    updatedCompletionDate: date("updated_completion_date"),
+
+    // ---- Phase 5: Completed (a.k.a. "Project Closeout") ----
     completionSummary: text("completion_summary").notNull().default(""),
+    // What we should repeat / do differently next time. Required
+    // when transitioning to `completed`.
+    keyTakeaway: text("key_takeaway").notNull().default(""),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    // Auto-captured at completion from the acting user.
+    completedById: integer("completed_by_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
 
     // ---- Phase 6: Cancelled ----
     cancellationReason: text("cancellation_reason").notNull().default(""),

@@ -31,6 +31,9 @@ export interface UpdateProjectInput {
   planningNotes?: string;
   statusUpdate?: string;
   /** @nullable */
+  updatedCompletionDate?: Date | null;
+  keyTakeaway?: string;
+  /** @nullable */
   suggestedById?: number | null;
   goal?: string;
   implementation?: string;

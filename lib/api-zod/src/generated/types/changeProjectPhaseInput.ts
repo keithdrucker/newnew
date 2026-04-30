@@ -15,6 +15,7 @@ export interface ChangeProjectPhaseInput {
   /** @nullable */
   revisitDate?: Date | null;
   completionSummary?: string;
+  keyTakeaway?: string;
   cancellationReason?: string;
   statusUpdate?: string;
   planningNotes?: string;

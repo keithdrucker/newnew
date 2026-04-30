@@ -41,13 +41,20 @@ export interface ProjectSummary {
   endDate?: Date | null;
   planningNotes: string;
   statusUpdate: string;
+  /** @nullable */
+  updatedCompletionDate?: Date | null;
   holdReason: string;
   holdNotes: string;
   /** @nullable */
   revisitDate?: Date | null;
   completionSummary: string;
+  keyTakeaway: string;
   /** @nullable */
   completedAt?: Date | null;
+  /** @nullable */
+  completedById?: number | null;
+  /** @nullable */
+  completedByName?: string | null;
   cancellationReason: string;
   /** @nullable */
   linkedInitiativeId?: number | null;

@@ -364,8 +364,14 @@ async function summarizeProjects(rows: ProjectRow[]) {
       holdReason: r.holdReason,
       holdNotes: r.holdNotes,
       revisitDate: r.revisitDate ?? null,
+      updatedCompletionDate: r.updatedCompletionDate ?? null,
       completionSummary: r.completionSummary,
+      keyTakeaway: r.keyTakeaway,
       completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+      completedById: r.completedById ?? null,
+      completedByName: r.completedById
+        ? (userMap.get(r.completedById)?.name ?? null)
+        : null,
       cancellationReason: r.cancellationReason,
       linkedInitiativeId: r.linkedInitiativeId ?? null,
       linkedInitiativeTitle:
@@ -574,6 +580,34 @@ router.post("/projects", async (req, res): Promise<void> => {
     completedYear = new Date().getUTCFullYear();
   }
 
+  // Closeout invariant on direct-create-to-completed (the import flow):
+  // a project that lands in "completed" must carry both a Completion
+  // Summary and a Key Takeaway, and we auto-capture who/when. Without
+  // this guard, importing a finished project would yield a Completed
+  // card with no closeout data and no `completedById`.
+  const incomingPhase =
+    (parsed.data.phase as ProjectPhase | undefined) ??
+    "backlog_needs_assignment";
+  let completedAtForInsert: Date | null = null;
+  let completedByIdForInsert: number | null = null;
+  if (incomingPhase === "completed") {
+    if (!parsed.data.completionSummary?.trim()) {
+      res.status(400).json({
+        error:
+          "Importing a project as completed requires a completion summary.",
+      });
+      return;
+    }
+    if (!parsed.data.keyTakeaway?.trim()) {
+      res
+        .status(400)
+        .json({ error: "Importing a project as completed requires a key takeaway." });
+      return;
+    }
+    completedAtForInsert = new Date();
+    completedByIdForInsert = user.id;
+  }
+
   const row = await db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(projectsTable)
@@ -581,8 +615,7 @@ router.post("/projects", async (req, res): Promise<void> => {
         name: parsed.data.name,
         description: parsed.data.description ?? "",
         color: parsed.data.color ?? "#4B9CD3",
-        phase: (parsed.data.phase as ProjectPhase | undefined) ??
-          "backlog_needs_assignment",
+        phase: incomingPhase,
         status: parsed.data.status ?? "active",
         departmentId: parsed.data.departmentId ?? null,
         bucketId,
@@ -593,6 +626,15 @@ router.post("/projects", async (req, res): Promise<void> => {
         dueAt,
         planningNotes: parsed.data.planningNotes ?? "",
         statusUpdate: parsed.data.statusUpdate ?? "",
+        updatedCompletionDate:
+          toDateString(parsed.data.updatedCompletionDate) ?? null,
+        // Imported "completed" projects can ship a closeout summary &
+        // takeaway up-front. Defaults to "" so the column NOT-NULL
+        // invariant holds.
+        completionSummary: parsed.data.completionSummary ?? "",
+        keyTakeaway: parsed.data.keyTakeaway ?? "",
+        completedAt: completedAtForInsert,
+        completedById: completedByIdForInsert,
         linkedInitiativeId: parsed.data.linkedInitiativeId ?? null,
         suggestedById: parsed.data.suggestedById ?? user.id,
         goal: parsed.data.goal ?? "",
@@ -772,6 +814,29 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     updates.planningNotes = parsed.data.planningNotes;
   if (parsed.data.statusUpdate !== undefined)
     updates.statusUpdate = parsed.data.statusUpdate;
+  if (parsed.data.updatedCompletionDate !== undefined)
+    updates.updatedCompletionDate =
+      toDateString(parsed.data.updatedCompletionDate) ?? null;
+  if (parsed.data.keyTakeaway !== undefined)
+    updates.keyTakeaway = parsed.data.keyTakeaway;
+  // Closeout integrity: once a project is completed, the closeout
+  // Key Takeaway cannot be patched to empty. (Completion Summary
+  // isn't part of UpdateProjectInput — it can only be set via
+  // POST /phase — so it can't be cleared via PATCH at all.) Re-opening
+  // (which goes through POST /phase) is how you intentionally clear
+  // these fields.
+  if (
+    existing.phase === "completed" &&
+    parsed.data.keyTakeaway !== undefined &&
+    !parsed.data.keyTakeaway.trim()
+  ) {
+    res.status(400).json({
+      error:
+        "Key takeaway cannot be cleared on a completed project. " +
+        "Reopen the project first.",
+    });
+    return;
+  }
   if (parsed.data.suggestedById !== undefined)
     updates.suggestedById = parsed.data.suggestedById;
   if (parsed.data.goal !== undefined) updates.goal = parsed.data.goal;
@@ -944,6 +1009,50 @@ router.post("/projects/:id/phase", async (req, res): Promise<void> => {
     }
   }
 
+  // ---- Backlog → Planning gate: require start + anticipated
+  //      completion dates with anticipated > start. The dates live on
+  //      the project itself (saved during Backlog edits), so we
+  //      validate against `existing` rather than the request body. ----
+  if (from === "backlog_needs_assignment" && to === "planning") {
+    if (!existing.startDate || !existing.endDate) {
+      res.status(400).json({
+        error:
+          "Start date and anticipated completion date are required " +
+          "before moving to Planning.",
+      });
+      return;
+    }
+    if (existing.endDate <= existing.startDate) {
+      res.status(400).json({
+        error: "Anticipated completion date must be after start date.",
+      });
+      return;
+    }
+  }
+
+  // ---- Closeout gate: require BOTH summary and key takeaway when
+  //      moving into Completed. We accept either values from the
+  //      request body OR pre-existing values on the row (so a project
+  //      can be drafted in Backlog and re-promoted later). ----
+  if (to === "completed") {
+    const summary = (
+      parsed.data.completionSummary ?? existing.completionSummary ?? ""
+    ).trim();
+    const takeaway = (
+      parsed.data.keyTakeaway ?? existing.keyTakeaway ?? ""
+    ).trim();
+    if (!summary) {
+      res.status(400).json({ error: "Completion summary is required." });
+      return;
+    }
+    if (!takeaway) {
+      res.status(400).json({
+        error: "Key takeaway / lesson learned is required.",
+      });
+      return;
+    }
+  }
+
   const updates: Partial<typeof projectsTable.$inferInsert> = { phase: to };
   let action = "phase_changed";
 
@@ -965,8 +1074,11 @@ router.post("/projects/:id/phase", async (req, res): Promise<void> => {
 
   if (to === "completed") {
     updates.completedAt = new Date();
+    updates.completedById = user.id;
     if (parsed.data.completionSummary !== undefined)
       updates.completionSummary = parsed.data.completionSummary;
+    if (parsed.data.keyTakeaway !== undefined)
+      updates.keyTakeaway = parsed.data.keyTakeaway;
     // Mirror to legacy status for back-compat.
     updates.status = "completed";
     action = "completed";

@@ -33,6 +33,10 @@ export interface CreateProjectInput {
   planningNotes?: string;
   statusUpdate?: string;
   /** @nullable */
+  updatedCompletionDate?: Date | null;
+  completionSummary?: string;
+  keyTakeaway?: string;
+  /** @nullable */
   linkedInitiativeId?: number | null;
   /** @nullable */
   suggestedById?: number | null;

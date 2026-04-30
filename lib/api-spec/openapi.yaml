@@ -3131,13 +3131,20 @@ components:
         planningNotes: { type: string }
         # --- Phase 3: In Progress ---
         statusUpdate: { type: string }
+        # Optional re-estimate set during In Progress; original
+        # endDate is preserved for reporting.
+        updatedCompletionDate: { type: ["string", "null"], format: date }
         # --- Phase 4 (side): On Hold ---
         holdReason: { type: string }
         holdNotes: { type: string }
         revisitDate: { type: ["string", "null"], format: date }
-        # --- Phase 5: Completed ---
+        # --- Phase 5: Completed (a.k.a. Project Closeout) ---
         completionSummary: { type: string }
+        # Required at completion; what to repeat / change next time.
+        keyTakeaway: { type: string }
         completedAt: { type: ["string", "null"], format: date-time }
+        completedById: { type: ["integer", "null"] }
+        completedByName: { type: ["string", "null"] }
         # --- Phase 6: Cancelled ---
         cancellationReason: { type: string }
         # Reverse link to the spawning Initiative (if any).
@@ -3183,6 +3190,7 @@ components:
         - holdReason
         - holdNotes
         - completionSummary
+        - keyTakeaway
         - cancellationReason
         - goal
         - implementation
@@ -3294,6 +3302,9 @@ components:
         dueAt: { type: ["string", "null"], format: date-time }
         planningNotes: { type: string }
         statusUpdate: { type: string }
+        updatedCompletionDate: { type: ["string", "null"], format: date }
+        completionSummary: { type: string }
+        keyTakeaway: { type: string }
         linkedInitiativeId: { type: ["integer", "null"] }
         suggestedById: { type: ["integer", "null"] }
         goal: { type: string }
@@ -3331,6 +3342,10 @@ components:
         dueAt: { type: ["string", "null"], format: date-time }
         planningNotes: { type: string }
         statusUpdate: { type: string }
+        # In Progress re-estimate; preserved separately from endDate.
+        updatedCompletionDate: { type: ["string", "null"], format: date }
+        # Editable from the closeout view; required at completion.
+        keyTakeaway: { type: string }
         suggestedById: { type: ["integer", "null"] }
         goal: { type: string }
         implementation: { type: string }
@@ -3357,6 +3372,8 @@ components:
         holdNotes: { type: string }
         revisitDate: { type: ["string", "null"], format: date }
         completionSummary: { type: string }
+        # Required when to=completed; what to repeat / change.
+        keyTakeaway: { type: string }
         cancellationReason: { type: string }
         statusUpdate: { type: string }
         planningNotes: { type: string }

@@ -1493,13 +1493,20 @@ export interface ProjectSummary {
   endDate?: string | null;
   planningNotes: string;
   statusUpdate: string;
+  /** @nullable */
+  updatedCompletionDate?: string | null;
   holdReason: string;
   holdNotes: string;
   /** @nullable */
   revisitDate?: string | null;
   completionSummary: string;
+  keyTakeaway: string;
   /** @nullable */
   completedAt?: string | null;
+  /** @nullable */
+  completedById?: number | null;
+  /** @nullable */
+  completedByName?: string | null;
   cancellationReason: string;
   /** @nullable */
   linkedInitiativeId?: number | null;
@@ -1599,6 +1606,10 @@ export interface CreateProjectInput {
   planningNotes?: string;
   statusUpdate?: string;
   /** @nullable */
+  updatedCompletionDate?: string | null;
+  completionSummary?: string;
+  keyTakeaway?: string;
+  /** @nullable */
   linkedInitiativeId?: number | null;
   /** @nullable */
   suggestedById?: number | null;
@@ -1635,6 +1646,9 @@ export interface UpdateProjectInput {
   planningNotes?: string;
   statusUpdate?: string;
   /** @nullable */
+  updatedCompletionDate?: string | null;
+  keyTakeaway?: string;
+  /** @nullable */
   suggestedById?: number | null;
   goal?: string;
   implementation?: string;
@@ -1656,6 +1670,7 @@ export interface ChangeProjectPhaseInput {
   /** @nullable */
   revisitDate?: string | null;
   completionSummary?: string;
+  keyTakeaway?: string;
   cancellationReason?: string;
   statusUpdate?: string;
   planningNotes?: string;

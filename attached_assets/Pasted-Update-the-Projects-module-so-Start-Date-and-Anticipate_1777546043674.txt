@@ -1,0 +1,86 @@
+Update the Projects module so Start Date and Anticipated Completion Date stay in Backlog / Needs Assignment and carry forward through all later phases.
+
+Goal:
+Backlog / Needs Assignment should capture the basic project assignment and target timeline.
+Planning should focus only on building the checklist and plan.
+
+1. Backlog / Needs Assignment
+
+Keep these fields:
+- Project Owner
+- Assigned Team
+- Priority
+- Start Date
+- Anticipated Completion Date
+
+Validation:
+- Start Date is required before moving to Planning
+- Anticipated Completion Date is required before moving to Planning
+- Anticipated Completion Date must be after Start Date
+- If invalid, show:
+  “Anticipated completion date must be after start date.”
+
+2. Planning phase
+
+Do NOT require Start Date or Anticipated Completion Date here.
+
+Planning should focus on:
+- Project Checklist
+- Planning Notes
+
+Display these as read-only carryover fields:
+- Start Date
+- Anticipated Completion Date
+
+3. In Progress phase
+
+Display these as read-only carryover fields:
+- Start Date
+- Anticipated Completion Date
+
+Allow optional:
+- Updated Completion Date
+
+Rules:
+- If Updated Completion Date is entered, store it separately.
+- Do not overwrite the original Anticipated Completion Date.
+- Preserve the original date for history and reporting.
+
+4. Completed phase
+
+Rename section to:
+“Project Closeout”
+
+Required fields:
+- Completion Summary
+  Placeholder: “What was delivered or completed?”
+
+- Key Takeaway / Lesson Learned
+  Placeholder: “What should we repeat or do differently next time?”
+
+Auto-capture:
+- Completed By
+- Completed Date / Actual Completion Date
+
+5. Project cards
+
+Display:
+- Title
+- Status / Phase
+- Owner
+- Priority
+- Start Date
+- Anticipated Completion Date
+- Progress %
+
+6. Data integrity
+
+- Do not delete existing Start Date or Anticipated Completion Date values.
+- If these dates already exist, keep them in Backlog and carry them forward.
+- Planning and In Progress should show them as grey/read-only fields.
+
+Important:
+Backlog = assignment + target timeline.
+Planning = checklist.
+In Progress = execute checklist.
+Completed = outcome + lesson learned.
