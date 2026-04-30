@@ -3131,9 +3131,6 @@ components:
         planningNotes: { type: string }
         # --- Phase 3: In Progress ---
         statusUpdate: { type: string }
-        # Optional re-estimate set during In Progress; original
-        # endDate is preserved for reporting.
-        updatedCompletionDate: { type: ["string", "null"], format: date }
         # --- Phase 4 (side): On Hold ---
         holdReason: { type: string }
         holdNotes: { type: string }
@@ -3302,7 +3299,6 @@ components:
         dueAt: { type: ["string", "null"], format: date-time }
         planningNotes: { type: string }
         statusUpdate: { type: string }
-        updatedCompletionDate: { type: ["string", "null"], format: date }
         completionSummary: { type: string }
         keyTakeaway: { type: string }
         linkedInitiativeId: { type: ["integer", "null"] }
@@ -3342,8 +3338,6 @@ components:
         dueAt: { type: ["string", "null"], format: date-time }
         planningNotes: { type: string }
         statusUpdate: { type: string }
-        # In Progress re-estimate; preserved separately from endDate.
-        updatedCompletionDate: { type: ["string", "null"], format: date }
         # Editable from the closeout view; required at completion.
         keyTakeaway: { type: string }
         suggestedById: { type: ["integer", "null"] }

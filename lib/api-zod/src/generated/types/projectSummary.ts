@@ -41,8 +41,6 @@ export interface ProjectSummary {
   endDate?: Date | null;
   planningNotes: string;
   statusUpdate: string;
-  /** @nullable */
-  updatedCompletionDate?: Date | null;
   holdReason: string;
   holdNotes: string;
   /** @nullable */

@@ -121,12 +121,6 @@ export const projectsTable = pgTable(
     holdNotes: text("hold_notes").notNull().default(""),
     revisitDate: date("revisit_date"),
 
-    // ---- Phase 3 (re-estimate): set when In Progress reveals
-    //      the original `endDate` is no longer accurate. Stored
-    //      separately so the original target is preserved for
-    //      reporting/history. Display: "Updated completion date".
-    updatedCompletionDate: date("updated_completion_date"),
-
     // ---- Phase 5: Completed (a.k.a. "Project Closeout") ----
     completionSummary: text("completion_summary").notNull().default(""),
     // What we should repeat / do differently next time. Required

@@ -424,11 +424,6 @@ function DetailInner({
   const [endDate, setEndDate] = useState<string>(row.endDate ?? "");
   const [planningNotes, setPlanningNotes] = useState(row.planningNotes);
   const [statusUpdate, setStatusUpdate] = useState(row.statusUpdate);
-  // In Progress re-estimate. Stored separately so the original
-  // `endDate` is preserved for reporting/history.
-  const [updatedCompletionDate, setUpdatedCompletionDate] = useState<string>(
-    row.updatedCompletionDate ?? "",
-  );
 
   useEffect(() => {
     setDepartmentId(row.departmentId ?? null);
@@ -439,7 +434,6 @@ function DetailInner({
     setEndDate(row.endDate ?? "");
     setPlanningNotes(row.planningNotes);
     setStatusUpdate(row.statusUpdate);
-    setUpdatedCompletionDate(row.updatedCompletionDate ?? "");
   }, [row.id, row]);
 
   const saveBasics = async (msg: string) => {
@@ -454,7 +448,6 @@ function DetailInner({
         endDate: endDate || null,
         planningNotes,
         statusUpdate,
-        updatedCompletionDate: updatedCompletionDate || null,
       },
     });
     toast({ title: msg });
@@ -827,10 +820,10 @@ function DetailInner({
                     : "default"
               }
             >
-              {/* Read-only carryover of the original timeline. The
-                  "Updated completion date" below lets the team capture
-                  a re-estimate WITHOUT clobbering the original target
-                  (which we keep for variance reporting). */}
+              {/* Read-only carryover of the original timeline from
+                  Backlog. The actual completion date is captured
+                  automatically when the user clicks Mark Completed
+                  (stored as `completedAt`). */}
               <div className="grid grid-cols-2 gap-3">
                 <ReadField
                   label="Start date"
@@ -849,19 +842,6 @@ function DetailInner({
                   }
                 />
               </div>
-              <Field label="Updated completion date (optional)">
-                <Input
-                  type="date"
-                  value={updatedCompletionDate}
-                  onChange={(e) => setUpdatedCompletionDate(e.target.value)}
-                  disabled={phase !== "in_progress"}
-                  data-testid="input-updated-completion-date"
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Use this if the anticipated completion date has
-                  shifted. The original date is preserved for history.
-                </p>
-              </Field>
               <Field label="Latest status update">
                 <Textarea
                   value={statusUpdate}

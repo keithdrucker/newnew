@@ -364,7 +364,6 @@ async function summarizeProjects(rows: ProjectRow[]) {
       holdReason: r.holdReason,
       holdNotes: r.holdNotes,
       revisitDate: r.revisitDate ?? null,
-      updatedCompletionDate: r.updatedCompletionDate ?? null,
       completionSummary: r.completionSummary,
       keyTakeaway: r.keyTakeaway,
       completedAt: r.completedAt ? r.completedAt.toISOString() : null,
@@ -626,8 +625,6 @@ router.post("/projects", async (req, res): Promise<void> => {
         dueAt,
         planningNotes: parsed.data.planningNotes ?? "",
         statusUpdate: parsed.data.statusUpdate ?? "",
-        updatedCompletionDate:
-          toDateString(parsed.data.updatedCompletionDate) ?? null,
         // Imported "completed" projects can ship a closeout summary &
         // takeaway up-front. Defaults to "" so the column NOT-NULL
         // invariant holds.
@@ -814,9 +811,6 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     updates.planningNotes = parsed.data.planningNotes;
   if (parsed.data.statusUpdate !== undefined)
     updates.statusUpdate = parsed.data.statusUpdate;
-  if (parsed.data.updatedCompletionDate !== undefined)
-    updates.updatedCompletionDate =
-      toDateString(parsed.data.updatedCompletionDate) ?? null;
   if (parsed.data.keyTakeaway !== undefined)
     updates.keyTakeaway = parsed.data.keyTakeaway;
   // Closeout integrity: once a project is completed, the closeout

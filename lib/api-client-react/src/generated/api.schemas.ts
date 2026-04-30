@@ -1493,8 +1493,6 @@ export interface ProjectSummary {
   endDate?: string | null;
   planningNotes: string;
   statusUpdate: string;
-  /** @nullable */
-  updatedCompletionDate?: string | null;
   holdReason: string;
   holdNotes: string;
   /** @nullable */
@@ -1605,8 +1603,6 @@ export interface CreateProjectInput {
   dueAt?: string | null;
   planningNotes?: string;
   statusUpdate?: string;
-  /** @nullable */
-  updatedCompletionDate?: string | null;
   completionSummary?: string;
   keyTakeaway?: string;
   /** @nullable */
@@ -1645,8 +1641,6 @@ export interface UpdateProjectInput {
   dueAt?: string | null;
   planningNotes?: string;
   statusUpdate?: string;
-  /** @nullable */
-  updatedCompletionDate?: string | null;
   keyTakeaway?: string;
   /** @nullable */
   suggestedById?: number | null;

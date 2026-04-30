@@ -32,8 +32,6 @@ export interface CreateProjectInput {
   dueAt?: Date | null;
   planningNotes?: string;
   statusUpdate?: string;
-  /** @nullable */
-  updatedCompletionDate?: Date | null;
   completionSummary?: string;
   keyTakeaway?: string;
   /** @nullable */

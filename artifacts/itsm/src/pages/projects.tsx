@@ -311,13 +311,8 @@ function ProjectCard({
   const total = p.checklistTotal;
   const done = p.checklistDone;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-  // Prefer the In-Progress re-estimate when set so the card reflects
-  // the team's current commitment, not the stale original target.
-  // The original `endDate` is still preserved on the row for reporting.
-  const effectiveEnd = p.updatedCompletionDate ?? p.endDate ?? p.dueAt;
-  const due = formatDue(effectiveEnd);
+  const due = formatDue(p.endDate ?? p.dueAt);
   const start = formatDue(p.startDate);
-  const dueIsUpdated = p.updatedCompletionDate != null;
   const isBacklog = p.phase === "backlog_needs_assignment";
   const subStatus = isBacklog ? backlogSubStatus(p) : null;
   const startInfo = isBacklog ? startDateLabel(p.startDate) : null;
@@ -431,21 +426,9 @@ function ProjectCard({
             )}
           </div>
           {due ? (
-            <span
-              className="inline-flex items-center gap-1"
-              title={
-                dueIsUpdated && p.endDate
-                  ? `Original target: ${formatDue(p.endDate) ?? p.endDate}`
-                  : undefined
-              }
-            >
+            <span className="inline-flex items-center gap-1">
               <CalendarDays className="h-2.5 w-2.5" />
               {start ? `${start} – ${due}` : due}
-              {dueIsUpdated && (
-                <span className="text-[9px] uppercase tracking-wide text-amber-600 ml-0.5">
-                  upd.
-                </span>
-              )}
             </span>
           ) : null}
         </div>
