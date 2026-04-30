@@ -27,6 +27,7 @@ import type {
   BoardView,
   CancelWorkflowRunInput,
   ChangeProjectPhaseInput,
+  CompleteOperationalTaskResult,
   CreateAgentInput,
   CreateApplicationInput,
   CreateAssetInput,
@@ -35,6 +36,7 @@ import type {
   CreateDepartmentInput,
   CreateInitiativeInput,
   CreateKbArticleInput,
+  CreateOperationalTaskInput,
   CreatePersonInput,
   CreateProjectCommentInput,
   CreateProjectInput,
@@ -63,12 +65,14 @@ import type {
   ListDepartmentsParams,
   ListInitiativesParams,
   ListKbArticlesParams,
+  ListOperationalTasksParams,
   ListPeopleParams,
   ListProjectsParams,
   ListTicketsParams,
   ListTimeEntriesParams,
   ListVendorsParams,
   ListWorkflowsParams,
+  OperationalTask,
   Person,
   ProjectComment,
   ProjectDetail,
@@ -96,6 +100,7 @@ import type {
   UpdateInitiativeInput,
   UpdateKbArticleInput,
   UpdateMePreferencesInput,
+  UpdateOperationalTaskInput,
   UpdatePersonInput,
   UpdateProjectInput,
   UpdateRiskRuleInput,
@@ -8810,4 +8815,520 @@ export const useCancelWorkflowRun = <
   TContext
 > => {
   return useMutation(getCancelWorkflowRunMutationOptions(options));
+};
+
+/**
+ * @summary List operational tasks
+ */
+export const getListOperationalTasksUrl = (
+  params?: ListOperationalTasksParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/operational-tasks?${stringifiedParams}`
+    : `/api/operational-tasks`;
+};
+
+export const listOperationalTasks = async (
+  params?: ListOperationalTasksParams,
+  options?: RequestInit,
+): Promise<OperationalTask[]> => {
+  return customFetch<OperationalTask[]>(getListOperationalTasksUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListOperationalTasksQueryKey = (
+  params?: ListOperationalTasksParams,
+) => {
+  return [`/api/operational-tasks`, ...(params ? [params] : [])] as const;
+};
+
+export const getListOperationalTasksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOperationalTasks>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListOperationalTasksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOperationalTasks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListOperationalTasksQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOperationalTasks>>
+  > = ({ signal }) =>
+    listOperationalTasks(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOperationalTasks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOperationalTasksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOperationalTasks>>
+>;
+export type ListOperationalTasksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List operational tasks
+ */
+
+export function useListOperationalTasks<
+  TData = Awaited<ReturnType<typeof listOperationalTasks>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListOperationalTasksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOperationalTasks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOperationalTasksQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create an operational task
+ */
+export const getCreateOperationalTaskUrl = () => {
+  return `/api/operational-tasks`;
+};
+
+export const createOperationalTask = async (
+  createOperationalTaskInput: CreateOperationalTaskInput,
+  options?: RequestInit,
+): Promise<OperationalTask> => {
+  return customFetch<OperationalTask>(getCreateOperationalTaskUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createOperationalTaskInput),
+  });
+};
+
+export const getCreateOperationalTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOperationalTask>>,
+    TError,
+    { data: BodyType<CreateOperationalTaskInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createOperationalTask>>,
+  TError,
+  { data: BodyType<CreateOperationalTaskInput> },
+  TContext
+> => {
+  const mutationKey = ["createOperationalTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createOperationalTask>>,
+    { data: BodyType<CreateOperationalTaskInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createOperationalTask(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateOperationalTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createOperationalTask>>
+>;
+export type CreateOperationalTaskMutationBody =
+  BodyType<CreateOperationalTaskInput>;
+export type CreateOperationalTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create an operational task
+ */
+export const useCreateOperationalTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOperationalTask>>,
+    TError,
+    { data: BodyType<CreateOperationalTaskInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createOperationalTask>>,
+  TError,
+  { data: BodyType<CreateOperationalTaskInput> },
+  TContext
+> => {
+  return useMutation(getCreateOperationalTaskMutationOptions(options));
+};
+
+export const getGetOperationalTaskUrl = (id: number) => {
+  return `/api/operational-tasks/${id}`;
+};
+
+export const getOperationalTask = async (
+  id: number,
+  options?: RequestInit,
+): Promise<OperationalTask> => {
+  return customFetch<OperationalTask>(getGetOperationalTaskUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOperationalTaskQueryKey = (id: number) => {
+  return [`/api/operational-tasks/${id}`] as const;
+};
+
+export const getGetOperationalTaskQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOperationalTask>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOperationalTask>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetOperationalTaskQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getOperationalTask>>
+  > = ({ signal }) => getOperationalTask(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOperationalTask>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOperationalTaskQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOperationalTask>>
+>;
+export type GetOperationalTaskQueryError = ErrorType<unknown>;
+
+export function useGetOperationalTask<
+  TData = Awaited<ReturnType<typeof getOperationalTask>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOperationalTask>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOperationalTaskQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getUpdateOperationalTaskUrl = (id: number) => {
+  return `/api/operational-tasks/${id}`;
+};
+
+export const updateOperationalTask = async (
+  id: number,
+  updateOperationalTaskInput: UpdateOperationalTaskInput,
+  options?: RequestInit,
+): Promise<OperationalTask> => {
+  return customFetch<OperationalTask>(getUpdateOperationalTaskUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateOperationalTaskInput),
+  });
+};
+
+export const getUpdateOperationalTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOperationalTask>>,
+    TError,
+    { id: number; data: BodyType<UpdateOperationalTaskInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOperationalTask>>,
+  TError,
+  { id: number; data: BodyType<UpdateOperationalTaskInput> },
+  TContext
+> => {
+  const mutationKey = ["updateOperationalTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOperationalTask>>,
+    { id: number; data: BodyType<UpdateOperationalTaskInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateOperationalTask(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOperationalTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOperationalTask>>
+>;
+export type UpdateOperationalTaskMutationBody =
+  BodyType<UpdateOperationalTaskInput>;
+export type UpdateOperationalTaskMutationError = ErrorType<unknown>;
+
+export const useUpdateOperationalTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOperationalTask>>,
+    TError,
+    { id: number; data: BodyType<UpdateOperationalTaskInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOperationalTask>>,
+  TError,
+  { id: number; data: BodyType<UpdateOperationalTaskInput> },
+  TContext
+> => {
+  return useMutation(getUpdateOperationalTaskMutationOptions(options));
+};
+
+export const getDeleteOperationalTaskUrl = (id: number) => {
+  return `/api/operational-tasks/${id}`;
+};
+
+export const deleteOperationalTask = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteOperationalTaskUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteOperationalTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOperationalTask>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteOperationalTask>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteOperationalTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteOperationalTask>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteOperationalTask(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteOperationalTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteOperationalTask>>
+>;
+
+export type DeleteOperationalTaskMutationError = ErrorType<unknown>;
+
+export const useDeleteOperationalTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOperationalTask>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteOperationalTask>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteOperationalTaskMutationOptions(options));
+};
+
+/**
+ * @summary Mark a task complete. For recurring tasks, atomically creates the next instance with `nextDueDate` advanced by the frequency interval and the same checklist (with `done` flags reset).
+
+ */
+export const getCompleteOperationalTaskUrl = (id: number) => {
+  return `/api/operational-tasks/${id}/complete`;
+};
+
+export const completeOperationalTask = async (
+  id: number,
+  options?: RequestInit,
+): Promise<CompleteOperationalTaskResult> => {
+  return customFetch<CompleteOperationalTaskResult>(
+    getCompleteOperationalTaskUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getCompleteOperationalTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeOperationalTask>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeOperationalTask>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["completeOperationalTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeOperationalTask>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return completeOperationalTask(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteOperationalTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeOperationalTask>>
+>;
+
+export type CompleteOperationalTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark a task complete. For recurring tasks, atomically creates the next instance with `nextDueDate` advanced by the frequency interval and the same checklist (with `done` flags reset).
+
+ */
+export const useCompleteOperationalTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeOperationalTask>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeOperationalTask>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getCompleteOperationalTaskMutationOptions(options));
 };

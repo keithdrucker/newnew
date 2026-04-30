@@ -12,6 +12,7 @@ export * from "./applications";
 export * from "./vendors";
 export * from "./projects";
 export * from "./initiatives";
+export * from "./operationalTasks";
 export * from "./riskRules";
 export * from "./timeEntries";
 export * from "./workflows";

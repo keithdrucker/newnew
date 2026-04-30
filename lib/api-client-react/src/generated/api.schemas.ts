@@ -164,6 +164,119 @@ export interface BoardSectionRoles {
   projects?: BoardSectionRole;
 }
 
+export type OperationalTaskType =
+  (typeof OperationalTaskType)[keyof typeof OperationalTaskType];
+
+export const OperationalTaskType = {
+  recurring: "recurring",
+  one_time: "one_time",
+} as const;
+
+export type OperationalTaskStatus =
+  (typeof OperationalTaskStatus)[keyof typeof OperationalTaskStatus];
+
+export const OperationalTaskStatus = {
+  scheduled: "scheduled",
+  in_progress: "in_progress",
+  completed: "completed",
+} as const;
+
+export type OperationalTaskFrequency =
+  (typeof OperationalTaskFrequency)[keyof typeof OperationalTaskFrequency];
+
+export const OperationalTaskFrequency = {
+  daily: "daily",
+  weekly: "weekly",
+  bi_weekly: "bi_weekly",
+  monthly: "monthly",
+  quarterly: "quarterly",
+  bi_annual: "bi_annual",
+  annual: "annual",
+  multi_year: "multi_year",
+} as const;
+
+export interface OperationalTaskChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
+  /**
+   * YYYY-MM-DD
+   * @nullable
+   */
+  dueDate?: string | null;
+}
+
+export interface OperationalTask {
+  id: number;
+  departmentId: number;
+  departmentName: string;
+  name: string;
+  description: string;
+  type: OperationalTaskType;
+  frequency?: OperationalTaskFrequency | null;
+  /** YYYY-MM-DD */
+  nextDueDate: string;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  ownerName?: string | null;
+  status: OperationalTaskStatus;
+  isOverdue: boolean;
+  checklist: OperationalTaskChecklistItem[];
+  /** @nullable */
+  seriesId?: number | null;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  completedById?: number | null;
+  /** @nullable */
+  completedByName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateOperationalTaskInput {
+  departmentId: number;
+  name: string;
+  description?: string;
+  type: OperationalTaskType;
+  frequency?: OperationalTaskFrequency | null;
+  /** YYYY-MM-DD */
+  nextDueDate: string;
+  /** @nullable */
+  ownerId?: number | null;
+  checklist?: OperationalTaskChecklistItem[];
+}
+
+export type UpdateOperationalTaskInputStatus =
+  (typeof UpdateOperationalTaskInputStatus)[keyof typeof UpdateOperationalTaskInputStatus];
+
+export const UpdateOperationalTaskInputStatus = {
+  scheduled: "scheduled",
+  in_progress: "in_progress",
+} as const;
+
+export interface UpdateOperationalTaskInput {
+  name?: string;
+  description?: string;
+  type?: OperationalTaskType;
+  frequency?: OperationalTaskFrequency | null;
+  nextDueDate?: string;
+  /** @nullable */
+  ownerId?: number | null;
+  status?: UpdateOperationalTaskInputStatus;
+  checklist?: OperationalTaskChecklistItem[];
+}
+
+export interface CompleteOperationalTaskResult {
+  completed: OperationalTask;
+  nextInstance?: OperationalTask | null;
+}
+
 export interface TimesheetVisibleUser {
   id: number;
   name: string;
@@ -2690,4 +2803,26 @@ export const ListWorkflowsStatus = {
   draft: "draft",
   active: "active",
   inactive: "inactive",
+} as const;
+
+export type ListOperationalTasksParams = {
+  departmentId?: number;
+  /**
+   * Comma-separated list of statuses to include.
+   */
+  status?: string;
+  ownerId?: number;
+  frequency?: OperationalTaskFrequency;
+  type?: OperationalTaskType;
+  dueWindow?: ListOperationalTasksDueWindow;
+  search?: string;
+};
+
+export type ListOperationalTasksDueWindow =
+  (typeof ListOperationalTasksDueWindow)[keyof typeof ListOperationalTasksDueWindow];
+
+export const ListOperationalTasksDueWindow = {
+  today: "today",
+  week: "week",
+  overdue: "overdue",
 } as const;

@@ -1965,6 +1965,133 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/WorkflowRun" }
 
+  /operational-tasks:
+    get:
+      operationId: listOperationalTasks
+      tags: [operationalTasks]
+      summary: List operational tasks
+      parameters:
+        - in: query
+          name: departmentId
+          required: false
+          schema: { type: integer }
+        - in: query
+          name: status
+          required: false
+          description: Comma-separated list of statuses to include.
+          schema: { type: string }
+        - in: query
+          name: ownerId
+          required: false
+          schema: { type: integer }
+        - in: query
+          name: frequency
+          required: false
+          schema: { $ref: "#/components/schemas/OperationalTaskFrequency" }
+        - in: query
+          name: type
+          required: false
+          schema: { $ref: "#/components/schemas/OperationalTaskType" }
+        - in: query
+          name: dueWindow
+          required: false
+          schema:
+            type: string
+            enum: [today, week, overdue]
+        - in: query
+          name: search
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OperationalTask" }
+    post:
+      operationId: createOperationalTask
+      tags: [operationalTasks]
+      summary: Create an operational task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOperationalTaskInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperationalTask" }
+
+  /operational-tasks/{id}:
+    get:
+      operationId: getOperationalTask
+      tags: [operationalTasks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperationalTask" }
+    patch:
+      operationId: updateOperationalTask
+      tags: [operationalTasks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateOperationalTaskInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperationalTask" }
+    delete:
+      operationId: deleteOperationalTask
+      tags: [operationalTasks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /operational-tasks/{id}/complete:
+    post:
+      operationId: completeOperationalTask
+      tags: [operationalTasks]
+      summary: >
+        Mark a task complete. For recurring tasks, atomically creates the
+        next instance with `nextDueDate` advanced by the frequency interval
+        and the same checklist (with `done` flags reset).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Result of completion
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompleteOperationalTaskResult" }
+
 components:
   schemas:
     HealthStatus:
@@ -2131,6 +2258,145 @@ components:
         operational_tasks: { $ref: "#/components/schemas/BoardSectionRole" }
         initiatives: { $ref: "#/components/schemas/BoardSectionRole" }
         projects: { $ref: "#/components/schemas/BoardSectionRole" }
+
+    OperationalTaskType:
+      type: string
+      enum: [recurring, one_time]
+
+    OperationalTaskStatus:
+      type: string
+      # `overdue` is intentionally NOT in the enum — it's derived at
+      # read time from `nextDueDate < today AND status != "completed"`.
+      enum: [scheduled, in_progress, completed]
+
+    OperationalTaskFrequency:
+      type: string
+      enum:
+        - daily
+        - weekly
+        - bi_weekly
+        - monthly
+        - quarterly
+        - bi_annual
+        - annual
+        - multi_year
+
+    OperationalTaskChecklistItem:
+      type: object
+      properties:
+        id: { type: string }
+        text: { type: string }
+        done: { type: boolean }
+        assigneeId:
+          type: ["integer", "null"]
+        assigneeName:
+          type: ["string", "null"]
+        dueDate:
+          type: ["string", "null"]
+          description: YYYY-MM-DD
+      required: [id, text, done]
+
+    OperationalTask:
+      type: object
+      properties:
+        id: { type: integer }
+        departmentId: { type: integer }
+        departmentName: { type: string }
+        name: { type: string }
+        description: { type: string }
+        type: { $ref: "#/components/schemas/OperationalTaskType" }
+        frequency:
+          oneOf:
+            - { $ref: "#/components/schemas/OperationalTaskFrequency" }
+            - { type: "null" }
+        nextDueDate: { type: string, description: YYYY-MM-DD }
+        ownerId:
+          type: ["integer", "null"]
+        ownerName:
+          type: ["string", "null"]
+        status: { $ref: "#/components/schemas/OperationalTaskStatus" }
+        # Always returned alongside status. UI shows an "Overdue" badge
+        # when this is true.
+        isOverdue: { type: boolean }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/OperationalTaskChecklistItem" }
+        seriesId:
+          type: ["integer", "null"]
+        completedAt:
+          type: ["string", "null"]
+        completedById:
+          type: ["integer", "null"]
+        completedByName:
+          type: ["string", "null"]
+        createdAt: { type: string }
+        updatedAt: { type: string }
+      required:
+        - id
+        - departmentId
+        - departmentName
+        - name
+        - description
+        - type
+        - nextDueDate
+        - status
+        - isOverdue
+        - checklist
+        - createdAt
+        - updatedAt
+
+    CreateOperationalTaskInput:
+      type: object
+      properties:
+        departmentId: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        type: { $ref: "#/components/schemas/OperationalTaskType" }
+        frequency:
+          oneOf:
+            - { $ref: "#/components/schemas/OperationalTaskFrequency" }
+            - { type: "null" }
+        nextDueDate: { type: string, description: YYYY-MM-DD }
+        ownerId:
+          type: ["integer", "null"]
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/OperationalTaskChecklistItem" }
+      required: [departmentId, name, type, nextDueDate]
+
+    UpdateOperationalTaskInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        type: { $ref: "#/components/schemas/OperationalTaskType" }
+        frequency:
+          oneOf:
+            - { $ref: "#/components/schemas/OperationalTaskFrequency" }
+            - { type: "null" }
+        nextDueDate: { type: string }
+        ownerId:
+          type: ["integer", "null"]
+        # `completed` is NOT accepted here — use POST /complete to drive
+        # the recurring chain logic. Allowed values: scheduled | in_progress.
+        status:
+          type: string
+          enum: [scheduled, in_progress]
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/OperationalTaskChecklistItem" }
+
+    CompleteOperationalTaskResult:
+      type: object
+      properties:
+        completed: { $ref: "#/components/schemas/OperationalTask" }
+        # Present when the completed task was recurring — this is the
+        # auto-created next instance with the advanced due date.
+        nextInstance:
+          oneOf:
+            - { $ref: "#/components/schemas/OperationalTask" }
+            - { type: "null" }
+      required: [completed]
 
     TimesheetVisibleUser:
       type: object

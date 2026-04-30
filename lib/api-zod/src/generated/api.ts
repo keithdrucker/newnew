@@ -4852,3 +4852,359 @@ export const CancelWorkflowRunResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary List operational tasks
+ */
+export const ListOperationalTasksQueryParams = zod.object({
+  departmentId: zod.coerce.number().optional(),
+  status: zod.coerce
+    .string()
+    .optional()
+    .describe("Comma-separated list of statuses to include."),
+  ownerId: zod.coerce.number().optional(),
+  frequency: zod
+    .enum([
+      "daily",
+      "weekly",
+      "bi_weekly",
+      "monthly",
+      "quarterly",
+      "bi_annual",
+      "annual",
+      "multi_year",
+    ])
+    .optional(),
+  type: zod.enum(["recurring", "one_time"]).optional(),
+  dueWindow: zod.enum(["today", "week", "overdue"]).optional(),
+  search: zod.coerce.string().optional(),
+});
+
+export const ListOperationalTasksResponseItem = zod.object({
+  id: zod.number(),
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  name: zod.string(),
+  description: zod.string(),
+  type: zod.enum(["recurring", "one_time"]),
+  frequency: zod
+    .union([
+      zod.enum([
+        "daily",
+        "weekly",
+        "bi_weekly",
+        "monthly",
+        "quarterly",
+        "bi_annual",
+        "annual",
+        "multi_year",
+      ]),
+      zod.null(),
+    ])
+    .optional(),
+  nextDueDate: zod.string().describe("YYYY-MM-DD"),
+  ownerId: zod.number().nullish(),
+  ownerName: zod.string().nullish(),
+  status: zod.enum(["scheduled", "in_progress", "completed"]),
+  isOverdue: zod.boolean(),
+  checklist: zod.array(
+    zod.object({
+      id: zod.string(),
+      text: zod.string(),
+      done: zod.boolean(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+      dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+    }),
+  ),
+  seriesId: zod.number().nullish(),
+  completedAt: zod.string().nullish(),
+  completedById: zod.number().nullish(),
+  completedByName: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListOperationalTasksResponse = zod.array(
+  ListOperationalTasksResponseItem,
+);
+
+/**
+ * @summary Create an operational task
+ */
+export const CreateOperationalTaskBody = zod.object({
+  departmentId: zod.number(),
+  name: zod.string(),
+  description: zod.string().optional(),
+  type: zod.enum(["recurring", "one_time"]),
+  frequency: zod
+    .union([
+      zod.enum([
+        "daily",
+        "weekly",
+        "bi_weekly",
+        "monthly",
+        "quarterly",
+        "bi_annual",
+        "annual",
+        "multi_year",
+      ]),
+      zod.null(),
+    ])
+    .optional(),
+  nextDueDate: zod.string().describe("YYYY-MM-DD"),
+  ownerId: zod.number().nullish(),
+  checklist: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        text: zod.string(),
+        done: zod.boolean(),
+        assigneeId: zod.number().nullish(),
+        assigneeName: zod.string().nullish(),
+        dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+      }),
+    )
+    .optional(),
+});
+
+export const GetOperationalTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetOperationalTaskResponse = zod.object({
+  id: zod.number(),
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  name: zod.string(),
+  description: zod.string(),
+  type: zod.enum(["recurring", "one_time"]),
+  frequency: zod
+    .union([
+      zod.enum([
+        "daily",
+        "weekly",
+        "bi_weekly",
+        "monthly",
+        "quarterly",
+        "bi_annual",
+        "annual",
+        "multi_year",
+      ]),
+      zod.null(),
+    ])
+    .optional(),
+  nextDueDate: zod.string().describe("YYYY-MM-DD"),
+  ownerId: zod.number().nullish(),
+  ownerName: zod.string().nullish(),
+  status: zod.enum(["scheduled", "in_progress", "completed"]),
+  isOverdue: zod.boolean(),
+  checklist: zod.array(
+    zod.object({
+      id: zod.string(),
+      text: zod.string(),
+      done: zod.boolean(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+      dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+    }),
+  ),
+  seriesId: zod.number().nullish(),
+  completedAt: zod.string().nullish(),
+  completedById: zod.number().nullish(),
+  completedByName: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+export const UpdateOperationalTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateOperationalTaskBody = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().optional(),
+  type: zod.enum(["recurring", "one_time"]).optional(),
+  frequency: zod
+    .union([
+      zod.enum([
+        "daily",
+        "weekly",
+        "bi_weekly",
+        "monthly",
+        "quarterly",
+        "bi_annual",
+        "annual",
+        "multi_year",
+      ]),
+      zod.null(),
+    ])
+    .optional(),
+  nextDueDate: zod.string().optional(),
+  ownerId: zod.number().nullish(),
+  status: zod.enum(["scheduled", "in_progress"]).optional(),
+  checklist: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        text: zod.string(),
+        done: zod.boolean(),
+        assigneeId: zod.number().nullish(),
+        assigneeName: zod.string().nullish(),
+        dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+      }),
+    )
+    .optional(),
+});
+
+export const UpdateOperationalTaskResponse = zod.object({
+  id: zod.number(),
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  name: zod.string(),
+  description: zod.string(),
+  type: zod.enum(["recurring", "one_time"]),
+  frequency: zod
+    .union([
+      zod.enum([
+        "daily",
+        "weekly",
+        "bi_weekly",
+        "monthly",
+        "quarterly",
+        "bi_annual",
+        "annual",
+        "multi_year",
+      ]),
+      zod.null(),
+    ])
+    .optional(),
+  nextDueDate: zod.string().describe("YYYY-MM-DD"),
+  ownerId: zod.number().nullish(),
+  ownerName: zod.string().nullish(),
+  status: zod.enum(["scheduled", "in_progress", "completed"]),
+  isOverdue: zod.boolean(),
+  checklist: zod.array(
+    zod.object({
+      id: zod.string(),
+      text: zod.string(),
+      done: zod.boolean(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+      dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+    }),
+  ),
+  seriesId: zod.number().nullish(),
+  completedAt: zod.string().nullish(),
+  completedById: zod.number().nullish(),
+  completedByName: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+export const DeleteOperationalTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Mark a task complete. For recurring tasks, atomically creates the next instance with `nextDueDate` advanced by the frequency interval and the same checklist (with `done` flags reset).
+
+ */
+export const CompleteOperationalTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CompleteOperationalTaskResponse = zod.object({
+  completed: zod.object({
+    id: zod.number(),
+    departmentId: zod.number(),
+    departmentName: zod.string(),
+    name: zod.string(),
+    description: zod.string(),
+    type: zod.enum(["recurring", "one_time"]),
+    frequency: zod
+      .union([
+        zod.enum([
+          "daily",
+          "weekly",
+          "bi_weekly",
+          "monthly",
+          "quarterly",
+          "bi_annual",
+          "annual",
+          "multi_year",
+        ]),
+        zod.null(),
+      ])
+      .optional(),
+    nextDueDate: zod.string().describe("YYYY-MM-DD"),
+    ownerId: zod.number().nullish(),
+    ownerName: zod.string().nullish(),
+    status: zod.enum(["scheduled", "in_progress", "completed"]),
+    isOverdue: zod.boolean(),
+    checklist: zod.array(
+      zod.object({
+        id: zod.string(),
+        text: zod.string(),
+        done: zod.boolean(),
+        assigneeId: zod.number().nullish(),
+        assigneeName: zod.string().nullish(),
+        dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+      }),
+    ),
+    seriesId: zod.number().nullish(),
+    completedAt: zod.string().nullish(),
+    completedById: zod.number().nullish(),
+    completedByName: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+  }),
+  nextInstance: zod
+    .union([
+      zod.object({
+        id: zod.number(),
+        departmentId: zod.number(),
+        departmentName: zod.string(),
+        name: zod.string(),
+        description: zod.string(),
+        type: zod.enum(["recurring", "one_time"]),
+        frequency: zod
+          .union([
+            zod.enum([
+              "daily",
+              "weekly",
+              "bi_weekly",
+              "monthly",
+              "quarterly",
+              "bi_annual",
+              "annual",
+              "multi_year",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        nextDueDate: zod.string().describe("YYYY-MM-DD"),
+        ownerId: zod.number().nullish(),
+        ownerName: zod.string().nullish(),
+        status: zod.enum(["scheduled", "in_progress", "completed"]),
+        isOverdue: zod.boolean(),
+        checklist: zod.array(
+          zod.object({
+            id: zod.string(),
+            text: zod.string(),
+            done: zod.boolean(),
+            assigneeId: zod.number().nullish(),
+            assigneeName: zod.string().nullish(),
+            dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+          }),
+        ),
+        seriesId: zod.number().nullish(),
+        completedAt: zod.string().nullish(),
+        completedById: zod.number().nullish(),
+        completedByName: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
