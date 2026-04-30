@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  ProjectCreateDialog,
+  ProjectImportDialog,
   ProjectDetailDialog,
 } from "@/components/project-detail-dialog";
 import {
@@ -20,7 +20,7 @@ import {
   CheckSquare,
   KanbanSquare,
   Pause,
-  Plus,
+  Upload,
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -122,15 +122,17 @@ export default function ProjectsPage() {
         </div>
         {canCreate && (
           <Button
-            data-testid="button-new-project"
+            variant="outline"
+            data-testid="button-import-project"
             onClick={() => setCreateOpen(true)}
+            title="Backfill an existing in-flight project"
           >
-            <Plus className="h-4 w-4 mr-1.5" /> New project
+            <Upload className="h-4 w-4 mr-1.5" /> Import project
           </Button>
         )}
       </div>
 
-      <ProjectCreateDialog
+      <ProjectImportDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         defaultDepartmentId={activeDept?.id ?? null}
@@ -160,9 +162,9 @@ export default function ProjectsPage() {
           </div>
           <p className="font-medium">No projects yet</p>
           <p className="text-[13px] text-muted-foreground mt-1">
-            {canCreate
-              ? "Click \u201CNew project\u201D to add the first one."
-              : "Approved initiatives will appear here as projects."}
+            Approved initiatives appear here as projects.
+            {canCreate &&
+              " Use \u201CImport project\u201D to backfill any work that\u2019s already in flight."}
           </p>
         </div>
       )}

@@ -66,6 +66,7 @@ import {
   Square,
   Trash2,
   Undo2,
+  Upload,
   XCircle,
 } from "lucide-react";
 
@@ -76,6 +77,15 @@ const PRIORITY_OPTIONS = [
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
   { value: "urgent", label: "Urgent" },
+];
+
+const PHASES: ProjectPhase[] = [
+  "backlog_needs_assignment",
+  "planning",
+  "in_progress",
+  "on_hold",
+  "completed",
+  "cancelled",
 ];
 
 const PHASE_LABEL: Record<ProjectPhase, string> = {
@@ -97,9 +107,14 @@ const PHASE_BADGE: Record<ProjectPhase, string> = {
   cancelled: "bg-rose-100 text-rose-800 border-rose-200",
 };
 
-// ----- Create dialog -------------------------------------------------------
+// ----- Import dialog -------------------------------------------------------
 
-export function ProjectCreateDialog({
+// New projects always originate from approved Initiatives. This dialog
+// is the one-shot escape hatch for backfilling in-flight work when a
+// team first adopts the ITSM. Imported projects can land in any phase
+// so existing planning notes, work-in-progress, or completed work
+// don't have to walk through the whole funnel again.
+export function ProjectImportDialog({
   open,
   onOpenChange,
   defaultDepartmentId,
@@ -129,6 +144,7 @@ export function ProjectCreateDialog({
   );
   const [ownerId, setOwnerId] = useState<number | null>(null);
   const [priority, setPriority] = useState("medium");
+  const [phase, setPhase] = useState<ProjectPhase>("in_progress");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -139,6 +155,7 @@ export function ProjectCreateDialog({
       setDepartmentId(defaultDepartmentId ?? null);
       setOwnerId(session?.userId ?? null);
       setPriority("medium");
+      setPhase("in_progress");
       setStartDate("");
       setEndDate("");
     }
@@ -155,7 +172,10 @@ export function ProjectCreateDialog({
           name: name.trim(),
           description: description.trim(),
           color: "#4B9CD3",
+          // The lifecycle is now driven by `phase`; keep status=active so
+          // the row passes legacy filters that still gate on it.
           status: "active",
+          phase,
           departmentId,
           ownerId,
           priority: priority as "low" | "medium" | "high" | "urgent",
@@ -165,7 +185,7 @@ export function ProjectCreateDialog({
       },
       {
         onSuccess: () => {
-          toast({ title: "Project created" });
+          toast({ title: "Project imported" });
           onOpenChange(false);
         },
       },
@@ -176,10 +196,15 @@ export function ProjectCreateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-2xl"
-        data-testid="dialog-project-create"
+        data-testid="dialog-project-import"
       >
         <DialogHeader>
-          <DialogTitle>New project</DialogTitle>
+          <DialogTitle>Import project</DialogTitle>
+          <p className="text-[12.5px] text-muted-foreground pt-1">
+            Use this to backfill projects already in flight when first
+            adopting the ITSM. New projects normally come from approved
+            Initiatives.
+          </p>
         </DialogHeader>
         <div className="space-y-3 pt-2">
           <Field label="Name" required>
@@ -239,7 +264,24 @@ export function ProjectCreateDialog({
               </Select>
             </Field>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Current phase">
+              <Select
+                value={phase}
+                onValueChange={(v) => setPhase(v as ProjectPhase)}
+              >
+                <SelectTrigger data-testid="select-project-phase">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PHASES.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {PHASE_LABEL[p]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="Priority">
               <Select value={priority} onValueChange={setPriority}>
                 <SelectTrigger data-testid="select-project-priority">
@@ -254,6 +296,8 @@ export function ProjectCreateDialog({
                 </SelectContent>
               </Select>
             </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <Field label="Start date">
               <Input
                 type="date"
@@ -276,16 +320,16 @@ export function ProjectCreateDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            data-testid="button-project-create-cancel"
+            data-testid="button-project-import-cancel"
           >
             Cancel
           </Button>
           <Button
             onClick={submit}
             disabled={create.isPending}
-            data-testid="button-project-create-submit"
+            data-testid="button-project-import-submit"
           >
-            <Plus className="h-4 w-4 mr-1.5" /> Create project
+            <Upload className="h-4 w-4 mr-1.5" /> Import project
           </Button>
         </DialogFooter>
       </DialogContent>
