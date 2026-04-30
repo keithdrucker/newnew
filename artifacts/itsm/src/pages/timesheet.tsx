@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { TimesheetExportMenu } from "@/components/timesheet-export";
 
 // Monday-anchored week boundaries. We compute three windows up front
 // (this week, last week, plus a single combined query covering both)
@@ -396,6 +397,19 @@ export default function Timesheet() {
               Week
             </button>
           </div>
+          {/* Export menu — CSV (custom range, fetches its own data) and
+              PDF report for the currently displayed day or week. */}
+          <TimesheetExportMenu
+            currentEntries={selectedDayEntries}
+            viewMode={viewMode}
+            selectedDay={selectedDay}
+            weekAnchor={now}
+            weekEntries={thisWeekEntries}
+            userName={
+              viewingSomeoneElse ? viewingUser.name : session.name ?? "Me"
+            }
+            csvFetchParams={isViewingSelf ? {} : { userId: viewingUserId! }}
+          />
           {canSwitchUser && (
             <div
               className="flex items-center gap-2"
