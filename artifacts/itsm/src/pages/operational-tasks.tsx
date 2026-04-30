@@ -70,7 +70,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -121,14 +123,68 @@ const STATUS_OPTIONS = [
 // the dropdown round-trips with no client/server translation. Kept
 // here so the labels live with the rest of the page's vocabulary.
 const CONTROL_CATEGORY_OPTIONS = [
-  { value: "security", label: "Security" },
-  { value: "access_management", label: "Access Management" },
-  { value: "backup_recovery", label: "Backup & Recovery" },
-  { value: "change_management", label: "Change Management" },
-  { value: "monitoring", label: "Monitoring" },
-  { value: "compliance", label: "Compliance" },
   { value: "operations", label: "Operations" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "monitoring", label: "Monitoring" },
+  { value: "reviews_audits", label: "Reviews & Audits" },
+  { value: "documentation", label: "Documentation" },
+  { value: "housekeeping", label: "Housekeeping" },
+  { value: "health_checks", label: "Health Checks" },
+  { value: "enablement_training", label: "Enablement / Training" },
+  { value: "systems", label: "Systems" },
+  { value: "infrastructure", label: "Infrastructure" },
+  { value: "applications", label: "Applications" },
+  { value: "automation", label: "Automation" },
+  { value: "data_reporting", label: "Data & Reporting" },
+  { value: "access_identity", label: "Access & Identity" },
+  { value: "security", label: "Security" },
+  { value: "compliance", label: "Compliance" },
+  { value: "business_continuity", label: "Business Continuity" },
+  { value: "risk_management", label: "Risk Management" },
 ] as const;
+
+// Same options grouped for the dropdowns. Category is purely an
+// informational tag — it never affects status, lifecycle, approvals,
+// or any business logic. Multi-team friendly: IT, Security, Ops,
+// Admin, Facilities all pick from the same vocabulary so the page
+// stays department-agnostic. ("Category provides context, not
+// control.")
+const CATEGORY_GROUPS = [
+  {
+    label: "Core Operational",
+    values: [
+      "operations",
+      "maintenance",
+      "monitoring",
+      "reviews_audits",
+      "documentation",
+      "housekeeping",
+      "health_checks",
+      "enablement_training",
+    ] as const,
+  },
+  {
+    label: "Technology & Systems",
+    values: [
+      "systems",
+      "infrastructure",
+      "applications",
+      "automation",
+      "data_reporting",
+      "access_identity",
+    ] as const,
+  },
+  {
+    label: "Risk & Assurance",
+    values: [
+      "security",
+      "compliance",
+      "business_continuity",
+      "risk_management",
+    ] as const,
+  },
+] as const;
+
 function controlCategoryLabel(value: string | null | undefined) {
   if (!value) return "—";
   return (
@@ -226,7 +282,7 @@ const COLUMN_DEFS: Record<ColumnKey, ColumnDef> = {
   },
   controlCategory: {
     key: "controlCategory",
-    label: "Control Category",
+    label: "Category",
     className: "w-[170px]",
     text: (t) => controlCategoryLabel(t.controlCategory),
   },
@@ -322,6 +378,10 @@ type Filters = {
   frequency: string; // "all" | freq
   type: string; // "all" | type
   dueWindow: string; // "all" | "today" | "week" | "overdue"
+  // Optional Category tag. "all" means no filter. The API has no
+  // server-side filter for this field today, so we narrow client-side
+  // in `visibleTasks` instead of pushing into queryParams.
+  controlCategory: string;
 };
 
 const DEFAULT_FILTERS: Filters = {
@@ -331,6 +391,7 @@ const DEFAULT_FILTERS: Filters = {
   frequency: "all",
   type: "all",
   dueWindow: "all",
+  controlCategory: "all",
 };
 
 type FilterCategoryKey = Exclude<keyof Filters, "search">;
@@ -341,6 +402,7 @@ const FILTER_CATEGORIES: { key: FilterCategoryKey; label: string }[] = [
   { key: "frequency", label: "Frequency" },
   { key: "type", label: "Type" },
   { key: "dueWindow", label: "Due date" },
+  { key: "controlCategory", label: "Category" },
 ];
 
 function todayYmd() {
@@ -537,11 +599,21 @@ export default function OperationalTasks() {
   // selection are no-ops here because queryParams already pushed them
   // to the server.
   const visibleTasks = useMemo<OperationalTask[]>(() => {
-    const list = (tasks ?? []) as OperationalTask[];
-    if (filters.status.length <= 1) return list;
-    const set = new Set(filters.status);
-    return list.filter((t) => set.has(t.status));
-  }, [tasks, filters.status]);
+    let list = (tasks ?? []) as OperationalTask[];
+    if (filters.status.length > 1) {
+      const set = new Set(filters.status);
+      list = list.filter((t) => set.has(t.status));
+    }
+    // Category is filtered client-side because the API doesn't
+    // accept a `controlCategory` query param yet. Tag-style only —
+    // it just narrows the visible rows, no other behavior changes.
+    if (filters.controlCategory !== "all") {
+      list = list.filter(
+        (t) => (t.controlCategory ?? "") === filters.controlCategory,
+      );
+    }
+    return list;
+  }, [tasks, filters.status, filters.controlCategory]);
 
   // Owner picker — load agents for whichever department is active
   // (fall back to global list when "All Operational Tasks").
@@ -657,6 +729,14 @@ export default function OperationalTasks() {
       clear: () => clearFilter("dueWindow"),
     });
   }
+  if (filters.controlCategory !== "all") {
+    activeFilterChips.push({
+      key: "controlCategory",
+      categoryLabel: "Category",
+      valueLabel: controlCategoryLabel(filters.controlCategory),
+      clear: () => clearFilter("controlCategory"),
+    });
+  }
   const activeFilterCount = activeFilterChips.length;
   const filtersActive =
     activeFilterCount > 0 || filters.search.trim() !== "";
@@ -689,6 +769,11 @@ export default function OperationalTasks() {
         ];
       case "dueWindow":
         return DUE_WINDOW_OPTIONS.map((d) => ({ ...d }));
+      case "controlCategory":
+        return [
+          { value: "all", label: "All categories" },
+          ...CONTROL_CATEGORY_OPTIONS.map((c) => ({ ...c })),
+        ];
     }
   }
 
@@ -1481,7 +1566,7 @@ function CreateTaskDialog({
             </div>
           </div>
           <div className="space-y-1">
-            <Label>Control Category (optional)</Label>
+            <Label>Category (optional)</Label>
             <Select
               value={controlCategory}
               onValueChange={setControlCategory}
@@ -1491,16 +1576,22 @@ function CreateTaskDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                {CONTROL_CATEGORY_OPTIONS.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    {c.label}
-                  </SelectItem>
+                {CATEGORY_GROUPS.map((g) => (
+                  <SelectGroup key={g.label}>
+                    <SelectLabel>{g.label}</SelectLabel>
+                    {g.values.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {controlCategoryLabel(v)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              Tag this task to a control area (security, backups, change
-              management, etc.) to make audit reporting easier.
+              Tag this task with a category (Operations, Maintenance,
+              Security, etc.) for context and reporting. Category is
+              informational only — it doesn’t affect status or workflow.
             </p>
           </div>
           {error && (
@@ -1825,7 +1916,7 @@ function TaskDetailDialog({
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">
-              Control Category
+              Category
             </Label>
             {lockAll ? (
               <p className="mt-0.5">
@@ -1849,10 +1940,15 @@ function TaskDetailDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {CONTROL_CATEGORY_OPTIONS.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
+                  {CATEGORY_GROUPS.map((g) => (
+                    <SelectGroup key={g.label}>
+                      <SelectLabel>{g.label}</SelectLabel>
+                      {g.values.map((v) => (
+                        <SelectItem key={v} value={v}>
+                          {controlCategoryLabel(v)}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   ))}
                 </SelectContent>
               </Select>
@@ -2416,7 +2512,7 @@ function formatActivity(a: OperationalTaskActivity): string {
     case "status_changed":
       return `changed status to ${statusLabel(String(d.to ?? ""))}`;
     case "control_category_changed":
-      return `set control category to ${controlCategoryLabel(
+      return `set category to ${controlCategoryLabel(
         (d.to ?? null) as never,
       )}`;
     case "checklist_item_added":
