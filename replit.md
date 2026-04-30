@@ -1,6 +1,6 @@
 # Overview
 
-This project is a pnpm workspace monorepo using TypeScript, designed to build a comprehensive IT Service Management (ITSM) solution, Harmony ITSM, for the &lt;Client Name&gt; construction firm. Modeled on established platforms like Freshservice and Atomicwork, Harmony ITSM aims to streamline IT operations, support, and project management.
+This project is a pnpm workspace monorepo using TypeScript, designed to build a comprehensive IT Service Management (ITSM) solution, branded as **Sidekick**, for a construction-firm client. Modeled on established platforms like Freshservice and Atomicwork, Sidekick aims to streamline IT operations, support, and project management. The product brand is **Sidekick** (logo includes the wordmark) — do NOT use the legacy names "Harmony ITSM" or the placeholder "&lt;Client Name&gt;" anywhere in user-visible UI.
 
 The project encompasses:
 - A multi-department ITSM web application (`itsm`) for agents and administrators, providing features like a Dashboard, Ticket Board, People, Agents, Knowledge Base, Assets, and Settings.
@@ -140,7 +140,7 @@ The project utilizes a pnpm workspace monorepo with each package managing its ow
     - Full-text search uses the `q` query parameter.
 
 ## Feature Specifications
-- **Harmony ITSM (`itsm`)**:
+- **Sidekick / ITSM (`itsm`)**:
     - **Dashboard**: KPIs, status counts, charts, top agents, recent breaches. Filterable.
     - **Ticket Board**: Collapsible groups for "All Tickets" and 13 departments, showing open ticket counts.
     - **Tickets table**: Columns are `ID, Priority, Risk Level, Status, Title, User, Level, Category, Created, Last Update, SLA`. Risk Level uses color-coded badges (gray = low, yellow = medium, orange = high, red = critical).
@@ -151,7 +151,7 @@ The project utilizes a pnpm workspace monorepo with each package managing its ow
     - **Admin Sections**: People, Agents, Knowledge Base, Assets, Settings, Applications (software catalog), Vendors.
     - **Board Settings**: Manage agents, portal settings, SLA, and assignment.
     - **Tests**: `pnpm --filter @workspace/itsm run test` runs the Vitest suite (jsdom + React Testing Library). Setup lives in `artifacts/itsm/src/test/setup.ts`, configured by `artifacts/itsm/vitest.config.ts`. The suite covers `src/components/layout/side-nav.tsx` — Dashboard / Tickets / Projects dropdown auto-expansion + active-state highlighting (including `*/dept/:slug` routes), and role-based visibility (Projects hidden for `end_user`, Administration only for `admin`). Sidebar children expose `data-testid` hooks (`nav-dashboard`, `nav-dashboard-overview|tickets|projects`, `nav-tickets`, `nav-tickets-all`, `nav-dept-<slug>`, `nav-projects`, `nav-projects-all`, `nav-projects-dept-<slug>`, `nav-assets|applications|vendors|people|settings`). Tests mock `@workspace/api-client-react` and use `wouter/memory-location` to drive the active route.
-- **Harmony Support (`support`)**:
+- **Sidekick Support (`support`)**:
     - **User-centric Interface**: Lists user's open conversations, allows creating new requests, and provides a chat-style view of tickets.
     - **LLM Extension Ready**: Chat message component supports `user`, `agent`, and `assistant` roles for future AI integration.
 - **Seed Data (`@workspace/db`)**: Includes 13 departments, ~32 users, 33 tickets, KB articles, and assets for development and testing.

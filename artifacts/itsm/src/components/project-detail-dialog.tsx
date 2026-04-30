@@ -1577,6 +1577,7 @@ function ChecklistEditor({
               onDragStart={() => setDragId(id)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => onDrop(id)}
+              onDragEnd={() => setDragId(null)}
               className={`flex flex-col gap-1.5 rounded border border-zinc-200 bg-white px-2 py-2 ${
                 dragId === id ? "opacity-50" : ""
               }`}

@@ -37,7 +37,7 @@ export default function People() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">People</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            End users across &lt;Client Name&gt; who can submit tickets.
+            End users across the organization who can submit tickets.
           </p>
         </div>
         <AddPersonDialog />

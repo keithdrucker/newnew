@@ -51,8 +51,8 @@ existing logins.
 ```bash
 pnpm install
 pnpm --filter @workspace/api-server run dev    # API on $PORT
-pnpm --filter @workspace/itsm run dev          # Harmony ITSM
-pnpm --filter @workspace/support run dev       # Harmony Support
+pnpm --filter @workspace/itsm run dev          # Sidekick (ITSM)
+pnpm --filter @workspace/support run dev       # Sidekick Support
 ```
 
 (Or your host's equivalent of `pnpm run start` for production.)
