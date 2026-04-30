@@ -32,6 +32,10 @@ export interface UpdateInitiativeInput {
   businessAlignment?: string;
   investigationDecision?: string;
   backlogNotes?: string;
+  /** @nullable */
+  reviewStartDate?: Date | null;
+  /** @nullable */
+  anticipatedApprovalDate?: Date | null;
   benefits?: string;
   tradeoffs?: string;
   businessValueLevel?: string;

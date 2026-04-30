@@ -3453,6 +3453,11 @@ components:
         backlogReviewedById: { type: ["integer", "null"] }
         backlogReviewedByName: { type: ["string", "null"] }
         backlogReviewedAt: { type: ["string", "null"], format: date-time }
+        # Accountability dates set during Backlog Triage. The UI uses
+        # `anticipatedApprovalDate` to drive a "Late" indicator until
+        # the initiative reaches a terminal lane.
+        reviewStartDate: { type: ["string", "null"], format: date }
+        anticipatedApprovalDate: { type: ["string", "null"], format: date }
         # Under review (structured)
         benefits: { type: string }
         tradeoffs: { type: string }
@@ -3558,6 +3563,9 @@ components:
         businessAlignment: { type: string }
         investigationDecision: { type: string }
         backlogNotes: { type: string }
+        # Backlog accountability dates
+        reviewStartDate: { type: ["string", "null"], format: date }
+        anticipatedApprovalDate: { type: ["string", "null"], format: date }
         # Under review (structured)
         benefits: { type: string }
         tradeoffs: { type: string }

@@ -318,6 +318,7 @@ function InitiativeCard({
     row.problemOpportunity?.trim() ||
     row.description?.trim() ||
     "—";
+  const overdue = isInitiativeLate(row);
   return (
     <button
       type="button"
@@ -341,6 +342,20 @@ function InitiativeCard({
             className="text-[10.5px] py-0 h-5 font-normal"
           >
             {row.departmentName}
+          </Badge>
+        )}
+        {overdue && (
+          <Badge
+            variant="outline"
+            className="text-[10.5px] py-0 h-5 font-normal border-rose-300 text-rose-700 bg-rose-50"
+            data-testid={`badge-late-${row.id}`}
+            title={
+              row.anticipatedApprovalDate
+                ? `Past anticipated approval (${new Date(row.anticipatedApprovalDate).toLocaleDateString()})`
+                : "Past anticipated approval"
+            }
+          >
+            Late
           </Badge>
         )}
         <span className="ml-auto text-[11px] text-muted-foreground inline-flex items-center gap-1">
@@ -553,6 +568,15 @@ function DetailDialog({
     row.investigationDecision,
   );
   const [backlogNotes, setBacklogNotes] = useState(row.backlogNotes);
+  // Backlog accountability dates. Saved with every Backlog edit and
+  // surfaced as a "Late" badge once anticipatedApprovalDate < today
+  // and the initiative still hasn't reached a terminal lane.
+  const [reviewStartDate, setReviewStartDate] = useState<string>(
+    row.reviewStartDate ?? "",
+  );
+  const [anticipatedApprovalDate, setAnticipatedApprovalDate] = useState<string>(
+    row.anticipatedApprovalDate ?? "",
+  );
   // Under review (with legacy fallbacks for first edit)
   const [benefits, setBenefits] = useState(row.benefits);
   const [tradeoffs, setTradeoffs] = useState(row.tradeoffs || row.prosCons);
@@ -592,6 +616,8 @@ function DetailDialog({
     setBusinessAlignment(row.businessAlignment);
     setInvestigationDecision(row.investigationDecision);
     setBacklogNotes(row.backlogNotes);
+    setReviewStartDate(row.reviewStartDate ?? "");
+    setAnticipatedApprovalDate(row.anticipatedApprovalDate ?? "");
     setBenefits(row.benefits);
     setTradeoffs(row.tradeoffs || row.prosCons);
     setBusinessValueLevel(row.businessValueLevel);
@@ -621,6 +647,8 @@ function DetailDialog({
     businessAlignment,
     investigationDecision,
     backlogNotes,
+    reviewStartDate: reviewStartDate || null,
+    anticipatedApprovalDate: anticipatedApprovalDate || null,
     benefits,
     tradeoffs,
     businessValueLevel,
@@ -875,6 +903,10 @@ function DetailDialog({
                 setInvestigationDecision={setInvestigationDecision}
                 backlogNotes={backlogNotes}
                 setBacklogNotes={setBacklogNotes}
+                reviewStartDate={reviewStartDate}
+                setReviewStartDate={setReviewStartDate}
+                anticipatedApprovalDate={anticipatedApprovalDate}
+                setAnticipatedApprovalDate={setAnticipatedApprovalDate}
               />
             ) : (
               <BacklogTriageView row={row} />
@@ -1522,7 +1554,18 @@ function BacklogTriageEditor(props: {
   setInvestigationDecision: (v: string) => void;
   backlogNotes: string;
   setBacklogNotes: (v: string) => void;
+  reviewStartDate: string;
+  setReviewStartDate: (v: string) => void;
+  anticipatedApprovalDate: string;
+  setAnticipatedApprovalDate: (v: string) => void;
 }) {
+  // Inline validation hint: anticipated approval should be on or after
+  // the review start date. Doesn't block save (the dates can be filled
+  // in any order during triage), just warns the reviewer.
+  const dateOrderInvalid =
+    !!props.reviewStartDate &&
+    !!props.anticipatedApprovalDate &&
+    props.anticipatedApprovalDate < props.reviewStartDate;
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1609,6 +1652,30 @@ function BacklogTriageEditor(props: {
           </SelectContent>
         </Select>
       </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Start Review Date">
+          <Input
+            type="date"
+            value={props.reviewStartDate}
+            onChange={(e) => props.setReviewStartDate(e.target.value)}
+            data-testid="input-review-start-date"
+          />
+        </Field>
+        <Field label="Anticipated Approval Date">
+          <Input
+            type="date"
+            value={props.anticipatedApprovalDate}
+            onChange={(e) => props.setAnticipatedApprovalDate(e.target.value)}
+            data-testid="input-anticipated-approval-date"
+          />
+        </Field>
+      </div>
+      {dateOrderInvalid && (
+        <p className="text-[11.5px] text-amber-700">
+          Anticipated approval is before the review start date — consider
+          adjusting one of the two.
+        </p>
+      )}
       <Field label="Backlog Notes">
         <Textarea
           rows={2}
@@ -1623,6 +1690,7 @@ function BacklogTriageEditor(props: {
 }
 
 function BacklogTriageView({ row }: { row: Initiative }) {
+  const overdue = isInitiativeLate(row);
   return (
     <div className="grid grid-cols-2 gap-3 text-[13px]">
       <ReadField
@@ -1650,11 +1718,50 @@ function BacklogTriageView({ row }: { row: Initiative }) {
         value={fmtOption(row.investigationDecision, INVESTIGATION_OPTIONS)}
       />
       <div />
+      <ReadField
+        label="Start Review Date"
+        value={
+          row.reviewStartDate
+            ? new Date(row.reviewStartDate).toLocaleDateString()
+            : "—"
+        }
+      />
+      <div className="space-y-1">
+        <div className="text-[11px] uppercase tracking-wide text-zinc-500">
+          Anticipated Approval Date
+        </div>
+        <div className="flex items-center gap-2 text-[13px]">
+          <span>
+            {row.anticipatedApprovalDate
+              ? new Date(row.anticipatedApprovalDate).toLocaleDateString()
+              : "—"}
+          </span>
+          {overdue && (
+            <Badge
+              variant="outline"
+              className="text-[10.5px] py-0 h-5 font-normal border-rose-300 text-rose-700 bg-rose-50"
+              data-testid="badge-late"
+            >
+              Late
+            </Badge>
+          )}
+        </div>
+      </div>
       <div className="col-span-2">
         <ReadField label="Backlog Notes" value={row.backlogNotes} />
       </div>
     </div>
   );
+}
+
+// Initiative is "late" when an anticipated approval date was set, that
+// date is in the past, and the initiative hasn't reached a terminal
+// lane yet (still in backlog or under_review).
+function isInitiativeLate(row: Initiative): boolean {
+  if (!row.anticipatedApprovalDate) return false;
+  if (row.status !== "backlog" && row.status !== "under_review") return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return row.anticipatedApprovalDate < today;
 }
 
 function UnderReviewEditor(props: {

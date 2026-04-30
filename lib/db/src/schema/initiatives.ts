@@ -82,6 +82,13 @@ export const initiativesTable = pgTable(
     backlogReviewedAt: timestamp("backlog_reviewed_at", {
       withTimezone: true,
     }),
+    // Accountability dates captured during Backlog Triage. We store
+    // these as plain `date` (no TZ) because they're calendar deadlines
+    // — same shape as `revisitDate` below. The UI surfaces a "Late"
+    // badge once today > anticipatedApprovalDate AND the initiative
+    // hasn't reached a terminal lane (approved / rejected_deferred).
+    reviewStartDate: date("review_start_date"),
+    anticipatedApprovalDate: date("anticipated_approval_date"),
 
     // ---------------- Under Review (light analysis) ----------------
     // New structured fields. The legacy text fields below are still

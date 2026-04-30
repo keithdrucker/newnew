@@ -1822,6 +1822,10 @@ export interface Initiative {
   backlogReviewedByName?: string | null;
   /** @nullable */
   backlogReviewedAt?: string | null;
+  /** @nullable */
+  reviewStartDate?: string | null;
+  /** @nullable */
+  anticipatedApprovalDate?: string | null;
   benefits: string;
   tradeoffs: string;
   businessValueLevel: string;
@@ -1897,6 +1901,10 @@ export interface UpdateInitiativeInput {
   businessAlignment?: string;
   investigationDecision?: string;
   backlogNotes?: string;
+  /** @nullable */
+  reviewStartDate?: string | null;
+  /** @nullable */
+  anticipatedApprovalDate?: string | null;
   benefits?: string;
   tradeoffs?: string;
   businessValueLevel?: string;

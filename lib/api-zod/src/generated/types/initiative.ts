@@ -41,6 +41,10 @@ export interface Initiative {
   backlogReviewedByName?: string | null;
   /** @nullable */
   backlogReviewedAt?: Date | null;
+  /** @nullable */
+  reviewStartDate?: Date | null;
+  /** @nullable */
+  anticipatedApprovalDate?: Date | null;
   benefits: string;
   tradeoffs: string;
   businessValueLevel: string;

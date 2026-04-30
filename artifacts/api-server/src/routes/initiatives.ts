@@ -215,6 +215,8 @@ async function hydrate(rows: InitiativeRow[]) {
     backlogReviewedAt: r.backlogReviewedAt
       ? r.backlogReviewedAt.toISOString()
       : null,
+    reviewStartDate: r.reviewStartDate ?? null,
+    anticipatedApprovalDate: r.anticipatedApprovalDate ?? null,
     // Under review (structured)
     benefits: r.benefits,
     tradeoffs: r.tradeoffs,
@@ -453,6 +455,21 @@ router.patch("/initiatives/:id", async (req, res): Promise<void> => {
     if (b.investigationDecision !== undefined)
       patch.investigationDecision = b.investigationDecision;
     if (b.backlogNotes !== undefined) patch.backlogNotes = b.backlogNotes;
+    // Backlog accountability dates. Same coercion shape as `revisitDate`
+    // below — Drizzle `date()` wants YYYY-MM-DD strings, the generated
+    // zod parser may give us a Date.
+    if (b.reviewStartDate !== undefined) {
+      patch.reviewStartDate =
+        b.reviewStartDate instanceof Date
+          ? b.reviewStartDate.toISOString().slice(0, 10)
+          : b.reviewStartDate;
+    }
+    if (b.anticipatedApprovalDate !== undefined) {
+      patch.anticipatedApprovalDate =
+        b.anticipatedApprovalDate instanceof Date
+          ? b.anticipatedApprovalDate.toISOString().slice(0, 10)
+          : b.anticipatedApprovalDate;
+    }
     // Under review
     if (b.benefits !== undefined) patch.benefits = b.benefits;
     if (b.tradeoffs !== undefined) patch.tradeoffs = b.tradeoffs;
