@@ -909,40 +909,56 @@ function DetailInner({
 
             {/* ---- Project Closeout (only when applicable) ---- */}
             {phase === "completed" && (
-              <Section title="Project Closeout" defaultOpen tone="active">
-                <ReadField
-                  label="Completion summary"
-                  value={row.completionSummary}
-                />
-                <ReadField
-                  label="Key takeaway / lesson learned"
-                  value={row.keyTakeaway}
-                />
-                <div className="grid grid-cols-2 gap-3">
+              <>
+                <Section title="Project Closeout" defaultOpen tone="active">
                   <ReadField
-                    label="Completed by"
-                    value={row.completedByName}
+                    label="Completion summary"
+                    value={row.completionSummary}
                   />
                   <ReadField
-                    label="Completed on"
-                    value={
-                      row.completedAt
-                        ? new Date(row.completedAt).toLocaleString()
-                        : null
-                    }
+                    label="Key takeaway / lesson learned"
+                    value={row.keyTakeaway}
                   />
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openPhaseChange("in_progress")}
-                    data-testid="button-reopen-completed"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen
-                  </Button>
-                </div>
-              </Section>
+                  <div className="grid grid-cols-2 gap-3">
+                    <ReadField
+                      label="Completed by"
+                      value={row.completedByName}
+                    />
+                    <ReadField
+                      label="Completed on"
+                      value={
+                        row.completedAt
+                          ? new Date(row.completedAt).toLocaleString()
+                          : null
+                      }
+                    />
+                  </div>
+                  <p className="text-[11.5px] text-muted-foreground italic pt-1">
+                    Each completion and reopen is preserved in the History
+                    section below.
+                  </p>
+                </Section>
+
+                <Section title="Actions" defaultOpen tone="default">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[12px] text-muted-foreground">
+                      Reopening sends this project back to In Progress and
+                      clears the active Completed By &amp; Completed On.
+                      The current values remain in the History below.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPhaseChange("in_progress")}
+                      data-testid="button-reopen-completed"
+                      className="shrink-0"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen
+                      Project
+                    </Button>
+                  </div>
+                </Section>
+              </>
             )}
 
             {/* ---- Cancelled (only when applicable) ---- */}

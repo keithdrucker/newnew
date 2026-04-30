@@ -1,0 +1,99 @@
+Update the Projects module Completed phase behavior and layout.
+
+Goal:
+Keep Project Closeout (Completion Summary + Key Takeaway) separate from action controls like Reopen. Ensure reopening resets completion tracking correctly.
+
+-----------------------------------
+1. Completed phase layout
+-----------------------------------
+
+Section name:
+“Project Closeout”
+
+Fields (REQUIRED):
+- Completion Summary
+  Placeholder:
+  “What was delivered or completed?”
+
+- Key Takeaway / Lesson Learned
+  Placeholder:
+  “What should we repeat or do differently next time?”
+
+Rules:
+- Both fields must be completed before marking a project as Completed.
+- These fields are for documentation only (no actions inside this section).
+
+-----------------------------------
+2. Move Reopen action OUTSIDE the closeout fields
+-----------------------------------
+
+Place the “Reopen Project” button BELOW the Project Closeout section.
+
+UI behavior:
+- Separate visually from the form fields
+- Style as an action button (not part of the form)
+
+Example layout:
+
+[Project Closeout Section]
+- Completion Summary
+- Key Takeaway
+
+---------------------------
+[Actions]
+- Reopen Project
+
+-----------------------------------
+3. Reopen behavior
+-----------------------------------
+
+When “Reopen Project” is clicked:
+
+- Move project status from Completed → In Progress
+- Clear “Completed” status
+
+Update tracking:
+- Remove or archive previous Completed By and Completed Date
+- When project is completed again:
+  - Capture new Completed By
+  - Capture new Completed Date
+
+Important:
+- Do NOT delete previous completion history
+- Store previous completion records in Project History
+
+-----------------------------------
+4. Project History updates
+-----------------------------------
+
+Add entries for:
+- Project marked Completed
+  Include:
+    - Completed By
+    - Completed Date
+
+- Project Reopened
+  Include:
+    - Reopened By
+    - Reopened Date
+
+- Project completed again
+  Include:
+    - New Completed By
+    - New Completed Date
+
+-----------------------------------
+5. Data handling
+-----------------------------------
+
+- Keep only ONE active Completed By and Completed Date on the project
+- Store all past completion/reopen events in Project History
+- Do not overwrite history entries
+
+-----------------------------------
+6. UI clarity
+-----------------------------------
+
+- Completed phase should feel like a final step
+- Reopen should feel like a deliberate action, not part of the form
+- Keep closeout simple and clean

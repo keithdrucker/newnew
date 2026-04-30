@@ -1089,7 +1089,16 @@ router.post("/projects/:id/phase", async (req, res): Promise<void> => {
     action = "cancelled";
   } else if (from === "completed" || from === "cancelled") {
     // Reopen → clear the closing-side fields and remap legacy status.
-    if (from === "completed") updates.completedAt = null;
+    // We clear BOTH `completedAt` and `completedById` so that only one
+    // active completion pair lives on the row at any time. Prior completion
+    // events (and this reopen event) remain in `project_audit_events` for
+    // history, including their `changedById` + `changedAt`. When the project
+    // is completed again, a fresh pair is captured (see `to === "completed"`
+    // branch above).
+    if (from === "completed") {
+      updates.completedAt = null;
+      updates.completedById = null;
+    }
     updates.status = to === "in_progress" ? "active" : "active";
     action = "reopened";
   } else if (to === "in_progress") {
