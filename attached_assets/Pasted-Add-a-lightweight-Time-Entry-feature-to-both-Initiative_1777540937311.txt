@@ -1,0 +1,129 @@
+Add a lightweight Time Entry feature to both Initiatives and Projects.
+
+Goal:
+Allow users to log time directly within Initiatives and Projects using a simple, hidden/collapsible section. All time entries should automatically reflect in a centralized Timesheet view.
+
+1. Time Entry UI (Initiatives and Projects)
+
+Add a collapsible section in both Initiative and Project detail modals:
+
+Section name:
+“Time Entry”
+
+Default state:
+- Collapsed (hidden)
+- Expandable dropdown
+
+When expanded, show:
+
+Fields:
+- Date
+  Default: today
+- Time Spent
+  Input format: hours (e.g., 1, 2.5)
+- Description
+  Placeholder: “What work was completed?”
+- (Optional) Billable toggle
+- (Optional) Category
+  Options: Planning, Execution, Meeting, Research, Admin
+
+Buttons:
+- Add Time Entry
+
+Below input, show:
+- List of previous time entries for this item
+- Each entry shows:
+  - Date
+  - Time
+  - Description
+  - User who logged it
+
+2. Quick Add (Optional but recommended)
+
+Add a small “+ Time” button on:
+- Initiative cards
+- Project cards
+
+Clicking it opens a quick modal:
+- Time Spent
+- Description
+- Save
+
+3. Data behavior
+
+Each time entry should store:
+- User ID
+- Initiative ID or Project ID
+- Date
+- Time spent
+- Description
+- Created timestamp
+
+4. Timesheet page
+
+Create a new page:
+“Timesheet”
+
+This should aggregate all time entries.
+
+View options:
+- Daily view
+- Weekly view (default)
+- Monthly view
+
+Columns:
+- Date
+- User
+- Initiative / Project Name
+- Type (Initiative or Project)
+- Time Spent
+- Description
+
+Filters:
+- User
+- Date range
+- Project
+- Initiative
+
+Show:
+- Total hours per day
+- Total hours per week
+
+5. Automatic linking
+
+- Time logged in Initiatives → appears in Timesheet
+- Time logged in Projects → appears in Timesheet
+- No duplicate entry required
+
+6. UI behavior
+
+- Keep Time Entry hidden by default (collapsible)
+- Keep it lightweight (no complex forms)
+- Show total time logged on:
+  - Initiative card
+  - Project card
+
+Example:
+“Total Time: 6.5 hrs”
+
+7. Edit/Delete
+
+Allow users to:
+- Edit their own time entries
+- Delete their own time entries
+
+Admins can:
+- Edit/delete all entries
+
+8. Future-ready (do not overbuild now)
+
+Structure data so it can later support:
+- Billable vs non-billable reporting
+- Cost tracking (hours × rate)
+- Integration with payroll or accounting
+
+9. Important
+
+- Do NOT turn this into a full timesheet system yet
+- Keep it fast and simple
+- Focus on capturing time tied to work (Initiatives + Projects)

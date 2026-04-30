@@ -1,0 +1,188 @@
+Update the Projects module to use a simple checklist-based project workflow.
+
+Goal:
+Projects should be execution-focused and easy to manage. No approval workflow is needed in Projects.
+
+Project main flow:
+1. Backlog / Needs Assignment
+2. Planning
+3. In Progress
+4. Completed
+
+Side states:
+- On Hold
+- Cancelled
+
+Important:
+On Hold should NOT be treated as a linear phase before or after In Progress. It should be a side state that a project can move into from Planning or In Progress, then resume back to the previous active phase.
+
+Approved Initiative → Project logic:
+- When an Initiative is approved, automatically create a Project.
+- New Project should enter:
+  - Phase: Backlog / Needs Assignment
+  - Status: Needs Assignment
+- Link the Project to the original Initiative.
+- Link the Initiative to the Project.
+
+Projects board columns:
+- Backlog / Needs Assignment
+- Planning
+- In Progress
+- On Hold
+- Completed
+- Cancelled
+
+Project phase behavior:
+
+1. Backlog / Needs Assignment
+Purpose: assign ownership and basic timeline.
+
+Fields:
+- Project Owner
+- Assigned Team
+- Priority
+  Options: Low, Medium, High
+- Start Date
+- End Date
+
+Actions:
+- Save Assignment
+- Move to Planning
+- Cancel Project
+
+2. Planning
+Purpose: build the project checklist.
+
+Fields:
+- Project Checklist
+  - Allow adding checklist items
+  - Allow editing checklist items
+  - Allow deleting checklist items
+  - Allow reordering checklist items
+- Planning Notes
+
+Actions:
+- Save Plan
+- Move to In Progress
+- Move back to Backlog / Needs Assignment
+- Put On Hold
+- Cancel Project
+
+3. In Progress
+Purpose: execute and update the checklist.
+
+Fields:
+- Project Checklist
+  - Allow checking items complete/incomplete
+  - Allow adding new checklist items
+  - Allow editing checklist items
+  - Allow deleting checklist items
+  - Allow reordering checklist items
+- Progress %
+  - Auto-calculate based on completed checklist items
+- Status Update / Notes
+
+Actions:
+- Save Update
+- Move to Completed
+- Move back to Planning
+- Put On Hold
+- Cancel Project
+
+4. On Hold
+Purpose: pause without cancelling.
+
+Fields:
+- Hold Reason
+- Revisit Date
+- Notes
+
+Rules:
+- Hold Reason is required.
+- Store the previous active phase before moving to On Hold.
+- When Resume Project is clicked, return the project to the previous active phase.
+- If previous active phase is unknown, return to Planning.
+
+Actions:
+- Resume Project
+- Cancel Project
+
+5. Completed
+Purpose: close out the project.
+
+Fields:
+- Completion Summary
+- Completion Date
+
+Actions:
+- Save Closeout
+- Reopen to In Progress
+
+6. Cancelled
+Purpose: close project without completion.
+
+Fields:
+- Cancellation Reason
+
+Rules:
+- Cancellation Reason is required.
+
+Actions:
+- Reopen to Backlog / Needs Assignment
+
+UI requirements:
+- Project modal should clearly show the current phase/status at the top.
+- Use a progress indicator for the main flow:
+  Backlog / Needs Assignment → Planning → In Progress → Completed
+- Show On Hold and Cancelled as side status badges, not main progress steps.
+- Current phase should be highlighted.
+- Completed phases should show checkmarks.
+- Future phases should be muted.
+
+Phase colors:
+- Backlog / Needs Assignment: amber/yellow
+- Planning: blue
+- In Progress: purple
+- On Hold: gray
+- Completed: green
+- Cancelled: red
+
+Read-only prior phase data:
+- Data entered in prior phases should display in later phases as grey/read-only.
+- To edit prior phase data, user must move the project back to that phase.
+- Do not delete prior data when moving backward or forward.
+
+Project cards should show:
+- Title
+- Current phase/status
+- Owner
+- Priority
+- Start Date
+- End Date
+- Progress %
+- Linked Initiative, if applicable
+
+Project History:
+Add a collapsible Project History section showing:
+- Created from Initiative, if applicable
+- Linked Initiative
+- Assignment changes
+- Checklist changes
+- Phase/status changes
+- Hold/resume events
+- Completion/cancellation details
+- Changed by
+- Date/time
+- Notes/reasons
+
+Audit trail:
+Every project action should record:
+- Old phase/status
+- New phase/status
+- Changed by
+- Changed date/time
+- Reason or notes
+- Checklist item changes when added, edited, deleted, reordered, or completed
+
+Do not add approval workflows to Projects.
+Projects are for assignment, planning, execution, pause/cancel, and completion only.

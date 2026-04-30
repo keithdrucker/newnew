@@ -1,0 +1,126 @@
+Update the Time Entry feature for Initiatives and Projects to support Start Time and End Time instead of only total hours.
+
+Goal:
+Allow users to log time more accurately using start and end times while still keeping the experience simple. Automatically calculate total time and reflect it in the Timesheet.
+
+1. Time Entry UI (Initiatives and Projects)
+
+In both Initiative and Project detail modals, update the “Time Entry” collapsible section.
+
+Fields:
+- Date
+  Default: today
+
+- Start Time
+  Input: time picker (12-hour format with AM/PM)
+
+- End Time
+  Input: time picker (12-hour format with AM/PM)
+
+- Time Spent (auto-calculated)
+  Display only (read-only)
+  Automatically calculate based on Start Time and End Time
+
+- Description
+  Placeholder: “What work was completed?”
+
+- (Optional) Billable toggle
+- (Optional) Category
+  Options: Planning, Execution, Meeting, Research, Admin
+
+Buttons:
+- Add Time Entry
+
+2. Time Calculation Logic
+
+- Time Spent = End Time - Start Time
+- If End Time is before Start Time:
+  - Show error: “End time must be after start time”
+- Allow same-day entries only for now (no overnight logic yet)
+- Store calculated duration in hours (decimal format, e.g., 1.5)
+
+3. Display Time Entries
+
+Below the input section, show logged entries:
+
+Each entry should show:
+- Date
+- Start Time – End Time
+- Total Time (e.g., 2.5 hrs)
+- Description
+- User
+
+4. Quick Add Time Entry
+
+Add a “+ Time” button on Initiative and Project cards.
+
+Quick modal fields:
+- Start Time
+- End Time
+- Description
+
+Auto-calculate time and save.
+
+5. Data structure
+
+Each time entry should store:
+- User ID
+- Initiative ID or Project ID
+- Date
+- Start Time
+- End Time
+- Total Time (calculated)
+- Description
+- Category (optional)
+- Billable flag (optional)
+- Created timestamp
+
+6. Timesheet page
+
+Update Timesheet page to reflect:
+
+Columns:
+- Date
+- User
+- Initiative / Project Name
+- Type (Initiative or Project)
+- Start Time
+- End Time
+- Total Time
+- Description
+
+Views:
+- Daily
+- Weekly (default)
+- Monthly
+
+Show:
+- Total hours per day
+- Total hours per week
+
+7. UI behavior
+
+- Time Entry section should remain collapsible (hidden by default)
+- Show total time logged on:
+  - Initiative card
+  - Project card
+
+Example:
+“Total Time: 8.0 hrs”
+
+8. Validation
+
+- Require Start Time and End Time
+- Prevent empty submissions
+- Prevent overlapping entries for the same user on the same item (optional for now)
+
+9. Edit/Delete
+
+- Users can edit or delete their own entries
+- Admins can edit/delete all entries
+
+10. Important
+
+- Keep the experience simple and fast
+- Do NOT overcomplicate with timers or tracking tools yet
+- Focus on manual entry with accurate time capture
