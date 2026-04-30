@@ -31,6 +31,9 @@ export type ChecklistItem = {
   done: boolean;
   assigneeId?: number | null;
   assigneeName?: string | null;
+  // Optional per-item due date (YYYY-MM-DD). Stored inside the
+  // `checklist` jsonb so no DB migration is needed.
+  dueDate?: string | null;
 };
 
 // Per-department phase column on the (legacy) department-level

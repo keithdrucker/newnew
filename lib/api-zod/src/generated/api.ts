@@ -2107,6 +2107,7 @@ export const ListProjectsResponseItem = zod.object({
       done: zod.boolean(),
       assigneeId: zod.number().nullish(),
       assigneeName: zod.string().nullish(),
+      dueDate: zod.coerce.date().nullish(),
     }),
   ),
   checklistTotal: zod.number(),
@@ -2170,6 +2171,7 @@ export const CreateProjectBody = zod.object({
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     )
     .optional(),
@@ -2246,6 +2248,7 @@ export const GetProjectResponse = zod
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     ),
     checklistTotal: zod.number(),
@@ -2317,6 +2320,7 @@ export const UpdateProjectBody = zod.object({
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     )
     .optional(),
@@ -2389,6 +2393,7 @@ export const UpdateProjectResponse = zod
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     ),
     checklistTotal: zod.number(),
@@ -2527,6 +2532,7 @@ export const ChangeProjectPhaseResponse = zod
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     ),
     checklistTotal: zod.number(),
@@ -2561,6 +2567,7 @@ export const AddProjectChecklistItemBody = zod.object({
   text: zod.string(),
   position: zod.number().nullish(),
   assigneeId: zod.number().nullish(),
+  dueDate: zod.coerce.date().nullish(),
 });
 
 export const AddProjectChecklistItemResponse = zod
@@ -2630,6 +2637,7 @@ export const AddProjectChecklistItemResponse = zod
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     ),
     checklistTotal: zod.number(),
@@ -2666,6 +2674,7 @@ export const UpdateProjectChecklistItemBody = zod.object({
   done: zod.boolean().optional(),
   position: zod.number().optional(),
   assigneeId: zod.number().nullish(),
+  dueDate: zod.coerce.date().nullish(),
 });
 
 export const UpdateProjectChecklistItemResponse = zod
@@ -2735,6 +2744,7 @@ export const UpdateProjectChecklistItemResponse = zod
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     ),
     checklistTotal: zod.number(),
@@ -2833,6 +2843,7 @@ export const DeleteProjectChecklistItemResponse = zod
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     ),
     checklistTotal: zod.number(),
@@ -2934,6 +2945,7 @@ export const ReorderProjectChecklistResponse = zod
         done: zod.boolean(),
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
+        dueDate: zod.coerce.date().nullish(),
       }),
     ),
     checklistTotal: zod.number(),
@@ -3496,6 +3508,7 @@ export const GetDepartmentBoardResponse = zod.object({
                   done: zod.boolean(),
                   assigneeId: zod.number().nullish(),
                   assigneeName: zod.string().nullish(),
+                  dueDate: zod.coerce.date().nullish(),
                 }),
               ),
               checklistTotal: zod.number(),
@@ -3575,6 +3588,7 @@ export const GetDepartmentBoardResponse = zod.object({
           done: zod.boolean(),
           assigneeId: zod.number().nullish(),
           assigneeName: zod.string().nullish(),
+          dueDate: zod.coerce.date().nullish(),
         }),
       ),
       checklistTotal: zod.number(),

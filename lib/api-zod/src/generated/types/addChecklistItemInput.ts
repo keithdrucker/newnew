@@ -12,4 +12,6 @@ export interface AddChecklistItemInput {
   position?: number | null;
   /** @nullable */
   assigneeId?: number | null;
+  /** @nullable */
+  dueDate?: Date | null;
 }

@@ -209,7 +209,15 @@ function sanitizeChecklist(input: unknown): ChecklistItem[] {
     if (typeof rawAssignee === "number" && Number.isFinite(rawAssignee)) {
       assigneeId = rawAssignee;
     }
-    return [{ text, done, assigneeId }];
+    // dueDate is YYYY-MM-DD or null. Accept either a Date (codegen
+    // hands these back when the spec says `format: date`) or a
+    // pre-formatted string; anything else falls through as null.
+    const rawDue = r.dueDate as Date | string | null | undefined;
+    const dueDate =
+      rawDue == null
+        ? null
+        : (toDateString(rawDue) ?? null);
+    return [{ text, done, assigneeId, dueDate }];
   });
 }
 
@@ -254,6 +262,7 @@ function normalizeChecklist(raw: ChecklistItem[]): ChecklistItem[] {
     text: item.text,
     done: item.done,
     assigneeId: item.assigneeId ?? null,
+    dueDate: item.dueDate ?? null,
   }));
   withMeta.sort((a, b) => a.position - b.position);
   return withMeta.map((item, idx) => ({ ...item, position: idx }));
@@ -343,6 +352,7 @@ async function summarizeProjects(rows: ProjectRow[]) {
         item.assigneeId != null
           ? (userMap.get(item.assigneeId)?.name ?? null)
           : null,
+      dueDate: item.dueDate ?? null,
     }));
     const checklistDone = checklist.filter((c) => c.done).length;
     const bucket = r.bucketId != null ? bucketMap.get(r.bucketId) : null;
@@ -1262,6 +1272,7 @@ router.post("/projects/:id/checklist", async (req, res): Promise<void> => {
     text,
     done: false,
     assigneeId: parsed.data.assigneeId ?? null,
+    dueDate: toDateString(parsed.data.dueDate) ?? null,
   };
   // Honour explicit position by inserting and renumbering.
   const next = [...ctx.checklist];
@@ -1315,6 +1326,12 @@ router.patch(
         parsed.data.assigneeId !== undefined
           ? parsed.data.assigneeId
           : (before.assigneeId ?? null),
+      // dueDate: undefined leaves the existing value alone; explicit
+      // null clears it; a value (Date or YYYY-MM-DD string) sets it.
+      dueDate:
+        parsed.data.dueDate !== undefined
+          ? (toDateString(parsed.data.dueDate) ?? null)
+          : (before.dueDate ?? null),
     };
     next[idx] = updated;
 

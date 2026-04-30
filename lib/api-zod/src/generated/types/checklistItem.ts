@@ -17,4 +17,6 @@ export interface ChecklistItem {
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
+  /** @nullable */
+  dueDate?: Date | null;
 }

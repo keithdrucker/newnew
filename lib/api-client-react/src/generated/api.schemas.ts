@@ -1414,6 +1414,8 @@ export interface ChecklistItem {
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
 }
 
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
@@ -1684,6 +1686,8 @@ export interface AddChecklistItemInput {
   position?: number | null;
   /** @nullable */
   assigneeId?: number | null;
+  /** @nullable */
+  dueDate?: string | null;
 }
 
 export interface UpdateChecklistItemInput {
@@ -1692,6 +1696,8 @@ export interface UpdateChecklistItemInput {
   position?: number;
   /** @nullable */
   assigneeId?: number | null;
+  /** @nullable */
+  dueDate?: string | null;
 }
 
 export interface ReorderChecklistInput {

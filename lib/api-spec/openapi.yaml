@@ -3071,6 +3071,8 @@ components:
         done: { type: boolean }
         assigneeId: { type: ["integer", "null"] }
         assigneeName: { type: ["string", "null"] }
+        # Optional per-item due date (YYYY-MM-DD).
+        dueDate: { type: ["string", "null"], format: date }
       required: [text, done]
 
     ProjectStatus:
@@ -3393,6 +3395,7 @@ components:
         text: { type: string }
         position: { type: ["integer", "null"] }
         assigneeId: { type: ["integer", "null"] }
+        dueDate: { type: ["string", "null"], format: date }
       required: [text]
 
     UpdateChecklistItemInput:
@@ -3402,6 +3405,7 @@ components:
         done: { type: boolean }
         position: { type: integer }
         assigneeId: { type: ["integer", "null"] }
+        dueDate: { type: ["string", "null"], format: date }
 
     ReorderChecklistInput:
       type: object

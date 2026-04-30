@@ -1482,6 +1482,7 @@ function ChecklistEditor({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { data: agents } = useListAgents({});
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
@@ -1509,6 +1510,8 @@ function ChecklistEditor({
   );
 
   const [newText, setNewText] = useState("");
+  const [newAssigneeId, setNewAssigneeId] = useState<number | null>(null);
+  const [newDueDate, setNewDueDate] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
@@ -1516,8 +1519,21 @@ function ChecklistEditor({
   const submitNew = () => {
     if (!newText.trim()) return;
     add.mutate(
-      { id: projectId, data: { text: newText.trim() } },
-      { onSuccess: () => setNewText("") },
+      {
+        id: projectId,
+        data: {
+          text: newText.trim(),
+          assigneeId: newAssigneeId,
+          dueDate: newDueDate ? newDueDate : null,
+        },
+      },
+      {
+        onSuccess: () => {
+          setNewText("");
+          setNewAssigneeId(null);
+          setNewDueDate("");
+        },
+      },
     );
   };
 
@@ -1550,6 +1566,10 @@ function ChecklistEditor({
         {sorted.map((item) => {
           const id = item.id ?? "";
           const isEditing = editingId === id;
+          const assigneeValue = item.assigneeId
+            ? String(item.assigneeId)
+            : "none";
+          const dueValue = item.dueDate ?? "";
           return (
             <li
               key={id}
@@ -1563,7 +1583,7 @@ function ChecklistEditor({
               data-testid={`checklist-item-${id}`}
             >
               {!readOnly && (
-                <GripVertical className="h-3.5 w-3.5 text-zinc-400 cursor-grab" />
+                <GripVertical className="h-3.5 w-3.5 text-zinc-400 cursor-grab shrink-0" />
               )}
               <Checkbox
                 checked={item.done}
@@ -1582,7 +1602,7 @@ function ChecklistEditor({
                   <Input
                     value={editingText}
                     onChange={(e) => setEditingText(e.target.value)}
-                    className="h-7 text-[13px]"
+                    className="h-7 text-[13px] flex-1 min-w-[120px]"
                     autoFocus
                   />
                   <Button
@@ -1610,27 +1630,72 @@ function ChecklistEditor({
                   </Button>
                 </>
               ) : (
+                <button
+                  type="button"
+                  className={`flex-1 min-w-[120px] text-left text-[13px] truncate ${
+                    item.done
+                      ? "line-through text-muted-foreground"
+                      : "text-zinc-800"
+                  }`}
+                  onClick={() => {
+                    if (readOnly) return;
+                    setEditingId(id);
+                    setEditingText(item.text);
+                  }}
+                  title={item.text}
+                >
+                  {item.text}
+                </button>
+              )}
+              {!isEditing && (
                 <>
-                  <button
-                    type="button"
-                    className={`flex-1 text-left text-[13px] ${
-                      item.done
-                        ? "line-through text-muted-foreground"
-                        : "text-zinc-800"
-                    }`}
-                    onClick={() => {
-                      if (readOnly) return;
-                      setEditingId(id);
-                      setEditingText(item.text);
-                    }}
+                  <Select
+                    value={assigneeValue}
+                    disabled={readOnly}
+                    onValueChange={(v) =>
+                      upd.mutate({
+                        id: projectId,
+                        itemId: id,
+                        data: { assigneeId: v === "none" ? null : Number(v) },
+                      })
+                    }
                   >
-                    {item.text}
-                  </button>
+                    <SelectTrigger
+                      className="h-7 w-[140px] text-[12px]"
+                      data-testid={`select-assignee-checklist-${id}`}
+                    >
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {agents?.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="date"
+                    value={dueValue}
+                    disabled={readOnly}
+                    onChange={(e) =>
+                      upd.mutate({
+                        id: projectId,
+                        itemId: id,
+                        data: {
+                          dueDate: e.target.value ? e.target.value : null,
+                        },
+                      })
+                    }
+                    className="h-7 w-[140px] text-[12px]"
+                    data-testid={`input-due-checklist-${id}`}
+                  />
                   {!readOnly && (
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-6 w-6"
+                      className="h-6 w-6 shrink-0"
                       onClick={() =>
                         del.mutate({ id: projectId, itemId: id })
                       }
@@ -1662,8 +1727,36 @@ function ChecklistEditor({
               }
             }}
             placeholder="Add a checklist item…"
-            className="h-8 text-[13px]"
+            className="h-8 text-[13px] flex-1 min-w-[120px]"
             data-testid="input-new-checklist"
+          />
+          <Select
+            value={newAssigneeId ? String(newAssigneeId) : "none"}
+            onValueChange={(v) =>
+              setNewAssigneeId(v === "none" ? null : Number(v))
+            }
+          >
+            <SelectTrigger
+              className="h-8 w-[140px] text-[12px]"
+              data-testid="select-assignee-new-checklist"
+            >
+              <SelectValue placeholder="Unassigned" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Unassigned</SelectItem>
+              {agents?.map((u) => (
+                <SelectItem key={u.id} value={String(u.id)}>
+                  {u.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            type="date"
+            value={newDueDate}
+            onChange={(e) => setNewDueDate(e.target.value)}
+            className="h-8 w-[140px] text-[12px]"
+            data-testid="input-due-new-checklist"
           />
           <Button
             size="sm"
