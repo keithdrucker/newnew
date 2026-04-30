@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import {
   useListProjects,
   useListDepartments,
+  useListAgents,
   useGetSession,
   type ProjectSummary,
   type ProjectPhase,
@@ -10,7 +11,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   ProjectImportDialog,
   ProjectDetailDialog,
@@ -22,6 +36,8 @@ import {
   Pause,
   Upload,
   Search,
+  Filter as FilterIcon,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -119,16 +135,64 @@ export function startDateLabel(
   return { text: `Starts in ${days} days`, tone: "ok" };
 }
 
+type ProjectSortKey = "default" | "due_asc" | "due_desc";
+
+type ProjectFilters = {
+  priority: string; // "all" | "low" | "medium" | "high" | "urgent"
+  ownerId: string; // "all" | "unassigned" | numeric id as string
+};
+
+const DEFAULT_PROJECT_FILTERS: ProjectFilters = {
+  priority: "all",
+  ownerId: "all",
+};
+
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "Urgent" },
+];
+
+// Tone for the per-phase counter chip in the page header. Mirrors the column
+// dot color so the chip set reads as a quick "where do my projects live"
+// summary.
+const PHASE_CHIP_TONE: Record<ProjectPhase, string> = {
+  backlog_needs_assignment: "bg-zinc-100 text-zinc-700 border-zinc-200",
+  planning: "bg-sky-50 text-sky-700 border-sky-200",
+  in_progress: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  on_hold: "bg-amber-50 text-amber-800 border-amber-200",
+  completed: "bg-teal-50 text-teal-700 border-teal-200",
+  closed: "bg-zinc-100 text-zinc-700 border-zinc-200",
+  cancelled: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
+const PHASE_CHIP_LABEL: Record<ProjectPhase, string> = {
+  backlog_needs_assignment: "Backlog",
+  planning: "Planning",
+  in_progress: "In Progress",
+  on_hold: "On Hold",
+  completed: "Completed",
+  closed: "Closed",
+  cancelled: "Cancelled",
+};
+
 export default function ProjectsPage() {
   const { data: session } = useGetSession();
   const canCreate = session?.role === "admin" || session?.role === "agent";
   const [createOpen, setCreateOpen] = useState(false);
   const [openProjectId, setOpenProjectId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<ProjectFilters>(
+    DEFAULT_PROJECT_FILTERS,
+  );
+  const [sortKey, setSortKey] = useState<ProjectSortKey>("default");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [, deptRouteMatch] = useRoute("/projects/dept/:slug");
   const deptSlug = deptRouteMatch?.slug;
   const { data: departments } = useListDepartments({ scope: "accessible" });
+  const { data: agents } = useListAgents({});
   const activeDept = useMemo(
     () => departments?.find((d) => d.slug === deptSlug),
     [departments, deptSlug],
@@ -136,15 +200,64 @@ export default function ProjectsPage() {
 
   // We always render the same fixed 6-column phase board; if a department
   // is selected via URL we just narrow the result set to that dept.
-  const { data: projects, isLoading } = useListProjects({
-    q: search || undefined,
-  });
+  // Search is applied fully client-side below so it can match across more
+  // fields than the backend's name+description-only `q=` parameter.
+  const { data: projects, isLoading } = useListProjects({});
+
+  const activeFilterCount = useMemo(
+    () =>
+      (Object.keys(filters) as (keyof ProjectFilters)[]).filter(
+        (k) => filters[k] !== "all",
+      ).length + (sortKey !== "default" ? 1 : 0),
+    [filters, sortKey],
+  );
 
   const filtered = useMemo(() => {
     if (!projects) return [];
-    if (!activeDept) return projects;
-    return projects.filter((p) => p.departmentId === activeDept.id);
-  }, [projects, activeDept]);
+    const q = search.trim().toLowerCase();
+    let list = projects.filter((p) => {
+      if (activeDept && p.departmentId !== activeDept.id) return false;
+      if (q) {
+        const hay = [
+          p.name,
+          p.description,
+          p.ownerName ?? "",
+          p.departmentName ?? "",
+          p.linkedInitiativeTitle ?? "",
+          p.assignedTeam ?? "",
+          p.holdReason ?? "",
+          p.holdNotes ?? "",
+          p.bucketName ?? "",
+        ]
+          .join(" \u0001 ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (filters.priority !== "all" && p.priority !== filters.priority)
+        return false;
+      if (filters.ownerId !== "all") {
+        if (filters.ownerId === "unassigned") {
+          if (p.ownerId != null) return false;
+        } else if (String(p.ownerId ?? "") !== filters.ownerId) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (sortKey !== "default") {
+      const dir = sortKey === "due_asc" ? 1 : -1;
+      list = [...list].sort((a, b) => {
+        const ad = a.endDate ?? a.dueAt ?? "";
+        const bd = b.endDate ?? b.dueAt ?? "";
+        if (!ad && !bd) return 0;
+        if (!ad) return 1;
+        if (!bd) return -1;
+        return ad < bd ? -1 * dir : ad > bd ? 1 * dir : 0;
+      });
+    }
+    return list;
+  }, [projects, activeDept, filters, sortKey, search]);
 
   const byPhase = useMemo(() => {
     const map: Record<ProjectPhase, ProjectSummary[]> = {
@@ -163,9 +276,14 @@ export default function ProjectsPage() {
     return map;
   }, [filtered]);
 
+  const clearAll = () => {
+    setFilters(DEFAULT_PROJECT_FILTERS);
+    setSortKey("default");
+  };
+
   return (
     <div className="p-8 max-w-[1800px] mx-auto" data-testid="projects-page">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
         <div>
           <h1 className="text-[26px] font-display font-semibold tracking-tight">
             {activeDept ? `${activeDept.name} projects` : "Projects"}
@@ -188,13 +306,140 @@ export default function ProjectsPage() {
         )}
       </div>
 
+      <div
+        className="flex items-center gap-1.5 flex-wrap mb-5"
+        data-testid="phase-counters"
+      >
+        {PHASE_COLUMNS.map((col) => (
+          <Badge
+            key={col.key}
+            variant="outline"
+            className={cn(
+              "text-[11.5px] font-medium px-2 py-0.5",
+              PHASE_CHIP_TONE[col.key],
+            )}
+            data-testid={`chip-count-${col.key}`}
+          >
+            {byPhase[col.key].length} {PHASE_CHIP_LABEL[col.key]}
+          </Badge>
+        ))}
+      </div>
+
       <ProjectImportDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         defaultDepartmentId={activeDept?.id ?? null}
       />
 
-      <div className="flex gap-2 mb-5">
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              data-testid="button-project-filters"
+            >
+              <FilterIcon className="h-3.5 w-3.5 mr-1.5" />
+              Filters
+              {activeFilterCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="ml-1.5 h-5 px-1.5 text-[10.5px] font-semibold"
+                >
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[320px] p-3" align="start">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[12px] font-semibold text-zinc-700">
+                Filters
+              </p>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-[11.5px] text-muted-foreground hover:text-foreground"
+                data-testid="button-clear-project-filters"
+              >
+                Clear all
+              </button>
+            </div>
+            <p className="text-[10.5px] text-muted-foreground italic mb-2">
+              Risk Level, Category, Business Alignment, and Effort live on
+              Initiatives only — they aren't tracked on Projects.
+            </p>
+            <div className="space-y-2.5">
+              <ProjectFilterField label="Priority">
+                <Select
+                  value={filters.priority}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, priority: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-project-priority"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {PRIORITY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Assignee">
+                <Select
+                  value={filters.ownerId}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, ownerId: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-project-assignee"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {agents?.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Sort by Due Date">
+                <Select
+                  value={sortKey}
+                  onValueChange={(v) => setSortKey(v as ProjectSortKey)}
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-project-sort"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default order</SelectItem>
+                    <SelectItem value="due_asc">Soonest first</SelectItem>
+                    <SelectItem value="due_desc">Latest first</SelectItem>
+                  </SelectContent>
+                </Select>
+              </ProjectFilterField>
+            </div>
+          </PopoverContent>
+        </Popover>
+
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
@@ -205,6 +450,20 @@ export default function ProjectsPage() {
             data-testid="input-project-search"
           />
         </div>
+        {(activeFilterCount > 0 || search) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 text-[12px]"
+            onClick={() => {
+              clearAll();
+              setSearch("");
+            }}
+            data-testid="button-reset-project-filters"
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Reset
+          </Button>
+        )}
       </div>
 
       {isLoading && (
@@ -436,5 +695,22 @@ function ProjectCard({
         </div>
       </div>
     </button>
+  );
+}
+
+function ProjectFilterField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+        {label}
+      </Label>
+      {children}
+    </div>
   );
 }

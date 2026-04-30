@@ -6,6 +6,7 @@ import {
   useCreateInitiative,
   useUpdateInitiative,
   useListDepartments,
+  useListAgents,
   type Initiative,
   type InitiativeStatus,
   type InitiativeAuditEvent,
@@ -39,6 +40,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 import {
   Lightbulb,
@@ -55,6 +61,9 @@ import {
   RotateCcw,
   History,
   FileDown,
+  Filter as FilterIcon,
+  Search,
+  X,
 } from "lucide-react";
 import { InitiativeWorkflowApproval } from "@/components/initiative-workflow-approval";
 import { downloadInitiativeReport } from "@/components/initiative-report";
@@ -190,39 +199,156 @@ function fmtOption(value: string, options: { value: string; label: string }[]) {
 
 // ---------- Page ----------
 
+type InitiativeSortKey = "default" | "due_asc" | "due_desc";
+
+type InitiativeFilters = {
+  riskLevel: string; // "all" | "low" | "medium" | "high"
+  category: string; // "all" | category value
+  alignment: string; // "all" | "yes" | "no" | "unsure"
+  priority: string; // "all" | "low" | "medium" | "high"
+  effort: string; // "all" | "low" | "medium" | "high"
+  assigneeId: string; // "all" | "unassigned" | numeric id as string
+};
+
+const DEFAULT_INITIATIVE_FILTERS: InitiativeFilters = {
+  riskLevel: "all",
+  category: "all",
+  alignment: "all",
+  priority: "all",
+  effort: "all",
+  assigneeId: "all",
+};
+
+const STATUS_CHIP_TONE: Record<InitiativeStatus, string> = {
+  backlog: "bg-zinc-100 text-zinc-700 border-zinc-200",
+  under_review: "bg-amber-50 text-amber-800 border-amber-200",
+  approved: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  rejected_deferred: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
 export default function InitiativesPage() {
   const { data, isLoading } = useListInitiatives();
   const initiatives = (data ?? []) as Initiative[];
+  const { data: agents } = useListAgents({});
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<InitiativeFilters>(
+    DEFAULT_INITIATIVE_FILTERS,
+  );
+  const [sortKey, setSortKey] = useState<InitiativeSortKey>("default");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const activeFilterCount = useMemo(
+    () =>
+      (Object.keys(filters) as (keyof InitiativeFilters)[]).filter(
+        (k) => filters[k] !== "all",
+      ).length + (sortKey !== "default" ? 1 : 0),
+    [filters, sortKey],
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = initiatives.filter((i) => {
+      if (q) {
+        const hay = [
+          i.title,
+          i.description,
+          i.problemOpportunity,
+          i.expectedBenefit,
+          i.reporterName ?? "",
+          i.assigneeName ?? "",
+          i.departmentName ?? "",
+        ]
+          .join(" \u0001 ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (filters.riskLevel !== "all" && i.riskLevel !== filters.riskLevel)
+        return false;
+      if (filters.category !== "all" && i.category !== filters.category)
+        return false;
+      if (
+        filters.alignment !== "all" &&
+        i.businessAlignment !== filters.alignment
+      )
+        return false;
+      if (
+        filters.priority !== "all" &&
+        i.initialPriority !== filters.priority
+      )
+        return false;
+      if (filters.effort !== "all" && i.initialEffort !== filters.effort)
+        return false;
+      if (filters.assigneeId !== "all") {
+        if (filters.assigneeId === "unassigned") {
+          if (i.assigneeId != null) return false;
+        } else if (String(i.assigneeId ?? "") !== filters.assigneeId) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (sortKey !== "default") {
+      const dir = sortKey === "due_asc" ? 1 : -1;
+      list = [...list].sort((a, b) => {
+        const ad = a.anticipatedApprovalDate ?? "";
+        const bd = b.anticipatedApprovalDate ?? "";
+        // Empties always sink to the bottom regardless of direction.
+        if (!ad && !bd) return 0;
+        if (!ad) return 1;
+        if (!bd) return -1;
+        return ad < bd ? -1 * dir : ad > bd ? 1 * dir : 0;
+      });
+    }
+    return list;
+  }, [initiatives, search, filters, sortKey]);
 
   const grouped = useMemo(() => {
     const m = new Map<InitiativeStatus, Initiative[]>();
     for (const s of STATUS_ORDER) m.set(s, []);
-    for (const i of initiatives)
+    for (const i of filtered)
       m.get(i.status as InitiativeStatus)?.push(i);
     return m;
-  }, [initiatives]);
+  }, [filtered]);
 
   const selected =
     selectedId != null
       ? initiatives.find((i) => i.id === selectedId) ?? null
       : null;
 
+  const clearAll = () => {
+    setFilters(DEFAULT_INITIATIVE_FILTERS);
+    setSortKey("default");
+  };
+
   return (
     <div
       className="p-6 space-y-6"
       data-testid="page-initiatives"
     >
-      <header className="flex items-start justify-between gap-4">
+      <header className="flex items-start justify-between gap-4 flex-wrap">
         <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="h-10 w-10 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
               <Lightbulb className="h-5 w-5" />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">
               Initiatives
             </h1>
+            <div className="flex items-center gap-1.5 flex-wrap ml-1">
+              {STATUS_ORDER.map((s) => (
+                <Badge
+                  key={s}
+                  variant="outline"
+                  className={`text-[11.5px] font-medium px-2 py-0.5 ${STATUS_CHIP_TONE[s]}`}
+                  data-testid={`chip-count-${s}`}
+                >
+                  {grouped.get(s)?.length ?? 0} {STATUS_LABEL[s]}
+                </Badge>
+              ))}
+            </div>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
             Decide whether work should be done — no planning, no execution.
@@ -238,6 +364,233 @@ export default function InitiativesPage() {
           New initiative
         </Button>
       </header>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              data-testid="button-initiatives-filters"
+            >
+              <FilterIcon className="h-3.5 w-3.5 mr-1.5" />
+              Filters
+              {activeFilterCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="ml-1.5 h-5 px-1.5 text-[10.5px] font-semibold"
+                >
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[320px] p-3" align="start">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[12px] font-semibold text-zinc-700">
+                Filters
+              </p>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-[11.5px] text-muted-foreground hover:text-foreground"
+                data-testid="button-clear-initiative-filters"
+              >
+                Clear all
+              </button>
+            </div>
+            <div className="space-y-2.5">
+              <FilterField label="Risk Level">
+                <Select
+                  value={filters.riskLevel}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, riskLevel: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-initiative-risk"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {LMH_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField label="Category">
+                <Select
+                  value={filters.category}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, category: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-initiative-category"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {CATEGORY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField label="Business Alignment">
+                <Select
+                  value={filters.alignment}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, alignment: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-initiative-alignment"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {ALIGNMENT_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField label="Priority">
+                <Select
+                  value={filters.priority}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, priority: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-initiative-priority"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {LMH_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField label="Effort">
+                <Select
+                  value={filters.effort}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, effort: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-initiative-effort"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {LMH_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField label="Assignee">
+                <Select
+                  value={filters.assigneeId}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, assigneeId: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-initiative-assignee"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {agents?.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField label="Sort by Due Date">
+                <Select
+                  value={sortKey}
+                  onValueChange={(v) =>
+                    setSortKey(v as InitiativeSortKey)
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-initiative-sort"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default order</SelectItem>
+                    <SelectItem value="due_asc">
+                      Soonest first
+                    </SelectItem>
+                    <SelectItem value="due_desc">Latest first</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search initiatives..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-9"
+            data-testid="input-initiative-search"
+          />
+        </div>
+        {(activeFilterCount > 0 || search) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 text-[12px]"
+            onClick={() => {
+              clearAll();
+              setSearch("");
+            }}
+            data-testid="button-reset-initiative-filters"
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Reset
+          </Button>
+        )}
+      </div>
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
@@ -264,6 +617,23 @@ export default function InitiativesPage() {
           onClose={() => setSelectedId(null)}
         />
       )}
+    </div>
+  );
+}
+
+function FilterField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+        {label}
+      </Label>
+      {children}
     </div>
   );
 }
