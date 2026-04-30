@@ -2,6 +2,7 @@
 // out of the main bundle; it only ships when an admin clicks "Export
 // PDF" from an initiative.
 import type { Initiative } from "@workspace/api-client-react";
+import sidekickLogo from "@assets/sidekick_logo.png";
 
 const STATUS_LABEL: Record<string, string> = {
   backlog: "BACKLOG",
@@ -112,7 +113,7 @@ export async function downloadInitiativeReport(
   initiative: Initiative,
 ): Promise<void> {
   const reactPdf = await import("@react-pdf/renderer");
-  const { Document, Page, Text, View, StyleSheet, pdf } = reactPdf;
+  const { Document, Page, Text, View, Image, StyleSheet, pdf } = reactPdf;
 
   const styles = StyleSheet.create({
     page: {
@@ -132,14 +133,13 @@ export async function downloadInitiativeReport(
     brandRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "flex-end",
+      alignItems: "center",
       marginBottom: 14,
     },
-    brand: {
-      fontSize: 9,
-      color: "#475569",
-      letterSpacing: 1.4,
-      fontFamily: "Helvetica-Bold",
+    brandLogo: {
+      height: 26,
+      width: 78,
+      objectFit: "contain",
     },
     reportLabel: {
       fontSize: 9,
@@ -311,15 +311,13 @@ export async function downloadInitiativeReport(
   const doc = (
     <Document
       title={`Initiative Report — ${initiative.title}`}
-      author={initiative.decidedByName ?? "Harmony ITSM"}
+      author={initiative.decidedByName ?? "Sidekick"}
       subject="Initiative Report"
     >
       <Page size="LETTER" style={styles.page}>
         <View style={styles.topBar} fixed />
         <View style={styles.brandRow}>
-          <Text style={styles.brand}>
-            {"<CLIENT NAME>"} · HARMONY ITSM
-          </Text>
+          <Image src={sidekickLogo} style={styles.brandLogo} />
           <Text style={styles.reportLabel}>INITIATIVE REPORT</Text>
         </View>
         <Text style={styles.title}>{initiative.title}</Text>

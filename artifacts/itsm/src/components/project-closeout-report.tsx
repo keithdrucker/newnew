@@ -3,6 +3,7 @@
 // `await import()` inside `downloadProjectReport` so the PDF runtime
 // is excluded from the initial app bundle.
 import type { ProjectDetail } from "@workspace/api-client-react";
+import sidekickLogo from "@assets/sidekick_logo.png";
 
 const PRIORITY_LABEL: Record<string, string> = {
   low: "Low",
@@ -73,7 +74,7 @@ export async function downloadProjectReport(
 ): Promise<void> {
   // Dynamic import keeps `@react-pdf/renderer` out of the main bundle.
   const reactPdf = await import("@react-pdf/renderer");
-  const { Document, Page, Text, View, StyleSheet, pdf } = reactPdf;
+  const { Document, Page, Text, View, Image, StyleSheet, pdf } = reactPdf;
 
   const styles = StyleSheet.create({
     page: {
@@ -93,14 +94,13 @@ export async function downloadProjectReport(
     brandRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "flex-end",
+      alignItems: "center",
       marginBottom: 14,
     },
-    brand: {
-      fontSize: 9,
-      color: "#475569",
-      letterSpacing: 1.4,
-      fontFamily: "Helvetica-Bold",
+    brandLogo: {
+      height: 26,
+      width: 78,
+      objectFit: "contain",
     },
     reportLabel: {
       fontSize: 9,
@@ -278,15 +278,13 @@ export async function downloadProjectReport(
   const doc = (
     <Document
       title={`Project Report — ${project.name}`}
-      author={project.closedByName ?? project.completedByName ?? "Harmony ITSM"}
+      author={project.closedByName ?? project.completedByName ?? "Sidekick"}
       subject="Project Report"
     >
       <Page size="LETTER" style={styles.page}>
         <View style={styles.topBar} fixed />
         <View style={styles.brandRow}>
-          <Text style={styles.brand}>
-            {"<CLIENT NAME>"} · HARMONY ITSM
-          </Text>
+          <Image src={sidekickLogo} style={styles.brandLogo} />
           <Text style={styles.reportLabel}>PROJECT REPORT</Text>
         </View>
         <Text style={styles.title}>{project.name}</Text>
