@@ -403,6 +403,14 @@ async function summarizeProjects(rows: ProjectRow[]) {
       suggestedByName: r.suggestedById
         ? (userMap.get(r.suggestedById)?.name ?? null)
         : null,
+      // Initiative-triage axes carried over at approval. Empty
+      // string means "not set" (e.g. project was imported, not
+      // promoted from an initiative).
+      riskLevel: r.riskLevel ?? "",
+      category: r.category ?? "",
+      businessAlignment: r.businessAlignment ?? "",
+      initialPriority: r.initialPriority ?? "",
+      initialEffort: r.initialEffort ?? "",
       goal: r.goal,
       implementation: r.implementation,
       rationale: r.rationale,

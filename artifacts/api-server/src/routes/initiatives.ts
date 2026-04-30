@@ -592,6 +592,20 @@ router.patch("/initiatives/:id", async (req, res): Promise<void> => {
             ownerId: existing.assigneeId ?? user.id,
             suggestedById: existing.reporterId ?? user.id,
             rationale: newRationale,
+            // Carry the initiative-triage axes onto the project so
+            // the Projects board exposes the same filters
+            // (Risk / Category / Business Alignment / Priority /
+            // Effort). Prefer pending patch values so a single PATCH
+            // that updates triage AND transitions to approved still
+            // hands the freshest data to the new project.
+            riskLevel: patch.riskLevel ?? existing.riskLevel ?? "",
+            category: patch.category ?? existing.category ?? "",
+            businessAlignment:
+              patch.businessAlignment ?? existing.businessAlignment ?? "",
+            initialPriority:
+              patch.initialPriority ?? existing.initialPriority ?? "",
+            initialEffort:
+              patch.initialEffort ?? existing.initialEffort ?? "",
             // Reverse link so the project's History panel shows where
             // it came from.
             linkedInitiativeId: existing.id,

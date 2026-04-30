@@ -166,6 +166,16 @@ export const projectsTable = pgTable(
     suggestedById: integer("suggested_by_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
+    // Initiative triage fields, copied verbatim from the spawning
+    // Initiative when the project is auto-created on approval. They
+    // give Projects the same filterable axes as Initiatives so the
+    // two boards stay legible after the handoff.
+    // Free-form strings (not enums) to mirror the initiative fields.
+    riskLevel: text("risk_level").notNull().default(""),
+    category: text("category").notNull().default(""),
+    businessAlignment: text("business_alignment").notNull().default(""),
+    initialPriority: text("initial_priority").notNull().default(""),
+    initialEffort: text("initial_effort").notNull().default(""),
     goal: text("goal").notNull().default(""),
     implementation: text("implementation").notNull().default(""),
     rationale: text("rationale").notNull().default(""),

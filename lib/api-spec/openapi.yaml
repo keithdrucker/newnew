@@ -3162,6 +3162,13 @@ components:
         # --- Initiative metadata (project IS the initiative) ---
         suggestedById: { type: ["integer", "null"] }
         suggestedByName: { type: ["string", "null"] }
+        # --- Initiative triage axes (carried over on approval) ---
+        # Free-form strings; "" means not set (e.g. imported project).
+        riskLevel: { type: string }
+        category: { type: string }
+        businessAlignment: { type: string }
+        initialPriority: { type: string }
+        initialEffort: { type: string }
         goal: { type: string }
         implementation: { type: string }
         rationale: { type: string }
@@ -3209,6 +3216,11 @@ components:
         - additionalComments
         - labels
         - priority
+        - riskLevel
+        - category
+        - businessAlignment
+        - initialPriority
+        - initialEffort
         - checklist
         - checklistTotal
         - checklistDone

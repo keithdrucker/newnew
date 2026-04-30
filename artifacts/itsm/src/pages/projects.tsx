@@ -140,11 +140,21 @@ type ProjectSortKey = "default" | "due_asc" | "due_desc";
 type ProjectFilters = {
   priority: string; // "all" | "low" | "medium" | "high" | "urgent"
   ownerId: string; // "all" | "unassigned" | numeric id as string
+  // Initiative-triage axes carried over on approval. Empty string on
+  // the project row means "not set" (e.g. imported, not promoted).
+  riskLevel: string;
+  category: string;
+  alignment: string;
+  effort: string;
 };
 
 const DEFAULT_PROJECT_FILTERS: ProjectFilters = {
   priority: "all",
   ownerId: "all",
+  riskLevel: "all",
+  category: "all",
+  alignment: "all",
+  effort: "all",
 };
 
 const PRIORITY_OPTIONS = [
@@ -152,6 +162,31 @@ const PRIORITY_OPTIONS = [
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
   { value: "urgent", label: "Urgent" },
+];
+
+// These mirror the initiative-side option sets so the filter dropdowns
+// here line up exactly with what gets copied onto the project at
+// approval time. Kept inline (vs. shared module) because the lists are
+// short, stable, and only consumed by these two pages.
+const LMH_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+const PROJECT_CATEGORY_OPTIONS = [
+  { value: "process", label: "Process" },
+  { value: "tooling", label: "Tooling / Software" },
+  { value: "policy", label: "Policy" },
+  { value: "training", label: "Training" },
+  { value: "infrastructure", label: "Infrastructure" },
+  { value: "other", label: "Other" },
+];
+
+const PROJECT_ALIGNMENT_OPTIONS = [
+  { value: "yes", label: "Aligned" },
+  { value: "no", label: "Not aligned" },
+  { value: "unsure", label: "Unsure" },
 ];
 
 // Tone for the per-phase counter chip in the page header. Mirrors the column
@@ -242,6 +277,22 @@ export default function ProjectsPage() {
           return false;
         }
       }
+      // Initiative-triage axes: an empty string on the project row
+      // means "not set", so any active filter on these axes will hide
+      // legacy/imported projects that lack the data. That's the
+      // intended behavior — these filters are about narrowing the
+      // initiative-promoted slice of the board.
+      if (filters.riskLevel !== "all" && p.riskLevel !== filters.riskLevel)
+        return false;
+      if (filters.category !== "all" && p.category !== filters.category)
+        return false;
+      if (
+        filters.alignment !== "all" &&
+        p.businessAlignment !== filters.alignment
+      )
+        return false;
+      if (filters.effort !== "all" && p.initialEffort !== filters.effort)
+        return false;
       return true;
     });
 
@@ -367,10 +418,80 @@ export default function ProjectsPage() {
               </button>
             </div>
             <p className="text-[10.5px] text-muted-foreground italic mb-2">
-              Risk Level, Category, Business Alignment, and Effort live on
-              Initiatives only — they aren't tracked on Projects.
+              Risk Level, Category, Business Alignment, and Effort are
+              copied from the Initiative on approval — imported projects
+              won't match those filters.
             </p>
             <div className="space-y-2.5">
+              <ProjectFilterField label="Risk Level">
+                <Select
+                  value={filters.riskLevel}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, riskLevel: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-project-risk"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {LMH_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Category">
+                <Select
+                  value={filters.category}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, category: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-project-category"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {PROJECT_CATEGORY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Business Alignment">
+                <Select
+                  value={filters.alignment}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, alignment: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-project-alignment"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {PROJECT_ALIGNMENT_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ProjectFilterField>
               <ProjectFilterField label="Priority">
                 <Select
                   value={filters.priority}
@@ -387,6 +508,29 @@ export default function ProjectsPage() {
                   <SelectContent>
                     <SelectItem value="all">All</SelectItem>
                     {PRIORITY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Effort">
+                <Select
+                  value={filters.effort}
+                  onValueChange={(v) =>
+                    setFilters((f) => ({ ...f, effort: v }))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 text-[12px]"
+                    data-testid="filter-project-effort"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {LMH_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>
                         {o.label}
                       </SelectItem>

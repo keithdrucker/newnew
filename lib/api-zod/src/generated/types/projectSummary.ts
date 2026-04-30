@@ -68,6 +68,11 @@ export interface ProjectSummary {
   suggestedById?: number | null;
   /** @nullable */
   suggestedByName?: string | null;
+  riskLevel: string;
+  category: string;
+  businessAlignment: string;
+  initialPriority: string;
+  initialEffort: string;
   goal: string;
   implementation: string;
   rationale: string;
