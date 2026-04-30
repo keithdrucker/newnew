@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChecklistItem } from "./checklistItem";
+import type { ProjectPhase } from "./projectPhase";
 import type { ProjectStatus } from "./projectStatus";
 import type { TaskLabel } from "./taskLabel";
 import type { TaskPriority } from "./taskPriority";
@@ -15,6 +16,9 @@ export interface ProjectSummary {
   name: string;
   description: string;
   color: string;
+  phase: ProjectPhase;
+  /** @nullable */
+  previousActivePhase?: string | null;
   status: ProjectStatus;
   /** @nullable */
   departmentId?: number | null;
@@ -30,6 +34,25 @@ export interface ProjectSummary {
   ownerName?: string | null;
   /** @nullable */
   dueAt?: Date | null;
+  assignedTeam: string;
+  /** @nullable */
+  startDate?: Date | null;
+  /** @nullable */
+  endDate?: Date | null;
+  planningNotes: string;
+  statusUpdate: string;
+  holdReason: string;
+  holdNotes: string;
+  /** @nullable */
+  revisitDate?: Date | null;
+  completionSummary: string;
+  /** @nullable */
+  completedAt?: Date | null;
+  cancellationReason: string;
+  /** @nullable */
+  linkedInitiativeId?: number | null;
+  /** @nullable */
+  linkedInitiativeTitle?: string | null;
   /** @nullable */
   suggestedById?: number | null;
   /** @nullable */

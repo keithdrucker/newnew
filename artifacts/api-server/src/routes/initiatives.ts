@@ -5,6 +5,7 @@ import {
   initiativesTable,
   initiativeAuditEventsTable,
   projectsTable,
+  projectAuditEventsTable,
   departmentsTable,
   usersTable,
   type Initiative as InitiativeRow,
@@ -565,17 +566,33 @@ router.patch("/initiatives/:id", async (req, res): Promise<void> => {
           .values({
             name: patch.title ?? existing.title,
             description: projectDescription,
-            // Per spec — auto-created projects start as "Not Started"
-            // (mapped to our existing project status enum value).
+            // Lifecycle: auto-created projects land at the start of
+            // the new phase board. `status` is kept as "active" for
+            // back-compat with downstream consumers that still read it.
+            phase: "backlog_needs_assignment",
             status: "active",
             departmentId: departmentId ?? null,
             ownerId: existing.assigneeId ?? user.id,
             suggestedById: existing.reporterId ?? user.id,
             rationale: newRationale,
+            // Reverse link so the project's History panel shows where
+            // it came from.
+            linkedInitiativeId: existing.id,
           })
           .returning();
         createdProjectId = createdProject.id;
         patch.createdProjectId = createdProjectId;
+
+        // First entry in the project's History — same transaction
+        // so the trail can never drift from the project row.
+        await tx.insert(projectAuditEventsTable).values({
+          projectId: createdProject.id,
+          action: "created_from_initiative",
+          newPhase: "backlog_needs_assignment",
+          reason: "",
+          detail: { initiativeId: existing.id, title: existing.title },
+          changedById: user.id,
+        });
       }
 
       // Audit reason for the log entry: prefer the explicit field

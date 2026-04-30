@@ -5,6 +5,9 @@
  * Harmony ITSM API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProjectAuditEvent } from "./projectAuditEvent";
 import type { ProjectSummary } from "./projectSummary";
 
-export type ProjectDetail = ProjectSummary;
+export type ProjectDetail = ProjectSummary & {
+  auditEvents: ProjectAuditEvent[];
+};

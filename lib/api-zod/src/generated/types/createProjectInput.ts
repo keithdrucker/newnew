@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChecklistItem } from "./checklistItem";
+import type { ProjectPhase } from "./projectPhase";
 import type { ProjectStatus } from "./projectStatus";
 import type { TaskLabel } from "./taskLabel";
 import type { TaskPriority } from "./taskPriority";
@@ -15,14 +16,24 @@ export interface CreateProjectInput {
   description?: string;
   color?: string;
   status?: ProjectStatus;
+  phase?: ProjectPhase;
   /** @nullable */
   departmentId?: number | null;
   /** @nullable */
   bucketId?: number | null;
   /** @nullable */
   ownerId?: number | null;
+  assignedTeam?: string;
+  /** @nullable */
+  startDate?: Date | null;
+  /** @nullable */
+  endDate?: Date | null;
   /** @nullable */
   dueAt?: Date | null;
+  planningNotes?: string;
+  statusUpdate?: string;
+  /** @nullable */
+  linkedInitiativeId?: number | null;
   /** @nullable */
   suggestedById?: number | null;
   goal?: string;

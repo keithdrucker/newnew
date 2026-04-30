@@ -11,7 +11,12 @@ import {
 } from "drizzle-orm/pg-core";
 import { departmentsTable } from "./departments";
 import { usersTable } from "./users";
-import { initiativesTable } from "./initiatives";
+// NOTE: We do NOT import `initiativesTable` here even though
+// `linkedInitiativeId` semantically references it. Doing so would
+// create a circular type-inference cycle with `initiatives.ts`
+// (which already imports `projectsTable` for `createdProjectId`)
+// and TS can't infer the table types through the cycle. The link
+// is enforced at the application layer instead.
 
 export type TaskLabel = { name: string; color: string };
 
@@ -125,11 +130,10 @@ export const projectsTable = pgTable(
 
     // Reverse link to the initiative that spawned this project (if
     // any). Initiatives keep their own `createdProjectId` for the
-    // forward link.
-    linkedInitiativeId: integer("linked_initiative_id").references(
-      () => initiativesTable.id,
-      { onDelete: "set null" },
-    ),
+    // forward link. We deliberately omit a Drizzle FK here to avoid
+    // a circular import with `initiatives.ts`; orphan cleanup is the
+    // application's responsibility.
+    linkedInitiativeId: integer("linked_initiative_id"),
 
     // ---- Initiative-era metadata (preserved for back-compat) ----
     suggestedById: integer("suggested_by_id").references(() => usersTable.id, {

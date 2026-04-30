@@ -1280,6 +1280,128 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /projects/{id}/phase:
+    post:
+      operationId: changeProjectPhase
+      tags: [projects]
+      summary: |
+        Transition a project between phases. Allowed transitions:
+        backlog_needs_assignment → planning;
+        planning → in_progress | on_hold | cancelled;
+        in_progress → completed | planning | on_hold | cancelled;
+        completed → in_progress (reopen);
+        cancelled → backlog_needs_assignment (reopen);
+        on_hold → previousActivePhase (resume) | cancelled.
+        Disallowed transitions return 409. Going to on_hold stores
+        the current phase as previousActivePhase; resuming restores
+        it. Each call writes a project_audit_events row.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeProjectPhaseInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+        "400": { description: Validation error }
+        "409": { description: Disallowed phase transition }
+
+  /projects/{id}/checklist:
+    post:
+      operationId: addProjectChecklistItem
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddChecklistItemInput" }
+      responses:
+        "200":
+          description: Project with the new item appended
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+
+  /projects/{id}/checklist/{itemId}:
+    patch:
+      operationId: updateProjectChecklistItem
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: itemId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateChecklistItemInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+        "404": { description: Item not found }
+    delete:
+      operationId: deleteProjectChecklistItem
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: itemId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Item removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+        "404": { description: Item not found }
+
+  /projects/{id}/checklist/reorder:
+    post:
+      operationId: reorderProjectChecklist
+      tags: [projects]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReorderChecklistInput" }
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+        "400": { description: itemIds set does not match the project }
+
   /initiatives:
     get:
       operationId: listInitiatives
@@ -2937,6 +3059,11 @@ components:
     ChecklistItem:
       type: object
       properties:
+        # Stable per-item id used by the granular checklist endpoints.
+        # Optional on input (server back-fills with a UUID on first write
+        # if missing) so legacy rows keep parsing.
+        id: { type: ["string", "null"] }
+        position: { type: ["integer", "null"] }
         text: { type: string }
         done: { type: boolean }
         assigneeId: { type: ["integer", "null"] }
@@ -2946,6 +3073,31 @@ components:
     ProjectStatus:
       type: string
       enum: [active, on_hold, completed, archived]
+
+    # Canonical six-state phase lifecycle that drives the Projects board.
+    ProjectPhase:
+      type: string
+      enum:
+        - backlog_needs_assignment
+        - planning
+        - in_progress
+        - on_hold
+        - completed
+        - cancelled
+
+    ProjectAuditEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        action: { type: string }
+        oldPhase: { type: ["string", "null"] }
+        newPhase: { type: ["string", "null"] }
+        reason: { type: string }
+        detail: { type: object, additionalProperties: true }
+        changedById: { type: ["integer", "null"] }
+        changedByName: { type: ["string", "null"] }
+        changedAt: { type: string, format: date-time }
+      required: [id, action, reason, changedAt]
 
     TaskPriority:
       type: string
@@ -2958,6 +3110,11 @@ components:
         name: { type: string }
         description: { type: string }
         color: { type: string }
+        # New canonical lifecycle (drives the Projects board UI).
+        phase: { $ref: "#/components/schemas/ProjectPhase" }
+        previousActivePhase: { type: ["string", "null"] }
+        # Legacy status, retained for back-compat with downstream
+        # consumers; new UI keys off `phase`.
         status: { $ref: "#/components/schemas/ProjectStatus" }
         departmentId: { type: ["integer", "null"] }
         departmentName: { type: ["string", "null"] }
@@ -2966,6 +3123,26 @@ components:
         ownerId: { type: ["integer", "null"] }
         ownerName: { type: ["string", "null"] }
         dueAt: { type: ["string", "null"], format: date-time }
+        # --- Phase 1: Backlog / Needs Assignment ---
+        assignedTeam: { type: string }
+        startDate: { type: ["string", "null"], format: date }
+        endDate: { type: ["string", "null"], format: date }
+        # --- Phase 2: Planning ---
+        planningNotes: { type: string }
+        # --- Phase 3: In Progress ---
+        statusUpdate: { type: string }
+        # --- Phase 4 (side): On Hold ---
+        holdReason: { type: string }
+        holdNotes: { type: string }
+        revisitDate: { type: ["string", "null"], format: date }
+        # --- Phase 5: Completed ---
+        completionSummary: { type: string }
+        completedAt: { type: ["string", "null"], format: date-time }
+        # --- Phase 6: Cancelled ---
+        cancellationReason: { type: string }
+        # Reverse link to the spawning Initiative (if any).
+        linkedInitiativeId: { type: ["integer", "null"] }
+        linkedInitiativeTitle: { type: ["string", "null"] }
         # --- Initiative metadata (project IS the initiative) ---
         suggestedById: { type: ["integer", "null"] }
         suggestedByName: { type: ["string", "null"] }
@@ -2998,7 +3175,15 @@ components:
         - name
         - description
         - color
+        - phase
         - status
+        - assignedTeam
+        - planningNotes
+        - statusUpdate
+        - holdReason
+        - holdNotes
+        - completionSummary
+        - cancellationReason
         - goal
         - implementation
         - rationale
@@ -3014,12 +3199,16 @@ components:
         - createdAt
         - updatedAt
 
-    # ProjectDetail is currently identical to ProjectSummary — kept as a
-    # distinct alias so we have a place to add detail-only fields later
-    # without churning every consumer.
+    # Detail-only fields (audit trail) shipped on /projects/{id}.
     ProjectDetail:
       allOf:
         - $ref: "#/components/schemas/ProjectSummary"
+        - type: object
+          properties:
+            auditEvents:
+              type: array
+              items: { $ref: "#/components/schemas/ProjectAuditEvent" }
+          required: [auditEvents]
 
     DepartmentBucket:
       type: object
@@ -3095,10 +3284,17 @@ components:
         description: { type: string }
         color: { type: string }
         status: { $ref: "#/components/schemas/ProjectStatus" }
+        phase: { $ref: "#/components/schemas/ProjectPhase" }
         departmentId: { type: ["integer", "null"] }
         bucketId: { type: ["integer", "null"] }
         ownerId: { type: ["integer", "null"] }
+        assignedTeam: { type: string }
+        startDate: { type: ["string", "null"], format: date }
+        endDate: { type: ["string", "null"], format: date }
         dueAt: { type: ["string", "null"], format: date-time }
+        planningNotes: { type: string }
+        statusUpdate: { type: string }
+        linkedInitiativeId: { type: ["integer", "null"] }
         suggestedById: { type: ["integer", "null"] }
         goal: { type: string }
         implementation: { type: string }
@@ -3123,11 +3319,18 @@ components:
         name: { type: string }
         description: { type: string }
         color: { type: string }
+        # Phase transitions go through POST /projects/{id}/phase so the
+        # audit log stays atomic. PATCH ignores `phase` if supplied.
         status: { $ref: "#/components/schemas/ProjectStatus" }
         departmentId: { type: ["integer", "null"] }
         bucketId: { type: ["integer", "null"] }
         ownerId: { type: ["integer", "null"] }
+        assignedTeam: { type: string }
+        startDate: { type: ["string", "null"], format: date }
+        endDate: { type: ["string", "null"], format: date }
         dueAt: { type: ["string", "null"], format: date-time }
+        planningNotes: { type: string }
+        statusUpdate: { type: string }
         suggestedById: { type: ["integer", "null"] }
         goal: { type: string }
         implementation: { type: string }
@@ -3144,6 +3347,44 @@ components:
         checklist:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
+
+    ChangeProjectPhaseInput:
+      type: object
+      properties:
+        to: { $ref: "#/components/schemas/ProjectPhase" }
+        reason: { type: string }
+        holdReason: { type: string }
+        holdNotes: { type: string }
+        revisitDate: { type: ["string", "null"], format: date }
+        completionSummary: { type: string }
+        cancellationReason: { type: string }
+        statusUpdate: { type: string }
+        planningNotes: { type: string }
+      required: [to]
+
+    AddChecklistItemInput:
+      type: object
+      properties:
+        text: { type: string }
+        position: { type: ["integer", "null"] }
+        assigneeId: { type: ["integer", "null"] }
+      required: [text]
+
+    UpdateChecklistItemInput:
+      type: object
+      properties:
+        text: { type: string }
+        done: { type: boolean }
+        position: { type: integer }
+        assigneeId: { type: ["integer", "null"] }
+
+    ReorderChecklistInput:
+      type: object
+      properties:
+        itemIds:
+          type: array
+          items: { type: string }
+      required: [itemIds]
 
     InitiativeStatus:
       type: string

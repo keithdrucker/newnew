@@ -18,12 +18,14 @@ import type {
 
 import type {
   AddBoardMemberInput,
+  AddChecklistItemInput,
   AddTicketCommentInput,
   Agent,
   Application,
   Asset,
   BoardMember,
   CancelWorkflowRunInput,
+  ChangeProjectPhaseInput,
   CreateAgentInput,
   CreateApplicationInput,
   CreateAssetInput,
@@ -68,6 +70,7 @@ import type {
   ProjectComment,
   ProjectDetail,
   ProjectSummary,
+  ReorderChecklistInput,
   RiskRule,
   Session,
   StartWorkflowRunInput,
@@ -82,6 +85,7 @@ import type {
   UpdateApplicationInput,
   UpdateAssetInput,
   UpdateBoardMemberInput,
+  UpdateChecklistItemInput,
   UpdateDepartmentBucketInput,
   UpdateDepartmentInput,
   UpdateDepartmentSettingsInput,
@@ -5816,6 +5820,451 @@ export const useDeleteProject = <
   TContext
 > => {
   return useMutation(getDeleteProjectMutationOptions(options));
+};
+
+/**
+ * @summary Transition a project between phases. Allowed transitions:
+backlog_needs_assignment → planning;
+planning → in_progress | on_hold | cancelled;
+in_progress → completed | planning | on_hold | cancelled;
+completed → in_progress (reopen);
+cancelled → backlog_needs_assignment (reopen);
+on_hold → previousActivePhase (resume) | cancelled.
+Disallowed transitions return 409. Going to on_hold stores
+the current phase as previousActivePhase; resuming restores
+it. Each call writes a project_audit_events row.
+
+ */
+export const getChangeProjectPhaseUrl = (id: number) => {
+  return `/api/projects/${id}/phase`;
+};
+
+export const changeProjectPhase = async (
+  id: number,
+  changeProjectPhaseInput: ChangeProjectPhaseInput,
+  options?: RequestInit,
+): Promise<ProjectDetail> => {
+  return customFetch<ProjectDetail>(getChangeProjectPhaseUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(changeProjectPhaseInput),
+  });
+};
+
+export const getChangeProjectPhaseMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changeProjectPhase>>,
+    TError,
+    { id: number; data: BodyType<ChangeProjectPhaseInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof changeProjectPhase>>,
+  TError,
+  { id: number; data: BodyType<ChangeProjectPhaseInput> },
+  TContext
+> => {
+  const mutationKey = ["changeProjectPhase"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof changeProjectPhase>>,
+    { id: number; data: BodyType<ChangeProjectPhaseInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return changeProjectPhase(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ChangeProjectPhaseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof changeProjectPhase>>
+>;
+export type ChangeProjectPhaseMutationBody = BodyType<ChangeProjectPhaseInput>;
+export type ChangeProjectPhaseMutationError = ErrorType<void>;
+
+/**
+ * @summary Transition a project between phases. Allowed transitions:
+backlog_needs_assignment → planning;
+planning → in_progress | on_hold | cancelled;
+in_progress → completed | planning | on_hold | cancelled;
+completed → in_progress (reopen);
+cancelled → backlog_needs_assignment (reopen);
+on_hold → previousActivePhase (resume) | cancelled.
+Disallowed transitions return 409. Going to on_hold stores
+the current phase as previousActivePhase; resuming restores
+it. Each call writes a project_audit_events row.
+
+ */
+export const useChangeProjectPhase = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changeProjectPhase>>,
+    TError,
+    { id: number; data: BodyType<ChangeProjectPhaseInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof changeProjectPhase>>,
+  TError,
+  { id: number; data: BodyType<ChangeProjectPhaseInput> },
+  TContext
+> => {
+  return useMutation(getChangeProjectPhaseMutationOptions(options));
+};
+
+export const getAddProjectChecklistItemUrl = (id: number) => {
+  return `/api/projects/${id}/checklist`;
+};
+
+export const addProjectChecklistItem = async (
+  id: number,
+  addChecklistItemInput: AddChecklistItemInput,
+  options?: RequestInit,
+): Promise<ProjectDetail> => {
+  return customFetch<ProjectDetail>(getAddProjectChecklistItemUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addChecklistItemInput),
+  });
+};
+
+export const getAddProjectChecklistItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProjectChecklistItem>>,
+    TError,
+    { id: number; data: BodyType<AddChecklistItemInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addProjectChecklistItem>>,
+  TError,
+  { id: number; data: BodyType<AddChecklistItemInput> },
+  TContext
+> => {
+  const mutationKey = ["addProjectChecklistItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addProjectChecklistItem>>,
+    { id: number; data: BodyType<AddChecklistItemInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return addProjectChecklistItem(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddProjectChecklistItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addProjectChecklistItem>>
+>;
+export type AddProjectChecklistItemMutationBody =
+  BodyType<AddChecklistItemInput>;
+export type AddProjectChecklistItemMutationError = ErrorType<unknown>;
+
+export const useAddProjectChecklistItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProjectChecklistItem>>,
+    TError,
+    { id: number; data: BodyType<AddChecklistItemInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addProjectChecklistItem>>,
+  TError,
+  { id: number; data: BodyType<AddChecklistItemInput> },
+  TContext
+> => {
+  return useMutation(getAddProjectChecklistItemMutationOptions(options));
+};
+
+export const getUpdateProjectChecklistItemUrl = (
+  id: number,
+  itemId: string,
+) => {
+  return `/api/projects/${id}/checklist/${itemId}`;
+};
+
+export const updateProjectChecklistItem = async (
+  id: number,
+  itemId: string,
+  updateChecklistItemInput: UpdateChecklistItemInput,
+  options?: RequestInit,
+): Promise<ProjectDetail> => {
+  return customFetch<ProjectDetail>(
+    getUpdateProjectChecklistItemUrl(id, itemId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateChecklistItemInput),
+    },
+  );
+};
+
+export const getUpdateProjectChecklistItemMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProjectChecklistItem>>,
+    TError,
+    { id: number; itemId: string; data: BodyType<UpdateChecklistItemInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProjectChecklistItem>>,
+  TError,
+  { id: number; itemId: string; data: BodyType<UpdateChecklistItemInput> },
+  TContext
+> => {
+  const mutationKey = ["updateProjectChecklistItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProjectChecklistItem>>,
+    { id: number; itemId: string; data: BodyType<UpdateChecklistItemInput> }
+  > = (props) => {
+    const { id, itemId, data } = props ?? {};
+
+    return updateProjectChecklistItem(id, itemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProjectChecklistItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateProjectChecklistItem>>
+>;
+export type UpdateProjectChecklistItemMutationBody =
+  BodyType<UpdateChecklistItemInput>;
+export type UpdateProjectChecklistItemMutationError = ErrorType<void>;
+
+export const useUpdateProjectChecklistItem = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProjectChecklistItem>>,
+    TError,
+    { id: number; itemId: string; data: BodyType<UpdateChecklistItemInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateProjectChecklistItem>>,
+  TError,
+  { id: number; itemId: string; data: BodyType<UpdateChecklistItemInput> },
+  TContext
+> => {
+  return useMutation(getUpdateProjectChecklistItemMutationOptions(options));
+};
+
+export const getDeleteProjectChecklistItemUrl = (
+  id: number,
+  itemId: string,
+) => {
+  return `/api/projects/${id}/checklist/${itemId}`;
+};
+
+export const deleteProjectChecklistItem = async (
+  id: number,
+  itemId: string,
+  options?: RequestInit,
+): Promise<ProjectDetail> => {
+  return customFetch<ProjectDetail>(
+    getDeleteProjectChecklistItemUrl(id, itemId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteProjectChecklistItemMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProjectChecklistItem>>,
+    TError,
+    { id: number; itemId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProjectChecklistItem>>,
+  TError,
+  { id: number; itemId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteProjectChecklistItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProjectChecklistItem>>,
+    { id: number; itemId: string }
+  > = (props) => {
+    const { id, itemId } = props ?? {};
+
+    return deleteProjectChecklistItem(id, itemId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProjectChecklistItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteProjectChecklistItem>>
+>;
+
+export type DeleteProjectChecklistItemMutationError = ErrorType<void>;
+
+export const useDeleteProjectChecklistItem = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProjectChecklistItem>>,
+    TError,
+    { id: number; itemId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProjectChecklistItem>>,
+  TError,
+  { id: number; itemId: string },
+  TContext
+> => {
+  return useMutation(getDeleteProjectChecklistItemMutationOptions(options));
+};
+
+export const getReorderProjectChecklistUrl = (id: number) => {
+  return `/api/projects/${id}/checklist/reorder`;
+};
+
+export const reorderProjectChecklist = async (
+  id: number,
+  reorderChecklistInput: ReorderChecklistInput,
+  options?: RequestInit,
+): Promise<ProjectDetail> => {
+  return customFetch<ProjectDetail>(getReorderProjectChecklistUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(reorderChecklistInput),
+  });
+};
+
+export const getReorderProjectChecklistMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderProjectChecklist>>,
+    TError,
+    { id: number; data: BodyType<ReorderChecklistInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reorderProjectChecklist>>,
+  TError,
+  { id: number; data: BodyType<ReorderChecklistInput> },
+  TContext
+> => {
+  const mutationKey = ["reorderProjectChecklist"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reorderProjectChecklist>>,
+    { id: number; data: BodyType<ReorderChecklistInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reorderProjectChecklist(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReorderProjectChecklistMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reorderProjectChecklist>>
+>;
+export type ReorderProjectChecklistMutationBody =
+  BodyType<ReorderChecklistInput>;
+export type ReorderProjectChecklistMutationError = ErrorType<void>;
+
+export const useReorderProjectChecklist = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderProjectChecklist>>,
+    TError,
+    { id: number; data: BodyType<ReorderChecklistInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reorderProjectChecklist>>,
+  TError,
+  { id: number; data: BodyType<ReorderChecklistInput> },
+  TContext
+> => {
+  return useMutation(getReorderProjectChecklistMutationOptions(options));
 };
 
 /**

@@ -1404,6 +1404,10 @@ export interface TaskLabel {
 }
 
 export interface ChecklistItem {
+  /** @nullable */
+  id?: string | null;
+  /** @nullable */
+  position?: number | null;
   text: string;
   done: boolean;
   /** @nullable */
@@ -1421,6 +1425,35 @@ export const ProjectStatus = {
   archived: "archived",
 } as const;
 
+export type ProjectPhase = (typeof ProjectPhase)[keyof typeof ProjectPhase];
+
+export const ProjectPhase = {
+  backlog_needs_assignment: "backlog_needs_assignment",
+  planning: "planning",
+  in_progress: "in_progress",
+  on_hold: "on_hold",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export type ProjectAuditEventDetail = { [key: string]: unknown };
+
+export interface ProjectAuditEvent {
+  id: number;
+  action: string;
+  /** @nullable */
+  oldPhase?: string | null;
+  /** @nullable */
+  newPhase?: string | null;
+  reason: string;
+  detail?: ProjectAuditEventDetail;
+  /** @nullable */
+  changedById?: number | null;
+  /** @nullable */
+  changedByName?: string | null;
+  changedAt: string;
+}
+
 export type TaskPriority = (typeof TaskPriority)[keyof typeof TaskPriority];
 
 export const TaskPriority = {
@@ -1435,6 +1468,9 @@ export interface ProjectSummary {
   name: string;
   description: string;
   color: string;
+  phase: ProjectPhase;
+  /** @nullable */
+  previousActivePhase?: string | null;
   status: ProjectStatus;
   /** @nullable */
   departmentId?: number | null;
@@ -1450,6 +1486,25 @@ export interface ProjectSummary {
   ownerName?: string | null;
   /** @nullable */
   dueAt?: string | null;
+  assignedTeam: string;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  planningNotes: string;
+  statusUpdate: string;
+  holdReason: string;
+  holdNotes: string;
+  /** @nullable */
+  revisitDate?: string | null;
+  completionSummary: string;
+  /** @nullable */
+  completedAt?: string | null;
+  cancellationReason: string;
+  /** @nullable */
+  linkedInitiativeId?: number | null;
+  /** @nullable */
+  linkedInitiativeTitle?: string | null;
   /** @nullable */
   suggestedById?: number | null;
   /** @nullable */
@@ -1472,7 +1527,9 @@ export interface ProjectSummary {
   updatedAt: string;
 }
 
-export type ProjectDetail = ProjectSummary;
+export type ProjectDetail = ProjectSummary & {
+  auditEvents: ProjectAuditEvent[];
+};
 
 export interface DepartmentBucket {
   id: number;
@@ -1525,14 +1582,24 @@ export interface CreateProjectInput {
   description?: string;
   color?: string;
   status?: ProjectStatus;
+  phase?: ProjectPhase;
   /** @nullable */
   departmentId?: number | null;
   /** @nullable */
   bucketId?: number | null;
   /** @nullable */
   ownerId?: number | null;
+  assignedTeam?: string;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
   /** @nullable */
   dueAt?: string | null;
+  planningNotes?: string;
+  statusUpdate?: string;
+  /** @nullable */
+  linkedInitiativeId?: number | null;
   /** @nullable */
   suggestedById?: number | null;
   goal?: string;
@@ -1558,8 +1625,15 @@ export interface UpdateProjectInput {
   bucketId?: number | null;
   /** @nullable */
   ownerId?: number | null;
+  assignedTeam?: string;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
   /** @nullable */
   dueAt?: string | null;
+  planningNotes?: string;
+  statusUpdate?: string;
   /** @nullable */
   suggestedById?: number | null;
   goal?: string;
@@ -1572,6 +1646,39 @@ export interface UpdateProjectInput {
   labels?: TaskLabel[];
   priority?: TaskPriority;
   checklist?: ChecklistItem[];
+}
+
+export interface ChangeProjectPhaseInput {
+  to: ProjectPhase;
+  reason?: string;
+  holdReason?: string;
+  holdNotes?: string;
+  /** @nullable */
+  revisitDate?: string | null;
+  completionSummary?: string;
+  cancellationReason?: string;
+  statusUpdate?: string;
+  planningNotes?: string;
+}
+
+export interface AddChecklistItemInput {
+  text: string;
+  /** @nullable */
+  position?: number | null;
+  /** @nullable */
+  assigneeId?: number | null;
+}
+
+export interface UpdateChecklistItemInput {
+  text?: string;
+  done?: boolean;
+  position?: number;
+  /** @nullable */
+  assigneeId?: number | null;
+}
+
+export interface ReorderChecklistInput {
+  itemIds: string[];
 }
 
 export type InitiativeStatus =

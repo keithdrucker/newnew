@@ -21,8 +21,15 @@ export interface UpdateProjectInput {
   bucketId?: number | null;
   /** @nullable */
   ownerId?: number | null;
+  assignedTeam?: string;
+  /** @nullable */
+  startDate?: Date | null;
+  /** @nullable */
+  endDate?: Date | null;
   /** @nullable */
   dueAt?: Date | null;
+  planningNotes?: string;
+  statusUpdate?: string;
   /** @nullable */
   suggestedById?: number | null;
   goal?: string;

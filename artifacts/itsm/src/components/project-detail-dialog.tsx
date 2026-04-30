@@ -1,0 +1,1538 @@
+import { useState, useEffect, useMemo } from "react";
+import {
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  useChangeProjectPhase,
+  useAddProjectChecklistItem,
+  useUpdateProjectChecklistItem,
+  useDeleteProjectChecklistItem,
+  useReorderProjectChecklist,
+  useGetProject,
+  useListAgents,
+  useListDepartments,
+  useGetSession,
+  getListProjectsQueryKey,
+  getGetProjectQueryKey,
+  getGetDepartmentBoardQueryKey,
+  type ProjectSummary,
+  type ProjectDetail,
+  type ProjectAuditEvent,
+  type ProjectPhase,
+  type ChecklistItem,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  CheckSquare,
+  ChevronDown,
+  CircleDashed,
+  GripVertical,
+  History,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
+  Square,
+  Trash2,
+  Undo2,
+  XCircle,
+} from "lucide-react";
+
+// ----- Constants -----------------------------------------------------------
+
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "Urgent" },
+];
+
+const PHASE_LABEL: Record<ProjectPhase, string> = {
+  backlog_needs_assignment: "Backlog / Needs Assignment",
+  planning: "Planning",
+  in_progress: "In Progress",
+  on_hold: "On Hold",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+const PHASE_BADGE: Record<ProjectPhase, string> = {
+  backlog_needs_assignment:
+    "bg-zinc-100 text-zinc-700 border-zinc-200",
+  planning: "bg-sky-100 text-sky-800 border-sky-200",
+  in_progress: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  on_hold: "bg-amber-100 text-amber-800 border-amber-200",
+  completed: "bg-slate-100 text-slate-700 border-slate-200",
+  cancelled: "bg-rose-100 text-rose-800 border-rose-200",
+};
+
+// ----- Create dialog -------------------------------------------------------
+
+export function ProjectCreateDialog({
+  open,
+  onOpenChange,
+  defaultDepartmentId,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  defaultDepartmentId?: number | null;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: session } = useGetSession();
+  const { data: departments } = useListDepartments({ scope: "accessible" });
+  const { data: agents } = useListAgents({});
+  const create = useCreateProject({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      },
+      onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+    },
+  });
+
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [departmentId, setDepartmentId] = useState<number | null>(
+    defaultDepartmentId ?? null,
+  );
+  const [ownerId, setOwnerId] = useState<number | null>(null);
+  const [priority, setPriority] = useState("medium");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setDescription("");
+      setDepartmentId(defaultDepartmentId ?? null);
+      setOwnerId(session?.userId ?? null);
+      setPriority("medium");
+      setStartDate("");
+      setEndDate("");
+    }
+  }, [open, defaultDepartmentId, session?.userId]);
+
+  const submit = () => {
+    if (!name.trim()) {
+      toast({ title: "Name is required", variant: "destructive" });
+      return;
+    }
+    create.mutate(
+      {
+        data: {
+          name: name.trim(),
+          description: description.trim(),
+          color: "#4B9CD3",
+          status: "active",
+          departmentId,
+          ownerId,
+          priority: priority as "low" | "medium" | "high" | "urgent",
+          startDate: startDate || null,
+          endDate: endDate || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Project created" });
+          onOpenChange(false);
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="sm:max-w-2xl"
+        data-testid="dialog-project-create"
+      >
+        <DialogHeader>
+          <DialogTitle>New project</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
+          <Field label="Name" required>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              data-testid="input-project-name"
+            />
+          </Field>
+          <Field label="Description">
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              data-testid="input-project-description"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Department">
+              <Select
+                value={departmentId ? String(departmentId) : "none"}
+                onValueChange={(v) =>
+                  setDepartmentId(v === "none" ? null : Number(v))
+                }
+              >
+                <SelectTrigger data-testid="select-project-department">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {departments?.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Owner">
+              <Select
+                value={ownerId ? String(ownerId) : "none"}
+                onValueChange={(v) =>
+                  setOwnerId(v === "none" ? null : Number(v))
+                }
+              >
+                <SelectTrigger data-testid="select-project-owner">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {agents?.map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Priority">
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger data-testid="select-project-priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIORITY_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Start date">
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                data-testid="input-project-start"
+              />
+            </Field>
+            <Field label="End date">
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                data-testid="input-project-end"
+              />
+            </Field>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            data-testid="button-project-create-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={submit}
+            disabled={create.isPending}
+            data-testid="button-project-create-submit"
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Create project
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ----- Detail dialog -------------------------------------------------------
+
+export function ProjectDetailDialog({
+  projectId,
+  onClose,
+}: {
+  projectId: number;
+  onClose: () => void;
+}) {
+  // Fetch the full detail (with auditEvents) so the dialog has fresh
+  // server data — the row passed in from the board may be stale after a
+  // phase mutation invalidates the list query.
+  const { data: row } = useGetProject(projectId);
+  if (!row) {
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Loading…</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  return <DetailInner row={row} onClose={onClose} />;
+}
+
+function DetailInner({
+  row,
+  onClose,
+}: {
+  row: ProjectDetail;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: agents } = useListAgents({});
+  const { data: departments } = useListDepartments({ scope: "accessible" });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetProjectQueryKey(row.id) });
+    if (row.departmentId) {
+      qc.invalidateQueries({
+        queryKey: getGetDepartmentBoardQueryKey(row.departmentId),
+      });
+    }
+  };
+
+  const update = useUpdateProject({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+    },
+  });
+  const changePhase = useChangeProjectPhase({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+    },
+  });
+  const remove = useDeleteProject({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        onClose();
+      },
+      onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+    },
+  });
+
+  const phase = row.phase as ProjectPhase;
+
+  // ----- Header / top fields (always-editable basics) -----
+  const [departmentId, setDepartmentId] = useState<number | null>(
+    row.departmentId ?? null,
+  );
+  const [ownerId, setOwnerId] = useState<number | null>(row.ownerId ?? null);
+  const [assignedTeam, setAssignedTeam] = useState(row.assignedTeam);
+  const [priority, setPriority] = useState<string>(row.priority);
+  const [startDate, setStartDate] = useState<string>(row.startDate ?? "");
+  const [endDate, setEndDate] = useState<string>(row.endDate ?? "");
+  const [planningNotes, setPlanningNotes] = useState(row.planningNotes);
+  const [statusUpdate, setStatusUpdate] = useState(row.statusUpdate);
+
+  useEffect(() => {
+    setDepartmentId(row.departmentId ?? null);
+    setOwnerId(row.ownerId ?? null);
+    setAssignedTeam(row.assignedTeam);
+    setPriority(row.priority);
+    setStartDate(row.startDate ?? "");
+    setEndDate(row.endDate ?? "");
+    setPlanningNotes(row.planningNotes);
+    setStatusUpdate(row.statusUpdate);
+  }, [row.id, row]);
+
+  const saveBasics = async (msg: string) => {
+    await update.mutateAsync({
+      id: row.id,
+      data: {
+        departmentId,
+        ownerId,
+        assignedTeam,
+        priority: priority as "low" | "medium" | "high" | "urgent",
+        startDate: startDate || null,
+        endDate: endDate || null,
+        planningNotes,
+        statusUpdate,
+      },
+    });
+    toast({ title: msg });
+  };
+
+  // ----- Phase transition modal -----
+  const [pendingPhase, setPendingPhase] = useState<ProjectPhase | null>(null);
+
+  const openPhaseChange = (to: ProjectPhase) => setPendingPhase(to);
+
+  // The "resume from on_hold" target depends on previousActivePhase.
+  const resumeTarget: ProjectPhase =
+    (row.previousActivePhase as ProjectPhase | null) ?? "planning";
+
+  return (
+    <>
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent
+          className="sm:max-w-3xl max-h-[90vh] overflow-y-auto"
+          data-testid="dialog-project-detail"
+        >
+          <DialogHeader>
+            <div className="space-y-3">
+              <DialogTitle className="text-xl pr-8">{row.name}</DialogTitle>
+              <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                <Badge
+                  variant="outline"
+                  className={PHASE_BADGE[phase]}
+                  data-testid="badge-current-phase"
+                >
+                  {PHASE_LABEL[phase]}
+                </Badge>
+                {row.departmentName && (
+                  <Badge variant="outline" className="font-normal">
+                    <Building2 className="h-3 w-3 mr-1" />
+                    {row.departmentName}
+                  </Badge>
+                )}
+                {row.linkedInitiativeTitle && (
+                  <Badge variant="outline" className="font-normal">
+                    From initiative: {row.linkedInitiativeTitle}
+                  </Badge>
+                )}
+                <span className="text-muted-foreground">
+                  Created {new Date(row.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <PhaseProgress phase={phase} />
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {row.description && (
+              <ReadField label="Description" value={row.description} />
+            )}
+
+            {/* ---- Backlog / Needs Assignment ---- */}
+            <Section
+              title="Backlog · Needs Assignment"
+              defaultOpen={phase === "backlog_needs_assignment"}
+              tone={
+                phase === "backlog_needs_assignment"
+                  ? "active"
+                  : phase === "planning" ||
+                      phase === "in_progress" ||
+                      phase === "on_hold" ||
+                      phase === "completed"
+                    ? "done"
+                    : "default"
+              }
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Department">
+                  <Select
+                    value={departmentId ? String(departmentId) : "none"}
+                    onValueChange={(v) =>
+                      setDepartmentId(v === "none" ? null : Number(v))
+                    }
+                  >
+                    <SelectTrigger data-testid="select-department">
+                      <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {departments?.map((d) => (
+                        <SelectItem key={d.id} value={String(d.id)}>
+                          {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Owner">
+                  <Select
+                    value={ownerId ? String(ownerId) : "none"}
+                    onValueChange={(v) =>
+                      setOwnerId(v === "none" ? null : Number(v))
+                    }
+                  >
+                    <SelectTrigger data-testid="select-owner">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {agents?.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Field label="Assigned team">
+                <Input
+                  value={assignedTeam}
+                  onChange={(e) => setAssignedTeam(e.target.value)}
+                  placeholder="e.g. Field Operations, IT, Project Controls"
+                  data-testid="input-assigned-team"
+                />
+              </Field>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Priority">
+                  <Select value={priority} onValueChange={setPriority}>
+                    <SelectTrigger data-testid="select-priority">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRIORITY_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Start">
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    data-testid="input-start-date"
+                  />
+                </Field>
+                <Field label="End">
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    data-testid="input-end-date"
+                  />
+                </Field>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => saveBasics("Saved")}
+                  disabled={update.isPending}
+                  data-testid="button-save-basics"
+                >
+                  Save changes
+                </Button>
+                {phase === "backlog_needs_assignment" && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      // Auto-save edits before transitioning so the
+                      // owner/team pickers don't get lost.
+                      saveBasics("Saved");
+                      openPhaseChange("planning");
+                    }}
+                    data-testid="button-move-to-planning"
+                  >
+                    Move to Planning
+                  </Button>
+                )}
+              </div>
+            </Section>
+
+            {/* ---- Planning ---- */}
+            <Section
+              title="Planning"
+              defaultOpen={phase === "planning"}
+              tone={
+                phase === "planning"
+                  ? "active"
+                  : phase === "in_progress" ||
+                      phase === "completed" ||
+                      phase === "on_hold"
+                    ? "done"
+                    : "default"
+              }
+            >
+              <Field label="Planning notes">
+                <Textarea
+                  value={planningNotes}
+                  onChange={(e) => setPlanningNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Scope, approach, dependencies, success criteria…"
+                  data-testid="textarea-planning-notes"
+                />
+              </Field>
+              <ChecklistEditor projectId={row.id} items={row.checklist} />
+              {phase === "planning" && (
+                <div className="flex justify-between gap-2 pt-1">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPhaseChange("on_hold")}
+                      data-testid="button-pause-from-planning"
+                    >
+                      <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPhaseChange("cancelled")}
+                      data-testid="button-cancel-from-planning"
+                    >
+                      <XCircle className="h-3.5 w-3.5 mr-1.5" /> Cancel
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => saveBasics("Saved")}
+                      disabled={update.isPending}
+                      data-testid="button-save-planning"
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={update.isPending}
+                      onClick={async () => {
+                        // Persist any in-flight planning edits BEFORE
+                        // changing phase so we never race the audit row.
+                        await saveBasics("Saved");
+                        openPhaseChange("in_progress");
+                      }}
+                      data-testid="button-start-project"
+                    >
+                      <Play className="h-3.5 w-3.5 mr-1.5" /> Start
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Section>
+
+            {/* ---- In Progress ---- */}
+            <Section
+              title="In Progress"
+              defaultOpen={phase === "in_progress"}
+              tone={
+                phase === "in_progress"
+                  ? "active"
+                  : phase === "completed"
+                    ? "done"
+                    : "default"
+              }
+            >
+              <Field label="Latest status update">
+                <Textarea
+                  value={statusUpdate}
+                  onChange={(e) => setStatusUpdate(e.target.value)}
+                  rows={3}
+                  placeholder="Most recent progress, blockers, next steps…"
+                  data-testid="textarea-status-update"
+                />
+              </Field>
+              {phase !== "planning" && (
+                <ChecklistEditor
+                  projectId={row.id}
+                  items={row.checklist}
+                  readOnly={phase !== "in_progress"}
+                />
+              )}
+              {phase === "in_progress" && (
+                <div className="flex justify-between gap-2 pt-1">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPhaseChange("on_hold")}
+                      data-testid="button-pause-from-progress"
+                    >
+                      <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPhaseChange("planning")}
+                      data-testid="button-back-to-planning"
+                    >
+                      <Undo2 className="h-3.5 w-3.5 mr-1.5" /> Back to
+                      Planning
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPhaseChange("cancelled")}
+                      data-testid="button-cancel-from-progress"
+                    >
+                      <XCircle className="h-3.5 w-3.5 mr-1.5" /> Cancel
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => saveBasics("Saved")}
+                      disabled={update.isPending}
+                      data-testid="button-save-progress"
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => openPhaseChange("completed")}
+                      data-testid="button-mark-completed"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                      Mark Completed
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Section>
+
+            {/* ---- On Hold (only when applicable) ---- */}
+            {phase === "on_hold" && (
+              <Section title="On Hold" defaultOpen tone="active">
+                <ReadField label="Hold reason" value={row.holdReason} />
+                {row.holdNotes && (
+                  <ReadField label="Notes" value={row.holdNotes} />
+                )}
+                {row.revisitDate && (
+                  <ReadField
+                    label="Revisit on"
+                    value={new Date(row.revisitDate).toLocaleDateString()}
+                  />
+                )}
+                {row.previousActivePhase && (
+                  <p className="text-[12px] text-muted-foreground">
+                    Will resume to{" "}
+                    <span className="font-medium">
+                      {PHASE_LABEL[
+                        row.previousActivePhase as ProjectPhase
+                      ] ?? row.previousActivePhase}
+                    </span>
+                    .
+                  </p>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openPhaseChange("cancelled")}
+                    data-testid="button-cancel-from-hold"
+                  >
+                    <XCircle className="h-3.5 w-3.5 mr-1.5" /> Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => openPhaseChange(resumeTarget)}
+                    data-testid="button-resume"
+                  >
+                    <Play className="h-3.5 w-3.5 mr-1.5" /> Resume
+                  </Button>
+                </div>
+              </Section>
+            )}
+
+            {/* ---- Completed (only when applicable) ---- */}
+            {phase === "completed" && (
+              <Section title="Completed" defaultOpen tone="active">
+                <ReadField
+                  label="Completion summary"
+                  value={row.completionSummary}
+                />
+                {row.completedAt && (
+                  <ReadField
+                    label="Completed on"
+                    value={new Date(row.completedAt).toLocaleString()}
+                  />
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openPhaseChange("in_progress")}
+                    data-testid="button-reopen-completed"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen
+                  </Button>
+                </div>
+              </Section>
+            )}
+
+            {/* ---- Cancelled (only when applicable) ---- */}
+            {phase === "cancelled" && (
+              <Section title="Cancelled" defaultOpen tone="active">
+                <ReadField
+                  label="Cancellation reason"
+                  value={row.cancellationReason}
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      openPhaseChange("backlog_needs_assignment")
+                    }
+                    data-testid="button-reopen-cancelled"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen to
+                    Backlog
+                  </Button>
+                </div>
+              </Section>
+            )}
+
+            {/* ---- History ---- */}
+            <Section title="History" defaultOpen={false} tone="default">
+              <AuditTimeline events={row.auditEvents} />
+            </Section>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Delete this project? This cannot be undone.",
+                  )
+                ) {
+                  remove.mutate({ id: row.id });
+                }
+              }}
+              className="mr-auto text-rose-600 hover:text-rose-700"
+              data-testid="button-delete-project"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" /> Delete
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              data-testid="button-close-detail"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {pendingPhase && (
+        <PhaseChangeDialog
+          projectId={row.id}
+          from={phase}
+          to={pendingPhase}
+          mutation={changePhase}
+          onClose={() => setPendingPhase(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ----- Phase change dialog -------------------------------------------------
+
+function PhaseChangeDialog({
+  projectId,
+  from,
+  to,
+  mutation,
+  onClose,
+}: {
+  projectId: number;
+  from: ProjectPhase;
+  to: ProjectPhase;
+  mutation: ReturnType<typeof useChangeProjectPhase>;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [reason, setReason] = useState("");
+  const [holdReason, setHoldReason] = useState("");
+  const [holdNotes, setHoldNotes] = useState("");
+  const [revisitDate, setRevisitDate] = useState("");
+  const [completionSummary, setCompletionSummary] = useState("");
+  const [cancellationReason, setCancellationReason] = useState("");
+
+  const submit = () => {
+    if (to === "on_hold" && !holdReason.trim()) {
+      toast({ title: "Hold reason is required", variant: "destructive" });
+      return;
+    }
+    if (to === "completed" && !completionSummary.trim()) {
+      toast({
+        title: "Completion summary is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (to === "cancelled" && !cancellationReason.trim()) {
+      toast({
+        title: "Cancellation reason is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    mutation.mutate(
+      {
+        id: projectId,
+        data: {
+          to,
+          reason: reason.trim() || undefined,
+          holdReason: holdReason.trim() || undefined,
+          holdNotes: holdNotes.trim() || undefined,
+          revisitDate: revisitDate || undefined,
+          completionSummary: completionSummary.trim() || undefined,
+          cancellationReason: cancellationReason.trim() || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: `Moved to ${PHASE_LABEL[to]}` });
+          onClose();
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        className="sm:max-w-md"
+        data-testid="dialog-phase-change"
+      >
+        <DialogHeader>
+          <DialogTitle>
+            Move from {PHASE_LABEL[from]} → {PHASE_LABEL[to]}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
+          {to === "on_hold" && (
+            <>
+              <Field label="Hold reason" required>
+                <Input
+                  value={holdReason}
+                  onChange={(e) => setHoldReason(e.target.value)}
+                  data-testid="input-hold-reason"
+                />
+              </Field>
+              <Field label="Notes">
+                <Textarea
+                  value={holdNotes}
+                  onChange={(e) => setHoldNotes(e.target.value)}
+                  rows={3}
+                  data-testid="input-hold-notes"
+                />
+              </Field>
+              <Field label="Revisit on">
+                <Input
+                  type="date"
+                  value={revisitDate}
+                  onChange={(e) => setRevisitDate(e.target.value)}
+                  data-testid="input-revisit-date"
+                />
+              </Field>
+            </>
+          )}
+          {to === "completed" && (
+            <Field label="Completion summary" required>
+              <Textarea
+                value={completionSummary}
+                onChange={(e) => setCompletionSummary(e.target.value)}
+                rows={4}
+                placeholder="What was delivered, outcomes, follow-ups…"
+                data-testid="input-completion-summary"
+              />
+            </Field>
+          )}
+          {to === "cancelled" && (
+            <Field label="Cancellation reason" required>
+              <Textarea
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                rows={3}
+                data-testid="input-cancellation-reason"
+              />
+            </Field>
+          )}
+          {to !== "on_hold" &&
+            to !== "completed" &&
+            to !== "cancelled" && (
+              <Field label="Reason (optional)">
+                <Textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={2}
+                  data-testid="input-transition-reason"
+                />
+              </Field>
+            )}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            data-testid="button-phase-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={submit}
+            disabled={mutation.isPending}
+            data-testid="button-phase-confirm"
+          >
+            Confirm move
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ----- Checklist editor ----------------------------------------------------
+
+function ChecklistEditor({
+  projectId,
+  items,
+  readOnly,
+}: {
+  projectId: number;
+  items: ChecklistItem[];
+  readOnly?: boolean;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+  };
+  const onError = (e: Error) =>
+    toast({ title: e.message, variant: "destructive" });
+
+  const add = useAddProjectChecklistItem({
+    mutation: { onSuccess: invalidate, onError },
+  });
+  const upd = useUpdateProjectChecklistItem({
+    mutation: { onSuccess: invalidate, onError },
+  });
+  const del = useDeleteProjectChecklistItem({
+    mutation: { onSuccess: invalidate, onError },
+  });
+  const reorder = useReorderProjectChecklist({
+    mutation: { onSuccess: invalidate, onError },
+  });
+
+  const sorted = useMemo(
+    () =>
+      [...items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+    [items],
+  );
+
+  const [newText, setNewText] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [dragId, setDragId] = useState<string | null>(null);
+
+  const submitNew = () => {
+    if (!newText.trim()) return;
+    add.mutate(
+      { id: projectId, data: { text: newText.trim() } },
+      { onSuccess: () => setNewText("") },
+    );
+  };
+
+  const onDrop = (targetId: string) => {
+    if (!dragId || dragId === targetId) {
+      setDragId(null);
+      return;
+    }
+    const ids = sorted.map((i) => i.id ?? "").filter(Boolean) as string[];
+    const fromIdx = ids.indexOf(dragId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = [...ids];
+    next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, dragId);
+    setDragId(null);
+    reorder.mutate({ id: projectId, data: { itemIds: next } });
+  };
+
+  return (
+    <div className="space-y-2" data-testid="checklist-editor">
+      <div className="flex items-center gap-2 text-[12px] font-medium text-zinc-700">
+        <CheckSquare className="h-3.5 w-3.5" />
+        Checklist
+        <span className="text-muted-foreground font-normal">
+          {sorted.filter((i) => i.done).length} / {sorted.length} done
+        </span>
+      </div>
+      <ul className="space-y-1">
+        {sorted.map((item) => {
+          const id = item.id ?? "";
+          const isEditing = editingId === id;
+          return (
+            <li
+              key={id}
+              draggable={!readOnly && !isEditing}
+              onDragStart={() => setDragId(id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => onDrop(id)}
+              className={`flex items-center gap-2 rounded border border-zinc-200 bg-white px-2 py-1.5 ${
+                dragId === id ? "opacity-50" : ""
+              }`}
+              data-testid={`checklist-item-${id}`}
+            >
+              {!readOnly && (
+                <GripVertical className="h-3.5 w-3.5 text-zinc-400 cursor-grab" />
+              )}
+              <Checkbox
+                checked={item.done}
+                disabled={readOnly}
+                onCheckedChange={(v) =>
+                  upd.mutate({
+                    id: projectId,
+                    itemId: id,
+                    data: { done: !!v },
+                  })
+                }
+                data-testid={`checkbox-checklist-${id}`}
+              />
+              {isEditing ? (
+                <>
+                  <Input
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    className="h-7 text-[13px]"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      upd.mutate(
+                        {
+                          id: projectId,
+                          itemId: id,
+                          data: { text: editingText },
+                        },
+                        { onSuccess: () => setEditingId(null) },
+                      );
+                    }}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditingId(null)}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={`flex-1 text-left text-[13px] ${
+                      item.done
+                        ? "line-through text-muted-foreground"
+                        : "text-zinc-800"
+                    }`}
+                    onClick={() => {
+                      if (readOnly) return;
+                      setEditingId(id);
+                      setEditingText(item.text);
+                    }}
+                  >
+                    {item.text}
+                  </button>
+                  {!readOnly && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() =>
+                        del.mutate({ id: projectId, itemId: id })
+                      }
+                      data-testid={`button-delete-checklist-${id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </>
+              )}
+            </li>
+          );
+        })}
+        {sorted.length === 0 && (
+          <li className="text-[12px] text-muted-foreground italic px-1 py-2">
+            No items yet.
+          </li>
+        )}
+      </ul>
+      {!readOnly && (
+        <div className="flex gap-2 pt-1">
+          <Input
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitNew();
+              }
+            }}
+            placeholder="Add a checklist item…"
+            className="h-8 text-[13px]"
+            data-testid="input-new-checklist"
+          />
+          <Button
+            size="sm"
+            onClick={submitNew}
+            disabled={add.isPending || !newText.trim()}
+            data-testid="button-add-checklist"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ----- Audit timeline ------------------------------------------------------
+
+function AuditTimeline({ events }: { events: ProjectAuditEvent[] }) {
+  if (events.length === 0) {
+    return (
+      <p className="text-[12px] text-muted-foreground italic">
+        No history yet.
+      </p>
+    );
+  }
+  return (
+    <ol className="space-y-2" data-testid="audit-timeline">
+      {events.map((ev) => (
+        <li
+          key={ev.id}
+          className="flex items-start gap-2 text-[12px]"
+          data-testid={`audit-event-${ev.id}`}
+        >
+          <History className="h-3.5 w-3.5 text-zinc-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-zinc-800">
+              <span className="font-medium">{prettyAction(ev.action)}</span>
+              {ev.oldPhase && ev.newPhase && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {labelPhase(ev.oldPhase)} → {labelPhase(ev.newPhase)}
+                </span>
+              )}
+            </div>
+            <div className="text-muted-foreground">
+              {ev.changedByName ?? "System"} ·{" "}
+              {new Date(ev.changedAt).toLocaleString()}
+            </div>
+            {ev.reason && (
+              <div className="text-zinc-600 italic mt-0.5">
+                "{ev.reason}"
+              </div>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function prettyAction(a: string) {
+  switch (a) {
+    case "created":
+      return "Created";
+    case "created_from_initiative":
+      return "Created from initiative";
+    case "phase_changed":
+      return "Phase changed";
+    case "hold_started":
+      return "Put on hold";
+    case "hold_resumed":
+      return "Resumed from hold";
+    case "completed":
+      return "Completed";
+    case "cancelled":
+      return "Cancelled";
+    case "reopened":
+      return "Reopened";
+    case "checklist_added":
+      return "Checklist item added";
+    case "checklist_edited":
+      return "Checklist item edited";
+    case "checklist_removed":
+      return "Checklist item removed";
+    case "checklist_checked":
+      return "Checklist item checked";
+    case "checklist_unchecked":
+      return "Checklist item unchecked";
+    case "checklist_reordered":
+      return "Checklist reordered";
+    default:
+      return a.replace(/_/g, " ");
+  }
+}
+
+function labelPhase(p: string) {
+  return PHASE_LABEL[p as ProjectPhase] ?? p.replace(/_/g, " ");
+}
+
+// ----- Phase progress bar --------------------------------------------------
+
+function PhaseProgress({ phase }: { phase: ProjectPhase }) {
+  // Off-track phases don't fit the linear flow — show a banner instead.
+  const isOnHold = phase === "on_hold";
+  const isCancelled = phase === "cancelled";
+  const stages: {
+    key: ProjectPhase;
+    label: string;
+    state: "done" | "active" | "future";
+  }[] = [
+    {
+      key: "backlog_needs_assignment",
+      label: "Backlog",
+      state:
+        phase === "backlog_needs_assignment"
+          ? "active"
+          : "done",
+    },
+    {
+      key: "planning",
+      label: "Planning",
+      state:
+        phase === "backlog_needs_assignment"
+          ? "future"
+          : phase === "planning"
+            ? "active"
+            : "done",
+    },
+    {
+      key: "in_progress",
+      label: "In Progress",
+      state:
+        phase === "in_progress"
+          ? "active"
+          : phase === "completed"
+            ? "done"
+            : "future",
+    },
+    {
+      key: "completed",
+      label: "Completed",
+      state: phase === "completed" ? "active" : "future",
+    },
+  ];
+
+  return (
+    <div className="space-y-2">
+      {(isOnHold || isCancelled) && (
+        <div
+          className={
+            isOnHold
+              ? "rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] text-amber-900 inline-flex items-center gap-1.5"
+              : "rounded border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[12px] text-rose-900 inline-flex items-center gap-1.5"
+          }
+          data-testid="phase-banner"
+        >
+          {isOnHold ? (
+            <>
+              <Pause className="h-3 w-3" /> On hold
+            </>
+          ) : (
+            <>
+              <Square className="h-3 w-3" /> Cancelled
+            </>
+          )}
+        </div>
+      )}
+      <div
+        className="flex items-center gap-2"
+        data-testid="phase-progress"
+      >
+        {stages.map((s, idx) => {
+          const baseChip =
+            s.state === "active"
+              ? "flex items-center gap-1.5 text-[11.5px] font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 flex-1 justify-center"
+              : s.state === "done"
+                ? "flex items-center gap-1.5 text-[11.5px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 flex-1 justify-center"
+                : "flex items-center gap-1.5 text-[11.5px] text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-full px-2.5 py-1 flex-1 justify-center";
+          return (
+            <div key={s.key} className="flex items-center gap-2 flex-1">
+              <div
+                className={baseChip}
+                data-testid={`phase-${s.key}-${s.state}`}
+              >
+                {s.state === "done" ? (
+                  <CheckCircle2 className="h-3 w-3" />
+                ) : s.state === "active" ? (
+                  <CircleDashed className="h-3 w-3" />
+                ) : null}
+                {s.label}
+              </div>
+              {idx < stages.length - 1 && (
+                <div
+                  className={
+                    s.state === "done"
+                      ? "h-px flex-1 bg-emerald-300"
+                      : "h-px flex-1 bg-zinc-200"
+                  }
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ----- Section / Field / ReadField primitives -----------------------------
+// Mirrored from initiatives.tsx so the project dialog has the same
+// "current step / done / default" tone vocabulary without coupling.
+
+function Section({
+  title,
+  defaultOpen,
+  tone = "default",
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  tone?: "active" | "done" | "default";
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  const wrapClass =
+    tone === "active"
+      ? "rounded-md border-2 border-amber-300 bg-amber-50/60 ring-1 ring-amber-200/60 shadow-sm"
+      : tone === "done"
+        ? "rounded-md border border-zinc-200 bg-zinc-50"
+        : "rounded-md border border-zinc-200 bg-white";
+  const titleClass =
+    tone === "active"
+      ? "flex items-center gap-2 text-[13px] font-semibold text-amber-900"
+      : tone === "done"
+        ? "flex items-center gap-2 text-[13px] font-medium text-zinc-500"
+        : "flex items-center gap-2 text-[13px] font-medium text-zinc-800";
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className={wrapClass}>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-3 py-2 text-left"
+          >
+            <div className={titleClass}>
+              {tone === "active" && (
+                <span className="inline-flex items-center text-[10px] uppercase tracking-wide font-semibold text-amber-800 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
+                  Current step
+                </span>
+              )}
+              {tone === "done" && (
+                <CheckCircle2 className="h-3.5 w-3.5 text-zinc-400" />
+              )}
+              {title}
+            </div>
+            <ChevronDown
+              className={`h-4 w-4 text-zinc-500 transition ${
+                open ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <Separator />
+          <div className="p-3 space-y-3">{children}</div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[12px] font-medium text-zinc-700">
+        {label}
+        {required && <span className="text-rose-600 ml-0.5">*</span>}
+      </Label>
+      {children}
+    </div>
+  );
+}
+
+function ReadField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="text-[11px] uppercase tracking-wide text-zinc-500">
+        {label}
+      </div>
+      <div className="text-[13px] text-zinc-800 whitespace-pre-wrap">
+        {value && value.trim() ? value : "—"}
+      </div>
+    </div>
+  );
+}

@@ -6,15 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ChecklistItem {
-  /** @nullable */
-  id?: string | null;
+export interface AddChecklistItemInput {
+  text: string;
   /** @nullable */
   position?: number | null;
-  text: string;
-  done: boolean;
   /** @nullable */
   assigneeId?: number | null;
-  /** @nullable */
-  assigneeName?: string | null;
 }

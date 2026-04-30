@@ -1,10 +1,13 @@
 import { Router, type IRouter } from "express";
+import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, max, or, sql } from "drizzle-orm";
 import {
   db,
   projectsTable,
   departmentBucketsTable,
   projectCommentsTable,
+  projectAuditEventsTable,
+  initiativesTable,
   departmentsTable,
   usersTable,
   type TaskLabel,
@@ -28,6 +31,10 @@ import {
   CreateProjectCommentParams,
   CreateProjectCommentBody,
   DeleteProjectCommentParams,
+  ChangeProjectPhaseBody,
+  AddProjectChecklistItemBody,
+  UpdateProjectChecklistItemBody,
+  ReorderProjectChecklistBody,
 } from "@workspace/api-zod";
 import { getCurrentUser, type SessionUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
@@ -41,7 +48,29 @@ import {
 const router: IRouter = Router();
 
 type ProjectStatus = "active" | "on_hold" | "completed" | "archived";
+type ProjectPhase =
+  | "backlog_needs_assignment"
+  | "planning"
+  | "in_progress"
+  | "on_hold"
+  | "completed"
+  | "cancelled";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+// Allowed phase transitions (the source of truth for the phase
+// state machine). Anything not present in this map → 409.
+const PHASE_TRANSITIONS: Record<ProjectPhase, ReadonlyArray<ProjectPhase>> = {
+  backlog_needs_assignment: ["planning", "cancelled"],
+  planning: ["in_progress", "on_hold", "cancelled"],
+  in_progress: ["completed", "planning", "on_hold", "cancelled"],
+  // Reopen / resume paths.
+  completed: ["in_progress"],
+  cancelled: ["backlog_needs_assignment"],
+  // on_hold can resume to whatever phase it came from
+  // (validated dynamically against `previousActivePhase`) or be
+  // cancelled outright.
+  on_hold: ["planning", "in_progress", "cancelled"],
+};
 
 // The seven phase columns every department starts with. Kept in sync with
 // the data migration that bootstrapped existing departments.
@@ -193,17 +222,49 @@ function bucketToDto(row: BucketRow) {
   };
 }
 
+// Drizzle's `date()` columns are stored as `string` in YYYY-MM-DD
+// form, but the OpenAPI spec marks them as `format: date` which the
+// generated zod parser hands back as a `Date` (or null/undefined).
+// This shim accepts either shape so the route handlers can stay
+// agnostic about the codegen output.
+function toDateString(
+  v: Date | string | null | undefined,
+): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return v;
+}
+
+// Convert a stored checklist (which may contain rows that pre-date the
+// id+position migration) into a fully-populated, position-sorted array
+// with stable ids. Pure: does NOT write back; the route handlers
+// persist the normalized array on first mutation.
+function normalizeChecklist(raw: ChecklistItem[]): ChecklistItem[] {
+  const withMeta = raw.map((item, idx) => ({
+    id: item.id ?? randomUUID(),
+    position: typeof item.position === "number" ? item.position : idx,
+    text: item.text,
+    done: item.done,
+    assigneeId: item.assigneeId ?? null,
+  }));
+  withMeta.sort((a, b) => a.position - b.position);
+  return withMeta.map((item, idx) => ({ ...item, position: idx }));
+}
+
 async function summarizeProjects(rows: ProjectRow[]) {
   if (rows.length === 0) return [];
   const projectIds = rows.map((r) => r.id);
   const deptIdSet = new Set<number>();
   const userIdSet = new Set<number>();
   const bucketIdSet = new Set<number>();
+  const initiativeIdSet = new Set<number>();
   for (const r of rows) {
     if (r.departmentId != null) deptIdSet.add(r.departmentId);
     if (r.bucketId != null) bucketIdSet.add(r.bucketId);
     if (r.ownerId != null) userIdSet.add(r.ownerId);
     if (r.suggestedById != null) userIdSet.add(r.suggestedById);
+    if (r.linkedInitiativeId != null) initiativeIdSet.add(r.linkedInitiativeId);
     for (const d of (r.impactedDepartmentIds ?? []) as number[]) {
       deptIdSet.add(d);
     }
@@ -214,8 +275,9 @@ async function summarizeProjects(rows: ProjectRow[]) {
   const deptIds = Array.from(deptIdSet);
   const userIds = Array.from(userIdSet);
   const bucketIds = Array.from(bucketIdSet);
+  const initiativeIds = Array.from(initiativeIdSet);
 
-  const [buckets, depts, users, commentRows] = await Promise.all([
+  const [buckets, depts, users, commentRows, initiatives] = await Promise.all([
     bucketIds.length
       ? db
           .select()
@@ -239,20 +301,34 @@ async function summarizeProjects(rows: ProjectRow[]) {
       .from(projectCommentsTable)
       .where(inArray(projectCommentsTable.projectId, projectIds))
       .groupBy(projectCommentsTable.projectId),
+    initiativeIds.length
+      ? db
+          .select({
+            id: initiativesTable.id,
+            title: initiativesTable.title,
+          })
+          .from(initiativesTable)
+          .where(inArray(initiativesTable.id, initiativeIds))
+      : Promise.resolve([] as Array<{ id: number; title: string }>),
   ]);
 
   const bucketMap = new Map(buckets.map((b) => [b.id, b]));
   const deptMap = new Map(depts.map((d) => [d.id, d]));
   const userMap = new Map(users.map((u) => [u.id, u]));
   const commentCounts = new Map(commentRows.map((r) => [r.projectId, r.count]));
+  const initiativeMap = new Map(initiatives.map((i) => [i.id, i.title]));
 
   return rows.map((r) => {
     const impactedIds = (r.impactedDepartmentIds ?? []) as number[];
     const impactedNames = impactedIds
       .map((id) => deptMap.get(id)?.name)
       .filter((n): n is string => typeof n === "string");
-    const rawChecklist = (r.checklist ?? []) as ChecklistItem[];
-    const checklist = rawChecklist.map((item) => ({
+    const normalized = normalizeChecklist(
+      (r.checklist ?? []) as ChecklistItem[],
+    );
+    const checklist = normalized.map((item) => ({
+      id: item.id ?? null,
+      position: item.position ?? null,
       text: item.text,
       done: item.done,
       assigneeId: item.assigneeId ?? null,
@@ -268,6 +344,8 @@ async function summarizeProjects(rows: ProjectRow[]) {
       name: r.name,
       description: r.description,
       color: r.color,
+      phase: r.phase as ProjectPhase,
+      previousActivePhase: r.previousActivePhase ?? null,
       status: r.status as ProjectStatus,
       departmentId: r.departmentId ?? null,
       departmentName: r.departmentId
@@ -278,6 +356,22 @@ async function summarizeProjects(rows: ProjectRow[]) {
       ownerId: r.ownerId ?? null,
       ownerName: r.ownerId ? (userMap.get(r.ownerId)?.name ?? null) : null,
       dueAt: r.dueAt ? r.dueAt.toISOString() : null,
+      assignedTeam: r.assignedTeam,
+      startDate: r.startDate ?? null,
+      endDate: r.endDate ?? null,
+      planningNotes: r.planningNotes,
+      statusUpdate: r.statusUpdate,
+      holdReason: r.holdReason,
+      holdNotes: r.holdNotes,
+      revisitDate: r.revisitDate ?? null,
+      completionSummary: r.completionSummary,
+      completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+      cancellationReason: r.cancellationReason,
+      linkedInitiativeId: r.linkedInitiativeId ?? null,
+      linkedInitiativeTitle:
+        r.linkedInitiativeId != null
+          ? (initiativeMap.get(r.linkedInitiativeId) ?? null)
+          : null,
       suggestedById: r.suggestedById ?? null,
       suggestedByName: r.suggestedById
         ? (userMap.get(r.suggestedById)?.name ?? null)
@@ -301,6 +395,38 @@ async function summarizeProjects(rows: ProjectRow[]) {
   });
 }
 
+// Hydrate audit events with the changedBy display name. Used only by
+// the project detail endpoint (list endpoint omits audit events to
+// keep payloads small).
+async function loadAuditEvents(projectId: number) {
+  const rows = await db
+    .select()
+    .from(projectAuditEventsTable)
+    .where(eq(projectAuditEventsTable.projectId, projectId))
+    .orderBy(desc(projectAuditEventsTable.changedAt));
+  if (rows.length === 0) return [];
+  const userIds = Array.from(
+    new Set(rows.map((r) => r.changedById).filter((v): v is number => v != null)),
+  );
+  const users = userIds.length
+    ? await db.select().from(usersTable).where(inArray(usersTable.id, userIds))
+    : [];
+  const userMap = new Map(users.map((u) => [u.id, u]));
+  return rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    oldPhase: r.oldPhase ?? null,
+    newPhase: r.newPhase ?? null,
+    reason: r.reason,
+    detail: (r.detail ?? {}) as Record<string, unknown>,
+    changedById: r.changedById ?? null,
+    changedByName: r.changedById
+      ? (userMap.get(r.changedById)?.name ?? null)
+      : null,
+    changedAt: r.changedAt.toISOString(),
+  }));
+}
+
 async function detailProject(id: number) {
   const [project] = await db
     .select()
@@ -308,7 +434,36 @@ async function detailProject(id: number) {
     .where(eq(projectsTable.id, id));
   if (!project) return null;
   const [summary] = await summarizeProjects([project]);
-  return summary;
+  const auditEvents = await loadAuditEvents(id);
+  return { ...summary, auditEvents };
+}
+
+// Insert one audit event row. Pass the transaction handle (`tx`)
+// when the audit row must be atomic with another write so the two
+// rows succeed or fail together. When no `tx` is supplied the row
+// is inserted using the default db connection.
+type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+async function writeAudit(
+  executor: DbExecutor,
+  projectId: number,
+  action: string,
+  opts: {
+    oldPhase?: string | null;
+    newPhase?: string | null;
+    reason?: string;
+    detail?: Record<string, unknown>;
+    changedById: number | null;
+  },
+) {
+  await executor.insert(projectAuditEventsTable).values({
+    projectId,
+    action,
+    oldPhase: opts.oldPhase ?? null,
+    newPhase: opts.newPhase ?? null,
+    reason: opts.reason ?? "",
+    detail: opts.detail ?? {},
+    changedById: opts.changedById,
+  });
 }
 
 // ---------- Routes: Projects ----------
@@ -419,29 +574,44 @@ router.post("/projects", async (req, res): Promise<void> => {
     completedYear = new Date().getUTCFullYear();
   }
 
-  const [row] = await db
-    .insert(projectsTable)
-    .values({
-      name: parsed.data.name,
-      description: parsed.data.description ?? "",
-      color: parsed.data.color ?? "#4B9CD3",
-      status: parsed.data.status ?? "active",
-      departmentId: parsed.data.departmentId ?? null,
-      bucketId,
-      ownerId: parsed.data.ownerId ?? user.id,
-      dueAt,
-      suggestedById: parsed.data.suggestedById ?? user.id,
-      goal: parsed.data.goal ?? "",
-      implementation: parsed.data.implementation ?? "",
-      rationale: parsed.data.rationale ?? "",
-      impactedDepartmentIds: parsed.data.impactedDepartmentIds ?? [],
-      additionalComments: parsed.data.additionalComments ?? "",
-      completedYear,
-      labels: parsed.data.labels ?? [],
-      priority: parsed.data.priority ?? "medium",
-      checklist: sanitizeChecklist(parsed.data.checklist),
-    })
-    .returning();
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(projectsTable)
+      .values({
+        name: parsed.data.name,
+        description: parsed.data.description ?? "",
+        color: parsed.data.color ?? "#4B9CD3",
+        phase: (parsed.data.phase as ProjectPhase | undefined) ??
+          "backlog_needs_assignment",
+        status: parsed.data.status ?? "active",
+        departmentId: parsed.data.departmentId ?? null,
+        bucketId,
+        ownerId: parsed.data.ownerId ?? user.id,
+        assignedTeam: parsed.data.assignedTeam ?? "",
+        startDate: toDateString(parsed.data.startDate) ?? null,
+        endDate: toDateString(parsed.data.endDate) ?? null,
+        dueAt,
+        planningNotes: parsed.data.planningNotes ?? "",
+        statusUpdate: parsed.data.statusUpdate ?? "",
+        linkedInitiativeId: parsed.data.linkedInitiativeId ?? null,
+        suggestedById: parsed.data.suggestedById ?? user.id,
+        goal: parsed.data.goal ?? "",
+        implementation: parsed.data.implementation ?? "",
+        rationale: parsed.data.rationale ?? "",
+        impactedDepartmentIds: parsed.data.impactedDepartmentIds ?? [],
+        additionalComments: parsed.data.additionalComments ?? "",
+        completedYear,
+        labels: parsed.data.labels ?? [],
+        priority: parsed.data.priority ?? "medium",
+        checklist: normalizeChecklist(sanitizeChecklist(parsed.data.checklist)),
+      })
+      .returning();
+    await writeAudit(tx, inserted.id, "created", {
+      newPhase: inserted.phase,
+      changedById: user.id,
+    });
+    return inserted;
+  });
 
   const detail = await detailProject(row.id);
   res.status(201).json(detail);
@@ -590,8 +760,18 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   // the project pinned to a bucket from its old department.
   if (resolvedBucketId !== undefined) updates.bucketId = resolvedBucketId;
   if (parsed.data.ownerId !== undefined) updates.ownerId = parsed.data.ownerId;
+  if (parsed.data.assignedTeam !== undefined)
+    updates.assignedTeam = parsed.data.assignedTeam;
+  if (parsed.data.startDate !== undefined)
+    updates.startDate = toDateString(parsed.data.startDate) ?? null;
+  if (parsed.data.endDate !== undefined)
+    updates.endDate = toDateString(parsed.data.endDate) ?? null;
   if (parsed.data.dueAt !== undefined)
     updates.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
+  if (parsed.data.planningNotes !== undefined)
+    updates.planningNotes = parsed.data.planningNotes;
+  if (parsed.data.statusUpdate !== undefined)
+    updates.statusUpdate = parsed.data.statusUpdate;
   if (parsed.data.suggestedById !== undefined)
     updates.suggestedById = parsed.data.suggestedById;
   if (parsed.data.goal !== undefined) updates.goal = parsed.data.goal;
@@ -608,7 +788,13 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   if (parsed.data.labels !== undefined) updates.labels = parsed.data.labels;
   if (parsed.data.priority !== undefined) updates.priority = parsed.data.priority;
   if (parsed.data.checklist !== undefined)
-    updates.checklist = sanitizeChecklist(parsed.data.checklist);
+    updates.checklist = normalizeChecklist(
+      sanitizeChecklist(parsed.data.checklist),
+    );
+  // NOTE: `phase` is intentionally NOT applied here. All phase
+  // transitions go through POST /projects/:id/phase so the audit
+  // trail and side-state bookkeeping (previousActivePhase,
+  // completedAt, holdReason, etc.) stay atomic.
 
   // Auto-stamp completedYear when card moves into a "Completed" bucket and
   // clear it when moving out — but only if the caller didn't explicitly set
@@ -658,6 +844,349 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
   }
   res.sendStatus(204);
 });
+
+// ---------- Routes: Phase transitions ----------
+
+// Helper used by every checklist mutation: parse params, authorize,
+// load + normalize the checklist, then return everything the handler
+// needs. Kept here so the four endpoints (add / patch / delete /
+// reorder) stay short and focused.
+async function loadProjectForChecklistMutation(
+  req: import("express").Request,
+  res: import("express").Response,
+): Promise<{
+  user: SessionUser;
+  project: typeof projectsTable.$inferSelect;
+  checklist: ChecklistItem[];
+} | null> {
+  const user = await getCurrentUser(req);
+  if (user.role === "end_user") {
+    res.status(403).json({ error: "Forbidden" });
+    return null;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid project id" });
+    return null;
+  }
+  const [project] = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.id, id));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return null;
+  }
+  if (!(await authorizeProjectAccess(user, project, "modify"))) {
+    res.status(403).json({ error: "Forbidden on this project" });
+    return null;
+  }
+  const checklist = normalizeChecklist((project.checklist ?? []) as ChecklistItem[]);
+  return { user, project, checklist };
+}
+
+router.post("/projects/:id/phase", async (req, res): Promise<void> => {
+  const user = await getCurrentUser(req);
+  if (user.role === "end_user") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid project id" });
+    return;
+  }
+  const parsed = ChangeProjectPhaseBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+  if (!(await authorizeProjectAccess(user, existing, "modify"))) {
+    res.status(403).json({ error: "Forbidden on this project" });
+    return;
+  }
+
+  const from = existing.phase as ProjectPhase;
+  const to = parsed.data.to as ProjectPhase;
+  if (from === to) {
+    res.status(409).json({ error: `Project is already in phase ${to}` });
+    return;
+  }
+
+  // Validate the legal transition. on_hold → resume requires the
+  // target to match `previousActivePhase` (or fall back to `planning`
+  // if the on-hold record was created before this field existed).
+  const allowed = PHASE_TRANSITIONS[from] ?? [];
+  if (!allowed.includes(to)) {
+    res.status(409).json({
+      error: `Cannot move from ${from} to ${to}`,
+    });
+    return;
+  }
+  if (from === "on_hold" && to !== "cancelled") {
+    const expected =
+      (existing.previousActivePhase as ProjectPhase | null) ?? "planning";
+    if (to !== expected) {
+      res.status(409).json({
+        error:
+          `Resume from on_hold must return to ${expected} ` +
+          `(was: previousActivePhase=${existing.previousActivePhase ?? "null"})`,
+      });
+      return;
+    }
+  }
+
+  const updates: Partial<typeof projectsTable.$inferInsert> = { phase: to };
+  let action = "phase_changed";
+
+  if (to === "on_hold") {
+    // Going on hold from an active phase — remember where to come back to.
+    updates.previousActivePhase = from;
+    if (parsed.data.holdReason !== undefined)
+      updates.holdReason = parsed.data.holdReason;
+    if (parsed.data.holdNotes !== undefined)
+      updates.holdNotes = parsed.data.holdNotes;
+    if (parsed.data.revisitDate !== undefined)
+      updates.revisitDate = toDateString(parsed.data.revisitDate) ?? null;
+    action = "hold_started";
+  } else if (from === "on_hold") {
+    // Resuming or cancelling out of on_hold — clear the bookkeeping.
+    updates.previousActivePhase = null;
+    if (to !== "cancelled") action = "hold_resumed";
+  }
+
+  if (to === "completed") {
+    updates.completedAt = new Date();
+    if (parsed.data.completionSummary !== undefined)
+      updates.completionSummary = parsed.data.completionSummary;
+    // Mirror to legacy status for back-compat.
+    updates.status = "completed";
+    action = "completed";
+  } else if (to === "cancelled") {
+    if (parsed.data.cancellationReason !== undefined)
+      updates.cancellationReason = parsed.data.cancellationReason;
+    updates.status = "archived";
+    action = "cancelled";
+  } else if (from === "completed" || from === "cancelled") {
+    // Reopen → clear the closing-side fields and remap legacy status.
+    if (from === "completed") updates.completedAt = null;
+    updates.status = to === "in_progress" ? "active" : "active";
+    action = "reopened";
+  } else if (to === "in_progress") {
+    updates.status = "active";
+    if (parsed.data.statusUpdate !== undefined)
+      updates.statusUpdate = parsed.data.statusUpdate;
+  } else if (to === "planning") {
+    updates.status = "active";
+    if (parsed.data.planningNotes !== undefined)
+      updates.planningNotes = parsed.data.planningNotes;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(projectsTable)
+      .set(updates)
+      .where(eq(projectsTable.id, id));
+    await writeAudit(tx, id, action, {
+      oldPhase: from,
+      newPhase: to,
+      reason: parsed.data.reason ?? "",
+      changedById: user.id,
+    });
+  });
+
+  const detail = await detailProject(id);
+  res.json(detail);
+});
+
+// ---------- Routes: Checklist CRUD ----------
+
+router.post("/projects/:id/checklist", async (req, res): Promise<void> => {
+  const ctx = await loadProjectForChecklistMutation(req, res);
+  if (!ctx) return;
+  const parsed = AddProjectChecklistItemBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const text = parsed.data.text.trim();
+  if (!text) {
+    res.status(400).json({ error: "text is required" });
+    return;
+  }
+  const newItem: ChecklistItem = {
+    id: randomUUID(),
+    position: ctx.checklist.length,
+    text,
+    done: false,
+    assigneeId: parsed.data.assigneeId ?? null,
+  };
+  // Honour explicit position by inserting and renumbering.
+  const next = [...ctx.checklist];
+  if (
+    typeof parsed.data.position === "number" &&
+    parsed.data.position >= 0 &&
+    parsed.data.position < next.length
+  ) {
+    next.splice(parsed.data.position, 0, newItem);
+  } else {
+    next.push(newItem);
+  }
+  const renumbered = next.map((item, idx) => ({ ...item, position: idx }));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(projectsTable)
+      .set({ checklist: renumbered })
+      .where(eq(projectsTable.id, ctx.project.id));
+    await writeAudit(tx, ctx.project.id, "checklist_added", {
+      detail: { itemId: newItem.id, text },
+      changedById: ctx.user.id,
+    });
+  });
+  const detail = await detailProject(ctx.project.id);
+  res.json(detail);
+});
+
+router.patch(
+  "/projects/:id/checklist/:itemId",
+  async (req, res): Promise<void> => {
+    const ctx = await loadProjectForChecklistMutation(req, res);
+    if (!ctx) return;
+    const itemId = req.params.itemId;
+    const parsed = UpdateProjectChecklistItemBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const idx = ctx.checklist.findIndex((it) => it.id === itemId);
+    if (idx < 0) {
+      res.status(404).json({ error: "Checklist item not found" });
+      return;
+    }
+    const before = ctx.checklist[idx];
+    const next = [...ctx.checklist];
+    const updated: ChecklistItem = {
+      ...before,
+      text: parsed.data.text !== undefined ? parsed.data.text : before.text,
+      done: parsed.data.done !== undefined ? parsed.data.done : before.done,
+      assigneeId:
+        parsed.data.assigneeId !== undefined
+          ? parsed.data.assigneeId
+          : (before.assigneeId ?? null),
+    };
+    next[idx] = updated;
+
+    // Optional reposition: pluck and re-insert, then renumber.
+    let positioned = next;
+    if (
+      typeof parsed.data.position === "number" &&
+      parsed.data.position !== idx
+    ) {
+      positioned = next.filter((_, i) => i !== idx);
+      const target = Math.max(0, Math.min(positioned.length, parsed.data.position));
+      positioned.splice(target, 0, updated);
+    }
+    const renumbered = positioned.map((item, i) => ({ ...item, position: i }));
+    // Pick the most specific audit action so the History panel can
+    // render a meaningful one-liner.
+    let action = "checklist_edited";
+    if (parsed.data.done !== undefined && parsed.data.done !== before.done) {
+      action = parsed.data.done ? "checklist_checked" : "checklist_unchecked";
+    }
+    await db.transaction(async (tx) => {
+      await tx
+        .update(projectsTable)
+        .set({ checklist: renumbered })
+        .where(eq(projectsTable.id, ctx.project.id));
+      await writeAudit(tx, ctx.project.id, action, {
+        detail: { itemId, text: updated.text },
+        changedById: ctx.user.id,
+      });
+    });
+
+    const detail = await detailProject(ctx.project.id);
+    res.json(detail);
+  },
+);
+
+router.delete(
+  "/projects/:id/checklist/:itemId",
+  async (req, res): Promise<void> => {
+    const ctx = await loadProjectForChecklistMutation(req, res);
+    if (!ctx) return;
+    const itemId = req.params.itemId;
+    const idx = ctx.checklist.findIndex((it) => it.id === itemId);
+    if (idx < 0) {
+      res.status(404).json({ error: "Checklist item not found" });
+      return;
+    }
+    const removed = ctx.checklist[idx];
+    const next = ctx.checklist
+      .filter((_, i) => i !== idx)
+      .map((item, i) => ({ ...item, position: i }));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(projectsTable)
+        .set({ checklist: next })
+        .where(eq(projectsTable.id, ctx.project.id));
+      await writeAudit(tx, ctx.project.id, "checklist_removed", {
+        detail: { itemId, text: removed.text },
+        changedById: ctx.user.id,
+      });
+    });
+    const detail = await detailProject(ctx.project.id);
+    res.json(detail);
+  },
+);
+
+router.post(
+  "/projects/:id/checklist/reorder",
+  async (req, res): Promise<void> => {
+    const ctx = await loadProjectForChecklistMutation(req, res);
+    if (!ctx) return;
+    const parsed = ReorderProjectChecklistBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const ids = parsed.data.itemIds;
+    const knownIds = new Set(ctx.checklist.map((it) => it.id));
+    if (
+      ids.length !== ctx.checklist.length ||
+      !ids.every((id) => knownIds.has(id))
+    ) {
+      res
+        .status(400)
+        .json({ error: "itemIds must be a permutation of this project's items" });
+      return;
+    }
+    const byId = new Map(ctx.checklist.map((it) => [it.id, it]));
+    const next = ids.map((id, i) => ({
+      ...(byId.get(id) as ChecklistItem),
+      position: i,
+    }));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(projectsTable)
+        .set({ checklist: next })
+        .where(eq(projectsTable.id, ctx.project.id));
+      await writeAudit(tx, ctx.project.id, "checklist_reordered", {
+        detail: { itemIds: ids },
+        changedById: ctx.user.id,
+      });
+    });
+    const detail = await detailProject(ctx.project.id);
+    res.json(detail);
+  },
+);
 
 // ---------- Routes: Department board (Kanban) ----------
 

@@ -7,6 +7,7 @@
  */
 
 export * from "./addBoardMemberInput";
+export * from "./addChecklistItemInput";
 export * from "./addTicketCommentInput";
 export * from "./addTicketCommentInputKind";
 export * from "./agent";
@@ -21,6 +22,7 @@ export * from "./assetType";
 export * from "./boardMember";
 export * from "./boardRole";
 export * from "./cancelWorkflowRunInput";
+export * from "./changeProjectPhaseInput";
 export * from "./checklistItem";
 export * from "./createAgentInput";
 export * from "./createApplicationInput";
@@ -108,10 +110,14 @@ export * from "./listWorkflowsModule";
 export * from "./listWorkflowsParams";
 export * from "./listWorkflowsStatus";
 export * from "./person";
+export * from "./projectAuditEvent";
+export * from "./projectAuditEventDetail";
 export * from "./projectComment";
 export * from "./projectDetail";
+export * from "./projectPhase";
 export * from "./projectStatus";
 export * from "./projectSummary";
+export * from "./reorderChecklistInput";
 export * from "./riskRule";
 export * from "./riskRuleRiskLevel";
 export * from "./role";
@@ -156,6 +162,7 @@ export * from "./updateAssetInputSite";
 export * from "./updateAssetInputStatus";
 export * from "./updateAssetInputType";
 export * from "./updateBoardMemberInput";
+export * from "./updateChecklistItemInput";
 export * from "./updateDepartmentBucketInput";
 export * from "./updateDepartmentInput";
 export * from "./updateDepartmentSettingsInput";
