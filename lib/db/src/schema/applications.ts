@@ -7,7 +7,7 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
-// Software applications used across EW Howell (M365, Bluebeam, Procore,
+// Software applications used across <Client Name> (M365, Bluebeam, Procore,
 // SAGE 300, etc). Tracked centrally so admins can see ownership, license
 // usage, and which department each app is tied to.
 export const applicationsTable = pgTable("applications", {

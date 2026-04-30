@@ -171,7 +171,7 @@ export function SideNav({ session }: { session: Session | null }) {
             className="block w-full h-auto object-contain max-h-20"
           />
           <p className="text-[11px] uppercase tracking-[0.18em] text-sidebar-foreground/65 px-0.5">
-            E.W. Howell
+            &lt;Client Name&gt;
           </p>
         </Link>
       </div>

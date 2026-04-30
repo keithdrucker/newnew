@@ -236,7 +236,9 @@ export async function downloadClosedProjectReport(
       <Page size="LETTER" style={styles.page}>
         <View style={styles.topBar} fixed />
         <View style={styles.brandRow}>
-          <Text style={styles.brand}>EW HOWELL · HARMONY ITSM</Text>
+          <Text style={styles.brand}>
+            {"<CLIENT NAME>"} · HARMONY ITSM
+          </Text>
           <Text style={styles.reportLabel}>PROJECT CLOSEOUT REPORT</Text>
         </View>
         <Text style={styles.title}>{project.name}</Text>
