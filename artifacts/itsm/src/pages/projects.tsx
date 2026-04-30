@@ -64,6 +64,60 @@ function formatDue(iso: string | null | undefined) {
   });
 }
 
+// Backlog sub-status is purely derived — there is no `subStatus` column. A
+// project sits in Backlog as "Scheduled" once it has an owner AND both a
+// start and an anticipated completion date; otherwise it's "Needs Assignment".
+// Removing any of those three reverts the badge automatically. Sub-status is
+// for clarity only — the project never leaves the Backlog phase column.
+export type BacklogSubStatus = "needs_assignment" | "scheduled";
+
+export function backlogSubStatus(p: {
+  ownerId?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}): BacklogSubStatus {
+  return p.ownerId != null && p.startDate != null && p.endDate != null
+    ? "scheduled"
+    : "needs_assignment";
+}
+
+// Days between today (UTC date-only) and an ISO `YYYY-MM-DD` date string.
+// Positive = future, 0 = today, negative = past. Returns null if no date.
+export function daysFromTodayTo(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const today = Date.UTC(
+    Number(todayISO.slice(0, 4)),
+    Number(todayISO.slice(5, 7)) - 1,
+    Number(todayISO.slice(8, 10)),
+  );
+  const target = Date.UTC(
+    Number(iso.slice(0, 4)),
+    Number(iso.slice(5, 7)) - 1,
+    Number(iso.slice(8, 10)),
+  );
+  return Math.round((target - today) / (1000 * 60 * 60 * 24));
+}
+
+// Dynamic, human-friendly label for a Backlog start date.
+// `tone` indicates whether the schedule is healthy ("ok") or has slipped
+// ("late"); the caller styles accordingly (rose for "late").
+export function startDateLabel(
+  iso: string | null | undefined,
+): { text: string; tone: "ok" | "late" } | null {
+  const days = daysFromTodayTo(iso);
+  if (days === null) return null;
+  if (days < 0) {
+    return {
+      text: `Start date missed by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`,
+      tone: "late",
+    };
+  }
+  if (days === 0) return { text: "Starts today", tone: "ok" };
+  if (days === 1) return { text: "Starts tomorrow", tone: "ok" };
+  return { text: `Starts in ${days} days`, tone: "ok" };
+}
+
 export default function ProjectsPage() {
   const { data: session } = useGetSession();
   const canCreate = session?.role === "admin" || session?.role === "agent";
@@ -264,6 +318,9 @@ function ProjectCard({
   const due = formatDue(effectiveEnd);
   const start = formatDue(p.startDate);
   const dueIsUpdated = p.updatedCompletionDate != null;
+  const isBacklog = p.phase === "backlog_needs_assignment";
+  const subStatus = isBacklog ? backlogSubStatus(p) : null;
+  const startInfo = isBacklog ? startDateLabel(p.startDate) : null;
   return (
     <button
       type="button"
@@ -291,6 +348,36 @@ function ProjectCard({
             {p.priority}
           </Badge>
         </div>
+
+        {isBacklog && subStatus && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[9.5px] px-1 py-0 font-medium",
+                subStatus === "scheduled"
+                  ? "bg-sky-50 text-sky-700 border-sky-200"
+                  : "bg-amber-50 text-amber-800 border-amber-200",
+              )}
+              data-testid={`badge-substatus-${p.id}`}
+            >
+              {subStatus === "scheduled" ? "Scheduled" : "Needs Assignment"}
+            </Badge>
+            {startInfo && (
+              <span
+                className={cn(
+                  "text-[10px]",
+                  startInfo.tone === "late"
+                    ? "text-rose-700 font-medium"
+                    : "text-muted-foreground",
+                )}
+                data-testid={`text-start-label-${p.id}`}
+              >
+                {startInfo.text}
+              </span>
+            )}
+          </div>
+        )}
 
         {p.linkedInitiativeTitle && (
           <p className="text-[10.5px] text-muted-foreground italic truncate">

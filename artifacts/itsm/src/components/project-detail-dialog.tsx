@@ -51,7 +51,9 @@ import {
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import {
+  AlertCircle,
   Building2,
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
   CheckSquare,
@@ -69,6 +71,7 @@ import {
   Upload,
   XCircle,
 } from "lucide-react";
+import { backlogSubStatus, startDateLabel } from "@/pages/projects";
 
 // ----- Constants -----------------------------------------------------------
 
@@ -509,6 +512,24 @@ function DetailInner({
                 >
                   {PHASE_LABEL[phase]}
                 </Badge>
+                {phase === "backlog_needs_assignment" &&
+                  (() => {
+                    const sub = backlogSubStatus(row);
+                    return (
+                      <Badge
+                        variant="outline"
+                        className={
+                          sub === "scheduled"
+                            ? "bg-sky-50 text-sky-700 border-sky-200 font-medium"
+                            : "bg-amber-50 text-amber-800 border-amber-200 font-medium"
+                        }
+                        data-testid="badge-backlog-substatus"
+                        title="Sub-status is derived from owner + start + completion date"
+                      >
+                        {sub === "scheduled" ? "Scheduled" : "Needs Assignment"}
+                      </Badge>
+                    );
+                  })()}
                 {row.departmentName && (
                   <Badge variant="outline" className="font-normal">
                     <Building2 className="h-3 w-3 mr-1" />
@@ -524,6 +545,52 @@ function DetailInner({
                   Created {new Date(row.createdAt).toLocaleDateString()}
                 </span>
               </div>
+              {phase === "backlog_needs_assignment" &&
+                backlogSubStatus(row) === "scheduled" &&
+                row.startDate &&
+                (() => {
+                  const info = startDateLabel(row.startDate);
+                  const startStr = new Date(row.startDate).toLocaleDateString(
+                    undefined,
+                    {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    },
+                  );
+                  const isLate = info?.tone === "late";
+                  return (
+                    <div
+                      className={
+                        isLate
+                          ? "flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800"
+                          : "flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-[12.5px] text-sky-900"
+                      }
+                      data-testid="banner-backlog-scheduled"
+                    >
+                      {isLate ? (
+                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      ) : (
+                        <CalendarClock className="h-4 w-4 mt-0.5 shrink-0" />
+                      )}
+                      <div className="space-y-0.5">
+                        <div>
+                          Project is scheduled to start on{" "}
+                          <span className="font-medium">{startStr}</span>.
+                        </div>
+                        {info && (
+                          <div
+                            className={
+                              isLate ? "font-medium" : "text-sky-700"
+                            }
+                          >
+                            {info.text}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               <PhaseProgress phase={phase} />
             </div>
           </DialogHeader>

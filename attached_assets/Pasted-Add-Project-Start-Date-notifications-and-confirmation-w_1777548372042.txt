@@ -1,0 +1,157 @@
+Add Project Start Date notifications and confirmation workflow.
+
+Goal:
+Notify assigned users before a project’s Start Date and require confirmation before moving into execution. Keep the project in Backlog until the start is confirmed.
+
+-----------------------------------
+1. Backlog / Needs Assignment fields
+-----------------------------------
+
+Ensure these fields exist:
+- Project Owner (required)
+- Assigned Team
+- Priority
+- Start Date (required)
+- Anticipated Completion Date (required)
+
+Validation:
+- Start Date must be set before moving forward
+- Anticipated Completion Date must be after Start Date
+
+-----------------------------------
+2. Start Date notification logic
+-----------------------------------
+
+When a Start Date is set:
+
+Create scheduled reminders for the Project Owner:
+- 7 days before Start Date
+- 3 days before Start Date
+- 1 day before Start Date
+- On Start Date
+
+Notification channels:
+- Email (required)
+- In-app notification (required)
+
+Notification content:
+Subject:
+“Upcoming Project Start: [Project Name]”
+
+Body:
+“Your project ‘[Project Name]’ is scheduled to start on [Start Date].
+
+Please confirm if the project should begin as planned or update the timeline.”
+
+Include actions:
+- Confirm Start
+- Modify Start Date
+- Move to On Hold
+
+-----------------------------------
+3. Pre-start confirmation workflow
+-----------------------------------
+
+Before the Start Date:
+
+Project remains in:
+Backlog / Needs Assignment
+
+Add a flag:
+- “Start Confirmation Pending”
+
+UI:
+- Show banner in project modal:
+  “Start date approaching – confirmation required”
+
+-----------------------------------
+4. On Start Date behavior
+-----------------------------------
+
+If user clicks “Confirm Start” (before or on Start Date):
+- Move project from Backlog → Planning
+- Remove “Start Confirmation Pending” flag
+
+If no action is taken:
+- Do NOT auto-move project
+- Mark project as:
+  “Start Date Missed”
+
+Show badge:
+- Red badge: “Start Date Missed”
+
+-----------------------------------
+5. Modify Start Date
+-----------------------------------
+
+If user selects “Modify Start Date”:
+- Allow editing Start Date
+- Reschedule all notifications based on new date
+- Log change in Project History
+
+-----------------------------------
+6. Move to On Hold (pre-start)
+-----------------------------------
+
+If user selects “Move to On Hold”:
+- Move project to On Hold status
+- Require:
+  - Hold Reason
+  - Optional Revisit Date
+
+-----------------------------------
+7. UI updates
+-----------------------------------
+
+Project card should show:
+- Start Date
+- Days until start OR “Starts today” OR “Start missed”
+
+Examples:
+- “Starts in 7 days”
+- “Starts tomorrow”
+- “Start date missed by 2 days”
+
+Project modal (top section):
+- Show Start Date
+- Show status:
+  - Pending Start
+  - Confirmed
+  - Missed
+
+-----------------------------------
+8. Project History
+-----------------------------------
+
+Track:
+- Start Date created
+- Start Date updated
+- Notification sent
+- Start confirmed
+- Start missed
+- Project moved to Planning
+- Project moved to On Hold
+
+Each entry should include:
+- User
+- Action
+- Timestamp
+- Notes (if applicable)
+
+-----------------------------------
+9. Important rules
+-----------------------------------
+
+- Projects should NOT automatically move phases without user confirmation
+- Start Date is a commitment, not an automatic trigger
+- Keep experience simple and proactive (not overly complex)
+
+-----------------------------------
+10. Future-ready (do not overbuild now)
+-----------------------------------
+
+Structure logic so it can later support:
+- Team notifications
+- Calendar integration
+- Slack / Teams notifications
+- Auto-escalation if repeatedly missed

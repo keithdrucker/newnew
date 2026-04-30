@@ -1,0 +1,120 @@
+Update the Projects module to improve Backlog clarity using sub-status instead of adding a new phase.
+
+Goal:
+Avoid adding a new phase between Backlog and Planning. Instead, introduce a clear sub-status within Backlog to differentiate between unassigned and scheduled projects.
+
+-----------------------------------
+1. Backlog sub-status
+-----------------------------------
+
+Within Backlog / Needs Assignment, add a sub-status field:
+
+Sub-status options:
+- Needs Assignment
+- Scheduled
+
+Rules:
+
+- Default = Needs Assignment
+
+- Automatically set to “Scheduled” when ALL of the following are present:
+  - Project Owner is assigned
+  - Start Date is set
+  - Anticipated Completion Date is set
+
+- If any of the above are removed, revert sub-status back to “Needs Assignment”
+
+-----------------------------------
+2. UI updates (Project cards)
+-----------------------------------
+
+Update project cards in Backlog to show:
+
+- Main status: Backlog
+- Sub-status badge:
+  - Needs Assignment (yellow/neutral)
+  - Scheduled (blue)
+
+Also display:
+- Start Date
+- Anticipated Completion Date
+
+Add dynamic labels:
+- “Starts in X days”
+- “Starts tomorrow”
+- “Starts today”
+- “Start date missed by X days” (if past due)
+
+-----------------------------------
+3. Project modal updates
+-----------------------------------
+
+At the top of the modal, display:
+
+- Phase: Backlog
+- Sub-status: Needs Assignment or Scheduled
+
+If Scheduled:
+Show banner:
+“Project is scheduled to start on [Start Date]”
+
+If Start Date is in the future:
+Show:
+“Starts in X days”
+
+If Start Date is past:
+Show:
+“Start date missed by X days” (red indicator)
+
+-----------------------------------
+4. Phase movement logic
+-----------------------------------
+
+Do NOT automatically move project from Backlog to Planning based on Start Date.
+
+Projects should ONLY move to Planning when:
+- User confirms start
+OR
+- User manually clicks “Move to Planning”
+
+-----------------------------------
+5. Start confirmation (if implemented)
+-----------------------------------
+
+If using start confirmation workflow:
+
+- Keep project in Backlog (Scheduled) until confirmed
+- After confirmation:
+  - Move to Planning
+  - Remove “Start Confirmation Pending” flag
+
+-----------------------------------
+6. Data integrity
+-----------------------------------
+
+- Do not create a new phase called “Scheduled”
+- Keep Backlog as a single column
+- Sub-status is for clarity only
+- Do not break existing data
+
+-----------------------------------
+7. Visual consistency
+-----------------------------------
+
+Use color coding:
+- Needs Assignment → yellow/neutral
+- Scheduled → blue
+
+Keep UI clean and easy to scan.
+
+-----------------------------------
+Important
+-----------------------------------
+
+Backlog = not started yet
+Scheduled = ready to start (dates + owner set)
+Planning = active preparation
+In Progress = execution
+
+Do NOT add extra phases.
+Use sub-status to improve clarity instead.
