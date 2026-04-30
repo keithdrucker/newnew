@@ -58,9 +58,18 @@ type NavItem = {
 };
 
 // Top of the Workspace section — Dashboard sits above the two thematic
-// sub-groups (Day-to-Day Operations / Improvements).
+// sub-groups (Day-to-Day Operations / Improvements). Timesheets sits
+// directly below Dashboard as a personal time-tracking shortcut
+// (hidden from end users, who don't log time).
 const WORKSPACE_TOP: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+  {
+    href: "/timesheet",
+    label: "Timesheets",
+    icon: Clock,
+    matchPrefix: "/timesheet",
+    endUserHidden: true,
+  },
 ];
 
 // Reactive / operational work users do every day.
@@ -102,26 +111,18 @@ const IMPROVEMENTS: NavItem[] = [
 ];
 
 // Bottom of the Workspace section — operational tools that don't belong
-// inside either sub-group.
-const WORKSPACE_BOTTOM: NavItem[] = [
+// inside either sub-group. Empty for now (Knowledge moved to
+// Administration, Timesheets moved up under Dashboard).
+const WORKSPACE_BOTTOM: NavItem[] = [];
+
+const ADMIN: NavItem[] = [
   {
     href: "/knowledge-base",
     label: "Knowledge",
     icon: BookOpen,
     matchPrefix: "/knowledge-base",
+    adminOnly: true,
   },
-  // Personal time-tracking view. Hidden from end users (they don't log
-  // time and shouldn't see internal effort).
-  {
-    href: "/timesheet",
-    label: "Timesheets",
-    icon: Clock,
-    matchPrefix: "/timesheet",
-    endUserHidden: true,
-  },
-];
-
-const ADMIN: NavItem[] = [
   { href: "/assets", label: "Assets", icon: MonitorPlay, adminOnly: true },
   {
     href: "/applications",
