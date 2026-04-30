@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 
 // Shared time-range model used by every workspace sub-dashboard
 // (Tickets uses its own range type because it talks to a server-aggregated
@@ -165,6 +167,22 @@ export function TimeRangePicker({
               onChange({ ...value, customEnd: e.target.value || undefined })
             }
           />
+          {/* Drop both dates and snap back to the default preset.
+              Without this the custom dates linger in component state
+              even after the user picks a preset, so re-entering custom
+              would silently restore the prior window. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-muted-foreground"
+            onClick={() => onChange(DEFAULT_TIME_RANGE)}
+            data-testid={`${testId ?? "range"}-reset`}
+            title="Reset to last 30 days"
+          >
+            <X className="h-3.5 w-3.5 mr-1" />
+            Reset
+          </Button>
         </div>
       )}
     </div>
