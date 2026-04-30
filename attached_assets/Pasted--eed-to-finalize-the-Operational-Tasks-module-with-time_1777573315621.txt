@@ -1,0 +1,182 @@
+
+eed to finalize the “Operational Tasks” module with time tracking, activity history, and lifecycle behavior that mirrors how Tickets work, while remaining ITIL‑aligned and audit‑friendly.
+
+LOCATION:
+Workspace → Day‑to‑Day Operations → Operational Tasks
+
+PURPOSE:
+Operational Tasks represent IT‑initiated, time‑based work (recurring or one‑time). They are not user‑requested and are not projects. This module must support daily operations, accountability, and reporting.
+
+────────────────────────────────────
+CORE OPERATIONAL TASK MODEL
+────────────────────────────────────
+
+Required fields:
+- Task Name
+- Description (what the task is and why it exists)
+- Owner (accountable person)
+- Type: Recurring or One‑Time
+- Frequency (required only if Recurring):
+  - Daily, Weekly, Bi‑Weekly, Monthly, Quarterly, Bi‑Annual, Annual, Multi‑Year (>1 year)
+- Next Due Date
+- Status
+
+Optional (recommended):
+- Control Category (tag-style, optional):
+  - Security
+  - Access Management
+  - Backup & Recovery
+  - Change Management
+  - Monitoring
+  - Compliance
+  - Operations
+
+────────────────────────────────────
+STATUS MODEL & LIFECYCLE RULES
+────────────────────────────────────
+
+Allowed statuses:
+- Scheduled (default)
+- In Progress
+- Completed
+- Overdue (system‑calculated only)
+- Closed (system‑applied only)
+
+Rules:
+- Overdue is automatically applied when:
+  current date > Next Due Date AND status ≠ Completed
+- Overdue cannot be set manually
+- Completing a Recurring task:
+  - Automatically generates the next task instance
+  - Advances Next Due Date based on Frequency
+- Completing a One‑Time task:
+  - Set status to Completed
+  - After 24 hours, automatically transition to Closed
+
+Closed behavior:
+- Closed tasks are hidden by default
+- Closed tasks are read‑only
+- A “Show Closed” toggle (same UX as Tickets) must display them
+
+────────────────────────────────────
+TIME TRACKING & TIMESHEET INTEGRATION
+────────────────────────────────────
+
+Operational Tasks must support time tracking.
+
+Requirements:
+- Users can log time when working on an Operational Task
+- Time entries include:
+  - User
+  - Date
+  - Duration
+  - Optional note
+- Logged time must automatically roll up into the Timesheets module
+- Time entries should be visible from:
+  - The task detail view
+  - The user’s Timesheet view
+
+Time tracking must be optional but encouraged.
+
+────────────────────────────────────
+TASK DETAIL VIEW
+────────────────────────────────────
+
+When opening an Operational Task, display:
+
+1. Task metadata
+   - Status
+   - Type
+   - Frequency (if applicable)
+   - Next Due Date
+   - Owner
+
+2. Description
+   - Plain‑language explanation of what the task is and why it exists
+
+3. Execution checklist
+   Each checklist item must include:
+   - Checkbox
+   - Description
+   - Assignee (may differ from task owner)
+   - Due Date
+   - Completion timestamp
+
+4. Time entries
+   - Log time directly from the task
+   - Display total time spent
+
+────────────────────────────────────
+ACTIVITY / AUDIT LOG
+────────────────────────────────────
+
+Each Operational Task must maintain an immutable activity log.
+
+Log entries must be automatically created for:
+- Status changes
+- Checklist item completion
+- Task completion
+- Task closure
+- Time entries added or edited
+- Owner reassignment
+
+Each log entry must show:
+- Action taken
+- User
+- Date / time
+
+This log is read‑only and serves as execution history and audit evidence.
+
+────────────────────────────────────
+LIST VIEW (PRIMARY VIEW)
+────────────────────────────────────
+
+Operational Tasks use a table/list view (not kanban).
+
+Columns:
+- Task Name
+- Frequency
+- Type (Recurring / One‑Time)
+- Next Due Date
+- Owner
+- Status
+
+Default sorting:
+1. Overdue tasks first
+2. Then by Next Due Date (ascending)
+
+────────────────────────────────────
+FILTERING (MATCH TICKETS UX)
+────────────────────────────────────
+
+Filtering behavior must match the Tickets section for consistency.
+
+Required filters:
+- Status
+- Owner
+- Frequency
+- Type (Recurring / One‑Time)
+- Due Date (Any time, Today, This Week, Overdue)
+- Search
+
+Additional behavior:
+- “Show Closed” toggle (same interaction as Tickets)
+
+────────────────────────────────────
+DESIGN CONSTRAINTS
+────────────────────────────────────
+
+DO NOT:
+- Add approval workflows
+- Add phase‑based columns
+- Add compliance‑specific statuses
+- Require status micromanagement
+- Expose Closed tasks by default
+
+DESIGN PRINCIPLES:
+- Time‑based, not workflow‑based
+- Humans do work, system enforces rules
+- Compliance evidence should emerge naturally
+- Optimize for daily IT operations first
+
+Please update or refactor the Operational Tasks implementation to match this behavior exactly.
