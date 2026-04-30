@@ -2,6 +2,7 @@ import {
   useListDepartments,
   useGetDepartmentSettings,
   useUpdateDepartmentSettings,
+  type BoardSection,
 } from "@workspace/api-client-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -25,12 +26,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ChevronRight, Layers, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  ClipboardList,
+  FolderKanban,
+  Layers,
+  Lightbulb,
+  Pencil,
+  Ticket,
+  Trash2,
+} from "lucide-react";
 import { useSession } from "@/components/providers/session-provider";
 import { DEPT_ICON_MAP } from "@/lib/dept-icons";
 import { EditBoardDialog } from "@/components/settings/edit-board-dialog";
 import { DeleteBoardDialog } from "@/components/settings/delete-board-dialog";
-import { BoardMembersCard } from "@/components/settings/board-members-card";
+import { SectionMembersCard } from "@/components/settings/board-members-card";
 import { toBoardViewModel, type BoardViewModel } from "@/lib/board";
 
 type Priority = "low" | "medium" | "high" | "urgent";
@@ -51,6 +62,48 @@ interface FormState {
   businessHoursEnd: string;
   ticketCategories: string;
 }
+
+// One row per Workspace area. Tickets is the only area with a rich
+// per-team configuration form today (portal/SLA/etc). The other three
+// surface the agent-permissions table and a small placeholder note;
+// real per-area configuration can be added here without touching the
+// page shell.
+type SectionDef = {
+  section: BoardSection;
+  title: string;
+  description: string;
+  Icon: typeof Ticket;
+};
+
+const SECTIONS: SectionDef[] = [
+  {
+    section: "tickets",
+    title: "Tickets",
+    description:
+      "Reactive incidents and requests routed to this team's ticket board.",
+    Icon: Ticket,
+  },
+  {
+    section: "operational_tasks",
+    title: "Operational Tasks",
+    description:
+      "Recurring day-to-day work items handled by this team.",
+    Icon: ClipboardList,
+  },
+  {
+    section: "initiatives",
+    title: "Initiatives",
+    description: "Ideas and proposals owned by this team.",
+    Icon: Lightbulb,
+  },
+  {
+    section: "projects",
+    title: "Projects",
+    description:
+      "Approved improvement work assigned to this team's project board.",
+    Icon: FolderKanban,
+  },
+];
 
 export default function BoardSettings({
   params,
@@ -137,14 +190,79 @@ export default function BoardSettings({
           }
         />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <BoardMembersCard departmentId={department.id} />
+
+      <div className="space-y-6">
+        {SECTIONS.map(({ section, title, description, Icon: SecIcon }) => (
+          <AreaSection
+            key={section}
+            section={section}
+            title={title}
+            description={description}
+            icon={<SecIcon className="h-4 w-4" />}
+            departmentId={department.id}
+          />
+        ))}
       </div>
-      <DepartmentSettingsForm
-        key={department.id}
-        departmentId={department.id}
-      />
     </div>
+  );
+}
+
+function AreaSection({
+  section,
+  title,
+  description,
+  icon,
+  departmentId,
+}: {
+  section: BoardSection;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  departmentId: number;
+}) {
+  return (
+    <section
+      className="space-y-3"
+      data-testid={`area-section-${section}`}
+    >
+      <div className="flex items-center gap-2 border-b pb-2">
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          {icon}
+        </span>
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {section === "tickets" ? (
+          <TicketsSetupForm departmentId={departmentId} />
+        ) : (
+          <PlaceholderSetupCard area={title} />
+        )}
+        <SectionMembersCard
+          departmentId={departmentId}
+          section={section}
+          title="Agent permissions"
+          description={`Who on this team can work in ${title}, and at what permission level.`}
+        />
+      </div>
+    </section>
+  );
+}
+
+function PlaceholderSetupCard({ area }: { area: string }) {
+  return (
+    <Card className="border-dashed">
+      <CardHeader>
+        <CardTitle className="text-sm">Setup</CardTitle>
+        <CardDescription className="text-xs">
+          {area} doesn't have any team-level settings yet — only agent
+          permissions. Configuration options will live here once added.
+        </CardDescription>
+      </CardHeader>
+    </Card>
   );
 }
 
@@ -213,10 +331,12 @@ function BoardActions({
   );
 }
 
-function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
-  // Note: this is the per-team configuration form (portal, SLA, business
-  // hours). The component name pre-dates the Boards → Teams rename and is
-  // kept as-is to avoid touching the underlying department settings API.
+// Tickets-only setup form. Wraps both the Portal card and the SLA &
+// assignment card so they stack inside the Tickets area's two-column
+// grid (each card occupies one column on desktop). The "Save settings"
+// button lives in the SLA card so it's adjacent to the editable fields
+// without disturbing the parent area-section layout.
+function TicketsSetupForm({ departmentId }: { departmentId: number }) {
   const { data: settings, isLoading } = useGetDepartmentSettings(departmentId);
   const update = useUpdateDepartmentSettings();
   const { toast } = useToast();
@@ -245,7 +365,13 @@ function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
   }, [settings]);
 
   if (isLoading || !form) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
+    return (
+      <Card>
+        <CardContent className="py-6">
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -279,7 +405,7 @@ function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
         onSuccess: () =>
           toast({
             title: "Settings saved",
-            description: "Team configuration updated.",
+            description: "Tickets configuration updated.",
           }),
         onError: () =>
           toast({
@@ -292,13 +418,18 @@ function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Portal</CardTitle>
-          <CardDescription>End-user self-service portal.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Setup</CardTitle>
+        <CardDescription className="text-xs">
+          Portal, SLA, and routing for this team's tickets.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Portal
+          </p>
           <ToggleRow
             label="Portal enabled"
             description="Allow end users to submit tickets via the portal."
@@ -340,15 +471,12 @@ function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
               data-testid="input-categories"
             />
           </Field>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">SLA & assignment</CardTitle>
-          <CardDescription>Response targets and routing.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <div className="space-y-3 pt-3 border-t">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            SLA & assignment
+          </p>
           <Field label="Default priority">
             <Select
               value={form.defaultPriority}
@@ -421,19 +549,19 @@ function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
             value={form.notifyOnSlaBreach}
             onChange={(v) => set("notifyOnSlaBreach", v)}
           />
-        </CardContent>
-      </Card>
+        </div>
 
-      <div className="lg:col-span-2 flex justify-end">
-        <Button
-          onClick={onSave}
-          disabled={update.isPending}
-          data-testid="button-save-settings"
-        >
-          {update.isPending ? "Saving…" : "Save settings"}
-        </Button>
-      </div>
-    </div>
+        <div className="flex justify-end pt-2 border-t">
+          <Button
+            onClick={onSave}
+            disabled={update.isPending}
+            data-testid="button-save-settings"
+          >
+            {update.isPending ? "Saving…" : "Save tickets settings"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

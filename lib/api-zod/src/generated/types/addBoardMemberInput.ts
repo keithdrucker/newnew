@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BoardRole } from "./boardRole";
+import type { BoardSectionRoles } from "./boardSectionRoles";
 
 export interface AddBoardMemberInput {
   userId: number;
   role: BoardRole;
+  sectionRoles?: BoardSectionRoles | null;
 }

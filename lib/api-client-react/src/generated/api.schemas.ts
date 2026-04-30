@@ -137,6 +137,33 @@ export const BoardRole = {
   read_only: "read_only",
 } as const;
 
+export type BoardSection = (typeof BoardSection)[keyof typeof BoardSection];
+
+export const BoardSection = {
+  tickets: "tickets",
+  operational_tasks: "operational_tasks",
+  initiatives: "initiatives",
+  projects: "projects",
+} as const;
+
+export type BoardSectionRole =
+  (typeof BoardSectionRole)[keyof typeof BoardSectionRole];
+
+export const BoardSectionRole = {
+  owner: "owner",
+  manager: "manager",
+  modify: "modify",
+  read_only: "read_only",
+  none: "none",
+} as const;
+
+export interface BoardSectionRoles {
+  tickets?: BoardSectionRole;
+  operational_tasks?: BoardSectionRole;
+  initiatives?: BoardSectionRole;
+  projects?: BoardSectionRole;
+}
+
 export interface TimesheetVisibleUser {
   id: number;
   name: string;
@@ -149,6 +176,7 @@ export interface BoardMember {
   departmentId: number;
   userId: number;
   role: BoardRole;
+  sectionRoles: BoardSectionRoles | null;
   userName: string;
   userEmail: string;
   /** @nullable */
@@ -160,10 +188,12 @@ export interface BoardMember {
 export interface AddBoardMemberInput {
   userId: number;
   role: BoardRole;
+  sectionRoles?: BoardSectionRoles | null;
 }
 
 export interface UpdateBoardMemberInput {
-  role: BoardRole;
+  role?: BoardRole;
+  sectionRoles?: BoardSectionRoles | null;
 }
 
 export type UpdateDepartmentSettingsInputDefaultPriority =

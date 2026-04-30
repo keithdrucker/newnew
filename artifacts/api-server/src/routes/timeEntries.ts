@@ -112,7 +112,7 @@ router.get("/tickets/:id/time-entries", async (req, res): Promise<void> => {
   }
   // Agents must have at least read access to the ticket's board.
   if (user.role === "agent") {
-    const role = await getBoardRole(user, ticket.departmentId);
+    const role = await getBoardRole(user, ticket.departmentId, "tickets");
     if (!roleAtLeast(role, "read_only")) {
       res.status(403).json({ error: "No access to this board" });
       return;
@@ -155,7 +155,7 @@ router.post("/tickets/:id/time-entries", async (req, res): Promise<void> => {
   }
   // Logging time is a write — require modify access.
   if (user.role === "agent") {
-    const role = await getBoardRole(user, ticket.departmentId);
+    const role = await getBoardRole(user, ticket.departmentId, "tickets");
     if (!roleAtLeast(role, "modify")) {
       res.status(403).json({ error: "Read-only on this board" });
       return;

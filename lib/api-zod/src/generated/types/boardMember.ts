@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BoardRole } from "./boardRole";
+import type { BoardSectionRoles } from "./boardSectionRoles";
 import type { Role } from "./role";
 
 export interface BoardMember {
@@ -13,6 +14,7 @@ export interface BoardMember {
   departmentId: number;
   userId: number;
   role: BoardRole;
+  sectionRoles: BoardSectionRoles | null;
   userName: string;
   userEmail: string;
   /** @nullable */

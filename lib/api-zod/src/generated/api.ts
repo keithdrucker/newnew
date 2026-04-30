@@ -302,6 +302,23 @@ export const ListBoardMembersResponseItem = zod.object({
   departmentId: zod.number(),
   userId: zod.number(),
   role: zod.enum(["owner", "manager", "modify", "read_only"]),
+  sectionRoles: zod.union([
+    zod.object({
+      tickets: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      operational_tasks: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      initiatives: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      projects: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+    }),
+    zod.null(),
+  ]),
   userName: zod.string(),
   userEmail: zod.string(),
   userTitle: zod.string().nullable(),
@@ -320,6 +337,25 @@ export const AddBoardMemberParams = zod.object({
 export const AddBoardMemberBody = zod.object({
   userId: zod.number(),
   role: zod.enum(["owner", "manager", "modify", "read_only"]),
+  sectionRoles: zod
+    .union([
+      zod.object({
+        tickets: zod
+          .enum(["owner", "manager", "modify", "read_only", "none"])
+          .optional(),
+        operational_tasks: zod
+          .enum(["owner", "manager", "modify", "read_only", "none"])
+          .optional(),
+        initiatives: zod
+          .enum(["owner", "manager", "modify", "read_only", "none"])
+          .optional(),
+        projects: zod
+          .enum(["owner", "manager", "modify", "read_only", "none"])
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 export const AddBoardMemberResponse = zod.object({
@@ -327,6 +363,23 @@ export const AddBoardMemberResponse = zod.object({
   departmentId: zod.number(),
   userId: zod.number(),
   role: zod.enum(["owner", "manager", "modify", "read_only"]),
+  sectionRoles: zod.union([
+    zod.object({
+      tickets: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      operational_tasks: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      initiatives: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      projects: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+    }),
+    zod.null(),
+  ]),
   userName: zod.string(),
   userEmail: zod.string(),
   userTitle: zod.string().nullable(),
@@ -343,7 +396,26 @@ export const UpdateBoardMemberParams = zod.object({
 });
 
 export const UpdateBoardMemberBody = zod.object({
-  role: zod.enum(["owner", "manager", "modify", "read_only"]),
+  role: zod.enum(["owner", "manager", "modify", "read_only"]).optional(),
+  sectionRoles: zod
+    .union([
+      zod.object({
+        tickets: zod
+          .enum(["owner", "manager", "modify", "read_only", "none"])
+          .optional(),
+        operational_tasks: zod
+          .enum(["owner", "manager", "modify", "read_only", "none"])
+          .optional(),
+        initiatives: zod
+          .enum(["owner", "manager", "modify", "read_only", "none"])
+          .optional(),
+        projects: zod
+          .enum(["owner", "manager", "modify", "read_only", "none"])
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 export const UpdateBoardMemberResponse = zod.object({
@@ -351,6 +423,23 @@ export const UpdateBoardMemberResponse = zod.object({
   departmentId: zod.number(),
   userId: zod.number(),
   role: zod.enum(["owner", "manager", "modify", "read_only"]),
+  sectionRoles: zod.union([
+    zod.object({
+      tickets: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      operational_tasks: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      initiatives: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+      projects: zod
+        .enum(["owner", "manager", "modify", "read_only", "none"])
+        .optional(),
+    }),
+    zod.null(),
+  ]),
   userName: zod.string(),
   userEmail: zod.string(),
   userTitle: zod.string().nullable(),

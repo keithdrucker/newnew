@@ -2112,6 +2112,26 @@ components:
       # this board. `owner` inherits manager-level visibility.
       enum: [owner, manager, modify, read_only]
 
+    # The four Workspace areas RBAC can be configured per-team-member for.
+    # Each `BoardMember` may carry overrides per area; missing areas fall
+    # back to the team-default `role` column. The special value `none`
+    # revokes access to that area for that agent on that team.
+    BoardSection:
+      type: string
+      enum: [tickets, operational_tasks, initiatives, projects]
+
+    BoardSectionRole:
+      type: string
+      enum: [owner, manager, modify, read_only, none]
+
+    BoardSectionRoles:
+      type: object
+      properties:
+        tickets: { $ref: "#/components/schemas/BoardSectionRole" }
+        operational_tasks: { $ref: "#/components/schemas/BoardSectionRole" }
+        initiatives: { $ref: "#/components/schemas/BoardSectionRole" }
+        projects: { $ref: "#/components/schemas/BoardSectionRole" }
+
     TimesheetVisibleUser:
       type: object
       properties:
@@ -2130,6 +2150,10 @@ components:
         departmentId: { type: integer }
         userId: { type: integer }
         role: { $ref: "#/components/schemas/BoardRole" }
+        sectionRoles:
+          oneOf:
+            - { $ref: "#/components/schemas/BoardSectionRoles" }
+            - { type: "null" }
         userName: { type: string }
         userEmail: { type: string }
         userTitle:
@@ -2138,20 +2162,27 @@ components:
         createdAt:
           type: string
           format: date-time
-      required: [id, departmentId, userId, role, userName, userEmail, userTitle, userGlobalRole, createdAt]
+      required: [id, departmentId, userId, role, sectionRoles, userName, userEmail, userTitle, userGlobalRole, createdAt]
 
     AddBoardMemberInput:
       type: object
       properties:
         userId: { type: integer }
         role: { $ref: "#/components/schemas/BoardRole" }
+        sectionRoles:
+          oneOf:
+            - { $ref: "#/components/schemas/BoardSectionRoles" }
+            - { type: "null" }
       required: [userId, role]
 
     UpdateBoardMemberInput:
       type: object
       properties:
         role: { $ref: "#/components/schemas/BoardRole" }
-      required: [role]
+        sectionRoles:
+          oneOf:
+            - { $ref: "#/components/schemas/BoardSectionRoles" }
+            - { type: "null" }
 
     UpdateDepartmentSettingsInput:
       type: object

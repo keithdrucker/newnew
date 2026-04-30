@@ -8,6 +8,9 @@ import {
   getListBoardMembersQueryKey,
   type BoardMember,
   type BoardRole,
+  type BoardSection,
+  type BoardSectionRole,
+  type BoardSectionRoles,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -38,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import {
+  Ban,
   Eye,
   Pencil,
   Plus,
@@ -48,31 +52,66 @@ import {
   UserPlus,
 } from "lucide-react";
 
-const ROLE_OPTIONS: { value: BoardRole; label: string; description: string }[] =
-  [
-    {
-      value: "owner",
-      label: "Full Control",
-      description: "Edit, comment, and delete tickets",
-    },
-    {
-      value: "manager",
-      label: "Manager",
-      description: "Modify + can view team timesheets",
-    },
-    {
-      value: "modify",
-      label: "Modify",
-      description: "Edit and comment, cannot delete",
-    },
-    {
-      value: "read_only",
-      label: "Read only",
-      description: "View tickets and dashboard only",
-    },
-  ];
+const SECTION_ROLE_OPTIONS: {
+  value: BoardSectionRole;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "owner",
+    label: "Full Control",
+    description: "Edit, comment, and delete",
+  },
+  {
+    value: "manager",
+    label: "Manager",
+    description: "Modify + view team timesheets",
+  },
+  {
+    value: "modify",
+    label: "Modify",
+    description: "Edit and comment, cannot delete",
+  },
+  {
+    value: "read_only",
+    label: "Read only",
+    description: "View only",
+  },
+  {
+    value: "none",
+    label: "No access",
+    description: "Cannot see this area",
+  },
+];
 
-function RoleBadge({ role }: { role: BoardRole }) {
+const TEAM_DEFAULT_ROLE_OPTIONS: {
+  value: BoardRole;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "owner",
+    label: "Full Control",
+    description: "Edit, comment, and delete tickets",
+  },
+  {
+    value: "manager",
+    label: "Manager",
+    description: "Modify + view team timesheets",
+  },
+  {
+    value: "modify",
+    label: "Modify",
+    description: "Edit and comment, cannot delete",
+  },
+  {
+    value: "read_only",
+    label: "Read only",
+    description: "View tickets and dashboard only",
+  },
+];
+
+function SectionRoleBadge({ role }: { role: BoardSectionRole }) {
   if (role === "owner") {
     return (
       <Badge className="bg-primary/10 text-primary hover:bg-primary/15 gap-1 border-primary/20">
@@ -97,10 +136,21 @@ function RoleBadge({ role }: { role: BoardRole }) {
       </Badge>
     );
   }
+  if (role === "read_only") {
+    return (
+      <Badge variant="outline" className="gap-1 text-muted-foreground">
+        <Eye className="h-3 w-3" />
+        Read only
+      </Badge>
+    );
+  }
   return (
-    <Badge variant="outline" className="gap-1 text-muted-foreground">
-      <Eye className="h-3 w-3" />
-      Read only
+    <Badge
+      variant="outline"
+      className="gap-1 text-muted-foreground bg-muted/40 border-dashed"
+    >
+      <Ban className="h-3 w-3" />
+      No access
     </Badge>
   );
 }
@@ -115,25 +165,55 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-export function BoardMembersCard({ departmentId }: { departmentId: number }) {
+// Resolve the effective role an agent has for a given section, mirroring
+// the server-side `getBoardRole` resolution: per-section override wins,
+// otherwise fall back to the team-default `role`.
+function effectiveSectionRole(
+  member: BoardMember,
+  section: BoardSection,
+): BoardSectionRole {
+  const v = member.sectionRoles?.[section];
+  if (v) return v;
+  return member.role as BoardSectionRole;
+}
+
+function sectionRoleLabel(role: BoardSectionRole): string {
+  return SECTION_ROLE_OPTIONS.find((o) => o.value === role)?.label ?? role;
+}
+
+// ---------------------------------------------------------------------------
+// AGENTS LIST CARD (one per area). Renders a single area's table:
+//   columns = Agent | Role for THIS area | Remove from team
+// "Remove from team" deletes the team membership entirely (since the
+// list of agents is shared across the four areas of a team). The role
+// dropdown writes ONLY this area's section override.
+// ---------------------------------------------------------------------------
+export function SectionMembersCard({
+  departmentId,
+  section,
+  title,
+  description,
+}: {
+  departmentId: number;
+  section: BoardSection;
+  title: string;
+  description: string;
+}) {
   const { data: members, isLoading } = useListBoardMembers(departmentId);
   const [addOpen, setAddOpen] = useState(false);
 
   return (
-    <Card className="lg:col-span-2">
+    <Card>
       <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
         <div>
-          <CardTitle className="text-base">Agents on this team</CardTitle>
-          <CardDescription>
-            Control who can see and work tickets on this team. Admins always
-            have full access everywhere.
-          </CardDescription>
+          <CardTitle className="text-sm">{title}</CardTitle>
+          <CardDescription className="text-xs">{description}</CardDescription>
         </div>
         <Button
           size="sm"
           variant="outline"
           onClick={() => setAddOpen(true)}
-          data-testid="button-add-board-member"
+          data-testid={`button-add-board-member-${section}`}
         >
           <UserPlus className="h-3.5 w-3.5 mr-1.5" />
           Add agent
@@ -143,18 +223,23 @@ export function BoardMembersCard({ departmentId }: { departmentId: number }) {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : !members || members.length === 0 ? (
-          <div className="rounded-md border border-dashed py-8 text-center">
+          <div className="rounded-md border border-dashed py-6 text-center">
             <p className="text-sm text-muted-foreground">
-              No agents have been added yet.
+              No agents on this team yet.
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Add agents to give them access to this team's tickets.
+              Add agents to grant them access to this area.
             </p>
           </div>
         ) : (
           <ul className="divide-y">
             {members.map((m) => (
-              <MemberRow key={m.id} member={m} departmentId={departmentId} />
+              <SectionMemberRow
+                key={m.id}
+                member={m}
+                departmentId={departmentId}
+                section={section}
+              />
             ))}
           </ul>
         )}
@@ -169,12 +254,14 @@ export function BoardMembersCard({ departmentId }: { departmentId: number }) {
   );
 }
 
-function MemberRow({
+function SectionMemberRow({
   member,
   departmentId,
+  section,
 }: {
   member: BoardMember;
   departmentId: number;
+  section: BoardSection;
 }) {
   const update = useUpdateBoardMember();
   const remove = useRemoveBoardMember();
@@ -186,25 +273,32 @@ function MemberRow({
       queryKey: getListBoardMembersQueryKey(departmentId),
     });
 
-  const onRoleChange = (next: BoardRole) => {
-    if (next === member.role) return;
+  const current = effectiveSectionRole(member, section);
+  const adminLocked = member.userGlobalRole === "admin";
+
+  const onRoleChange = (next: BoardSectionRole) => {
+    if (next === current) return;
+    const nextSectionRoles: BoardSectionRoles = {
+      ...(member.sectionRoles ?? {}),
+      [section]: next,
+    };
     update.mutate(
       {
         id: departmentId,
         userId: member.userId,
-        data: { role: next },
+        data: { role: member.role, sectionRoles: nextSectionRoles },
       },
       {
         onSuccess: () => {
           invalidate();
           toast({
-            title: "Role updated",
-            description: `${member.userName} is now ${roleLabel(next)} on this team.`,
+            title: "Permission updated",
+            description: `${member.userName} → ${sectionRoleLabel(next)} on this area.`,
           });
         },
         onError: () =>
           toast({
-            title: "Could not update role",
+            title: "Could not update permission",
             variant: "destructive",
           }),
       },
@@ -219,7 +313,7 @@ function MemberRow({
           invalidate();
           toast({
             title: "Removed from team",
-            description: `${member.userName} no longer has access.`,
+            description: `${member.userName} no longer has access to this team.`,
           });
         },
         onError: () =>
@@ -232,14 +326,17 @@ function MemberRow({
   };
 
   return (
-    <li className="flex items-center gap-3 py-3" data-testid={`member-row-${member.userId}`}>
+    <li
+      className="flex items-center gap-3 py-3"
+      data-testid={`member-row-${section}-${member.userId}`}
+    >
       <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">
         {initials(member.userName)}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-medium truncate">{member.userName}</p>
-          {member.userGlobalRole === "admin" && (
+          {adminLocked && (
             <Badge
               variant="outline"
               className="h-5 text-[10px] uppercase tracking-wide border-primary/30 text-primary"
@@ -254,20 +351,20 @@ function MemberRow({
         </p>
       </div>
       <Select
-        value={member.role}
-        onValueChange={(v) => onRoleChange(v as BoardRole)}
-        disabled={update.isPending || member.userGlobalRole === "admin"}
+        value={current}
+        onValueChange={(v) => onRoleChange(v as BoardSectionRole)}
+        disabled={update.isPending || adminLocked}
       >
         <SelectTrigger
-          className="h-8 w-[140px]"
-          data-testid={`select-role-${member.userId}`}
+          className="h-8 w-[150px]"
+          data-testid={`select-role-${section}-${member.userId}`}
         >
           <SelectValue>
-            <RoleBadge role={member.role} />
+            <SectionRoleBadge role={current} />
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {ROLE_OPTIONS.map((opt) => (
+          {SECTION_ROLE_OPTIONS.map((opt) => (
             <SelectItem key={opt.value} value={opt.value}>
               <div className="flex flex-col">
                 <span className="text-sm">{opt.label}</span>
@@ -285,8 +382,9 @@ function MemberRow({
         className="h-8 w-8 text-muted-foreground hover:text-destructive"
         onClick={onRemove}
         disabled={remove.isPending}
-        data-testid={`button-remove-member-${member.userId}`}
-        aria-label={`Remove ${member.userName}`}
+        data-testid={`button-remove-member-${section}-${member.userId}`}
+        aria-label={`Remove ${member.userName} from team`}
+        title="Remove from team"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </Button>
@@ -294,10 +392,12 @@ function MemberRow({
   );
 }
 
-function roleLabel(r: BoardRole): string {
-  return ROLE_OPTIONS.find((o) => o.value === r)?.label ?? r;
-}
-
+// ---------------------------------------------------------------------------
+// ADD MEMBER DIALOG
+// Picks an agent + a default team role. The same role is applied to all
+// four sections initially; admins can fine-tune per-area afterwards via
+// the per-section dropdowns.
+// ---------------------------------------------------------------------------
 function AddMemberDialog({
   open,
   onOpenChange,
@@ -350,7 +450,8 @@ function AddMemberDialog({
           });
           toast({
             title: "Added to team",
-            description: "Access granted.",
+            description:
+              "Default access granted across all areas. Tune per-area below if needed.",
           });
           reset();
           onOpenChange(false);
@@ -376,7 +477,9 @@ function AddMemberDialog({
         <DialogHeader>
           <DialogTitle>Add agent to team</DialogTitle>
           <DialogDescription>
-            Pick an agent and choose what they can do on this team.
+            Pick an agent and choose a default role. The default applies to
+            all four areas (Tickets, Operational Tasks, Initiatives, Projects)
+            and can be tuned per-area afterwards.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -449,13 +552,13 @@ function AddMemberDialog({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Role on this team</Label>
+            <Label className="text-xs">Default role on this team</Label>
             <Select value={role} onValueChange={(v) => setRole(v as BoardRole)}>
               <SelectTrigger data-testid="select-new-member-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLE_OPTIONS.map((opt) => (
+                {TEAM_DEFAULT_ROLE_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     <div className="flex flex-col">
                       <span className="text-sm">{opt.label}</span>

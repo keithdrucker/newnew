@@ -41,6 +41,8 @@ import { coerceQuery } from "../lib/queryCoerce";
 import {
   getBoardRole,
   modifiableDepartmentIds,
+  sectionModifiableDepartmentIds,
+  sectionVisibleDepartmentIds,
   roleAtLeast,
   visibleDepartmentIds,
 } from "../lib/board-access";
@@ -142,11 +144,17 @@ async function authorizeProjectAccess(
 
   if (project.departmentId == null) {
     if (min === "read") return true;
-    const dept = await modifiableDepartmentIds(user, "modify");
+    // Cross-functional projects: write requires that the agent has at
+    // least "modify" on the projects section of *some* board.
+    const dept = await sectionModifiableDepartmentIds(
+      user,
+      "projects",
+      "modify",
+    );
     return dept === null || dept.length > 0;
   }
 
-  const role = await getBoardRole(user, project.departmentId);
+  const role = await getBoardRole(user, project.departmentId, "projects");
   if (min === "read") return role !== null;
   return roleAtLeast(role, "modify");
 }
@@ -159,16 +167,18 @@ async function authorizeDepartmentAccess(
   if (user.role === "end_user") return false;
   if (user.role === "admin") return true;
   if (user.role !== "agent") return false;
-  const role = await getBoardRole(user, departmentId);
+  const role = await getBoardRole(user, departmentId, "projects");
   if (min === "read") return role !== null;
   return roleAtLeast(role, "modify");
 }
 
 // SQL where-clause that limits a project list to those the caller can read.
+// Cross-functional projects (departmentId IS NULL) are visible to any agent;
+// department-scoped projects honor per-section "projects" RBAC.
 async function projectVisibilityWhere(user: SessionUser) {
   if (user.role === "admin") return undefined;
   if (user.role === "end_user") return eq(projectsTable.id, -1); // none
-  const visible = await visibleDepartmentIds(user);
+  const visible = await sectionVisibleDepartmentIds(user, "projects");
   if (visible === null) return undefined;
   if (visible.length === 0) return isNull(projectsTable.departmentId);
   return or(
@@ -561,7 +571,7 @@ router.post("/projects", async (req, res): Promise<void> => {
   // Agents can only create projects scoped to a board they can modify
   // (or cross-functional projects with no departmentId).
   if (user.role === "agent" && parsed.data.departmentId != null) {
-    const role = await getBoardRole(user, parsed.data.departmentId);
+    const role = await getBoardRole(user, parsed.data.departmentId, "projects");
     if (!roleAtLeast(role, "modify")) {
       res.status(403).json({ error: "Forbidden on this board" });
       return;

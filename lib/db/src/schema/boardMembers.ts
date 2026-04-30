@@ -5,6 +5,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 // Per-board (per-department) membership for agents.
@@ -16,6 +17,32 @@ import {
 //                supported and all of them can audit team time)
 //   owner      → full control on this board (settings + tickets), and
 //                inherits manager-level visibility
+//
+// Per-section overrides: `sectionRoles` is an optional jsonb that lets an
+// admin set an agent's role independently for each Workspace area. Missing
+// keys fall back to the legacy `role` column (the team default). The
+// special value `"none"` revokes access to that section without affecting
+// the others. The `role` column is preserved as the team-default fallback
+// so existing memberships keep working.
+export type BoardSection =
+  | "tickets"
+  | "operational_tasks"
+  | "initiatives"
+  | "projects";
+export const BOARD_SECTIONS: BoardSection[] = [
+  "tickets",
+  "operational_tasks",
+  "initiatives",
+  "projects",
+];
+export type BoardSectionRole =
+  | "owner"
+  | "manager"
+  | "modify"
+  | "read_only"
+  | "none";
+export type BoardSectionRoles = Partial<Record<BoardSection, BoardSectionRole>>;
+
 export const boardMembersTable = pgTable(
   "board_members",
   {
@@ -23,6 +50,7 @@ export const boardMembersTable = pgTable(
     departmentId: integer("department_id").notNull(),
     userId: integer("user_id").notNull(),
     role: text("role").notNull().default("modify"),
+    sectionRoles: jsonb("section_roles").$type<BoardSectionRoles>(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

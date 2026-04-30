@@ -41,6 +41,7 @@ import { coerceQuery } from "../lib/queryCoerce";
 import {
   getBoardRole,
   modifiableDepartmentIds,
+  sectionVisibleDepartmentIds,
   roleAtLeast,
   visibleDepartmentIds,
 } from "../lib/board-access";
@@ -303,7 +304,10 @@ router.get("/tickets", async (req, res): Promise<void> => {
   if (user.role === "end_user") {
     conds.push(eq(ticketsTable.reporterId, user.id));
   } else if (user.role === "agent") {
-    const visible = await visibleDepartmentIds(user);
+    // Per-section: only list tickets in boards where the agent has at
+    // least read access on the "tickets" section (sectionRoles wins,
+    // including "none" revocations).
+    const visible = await sectionVisibleDepartmentIds(user, "tickets");
     if (!visible || visible.length === 0) {
       res.json([]);
       return;
@@ -373,19 +377,12 @@ async function validateAssigneeBoardAccess(
   if (assignee.role === "end_user") {
     return "Assignee must be an agent or admin";
   }
-  if (assignee.role === "admin") return null;
-  if (assignee.departmentId === departmentId) return null;
-  const [member] = await db
-    .select({ role: boardMembersTable.role })
-    .from(boardMembersTable)
-    .where(
-      and(
-        eq(boardMembersTable.userId, assigneeId),
-        eq(boardMembersTable.departmentId, departmentId),
-      ),
-    )
-    .limit(1);
-  if (member) return null;
+  // Resolve through getBoardRole so per-section "tickets" overrides
+  // (including "none" revocations) are honored — an agent whose
+  // tickets-section is revoked must not be assignable, even if they
+  // remain on the team for other sections.
+  const role = await getBoardRole(assignee, departmentId, "tickets");
+  if (role) return null;
   return "Assignee does not have access to this board";
 }
 
@@ -413,7 +410,7 @@ router.post("/tickets", async (req, res): Promise<void> => {
     return;
   }
   if (user.role === "agent") {
-    const role = await getBoardRole(user, parsed.data.departmentId);
+    const role = await getBoardRole(user, parsed.data.departmentId, "tickets");
     if (!roleAtLeast(role, "modify")) {
       res.status(403).json({ error: "Read-only on this board" });
       return;
@@ -513,7 +510,7 @@ router.get("/tickets/:id", async (req, res): Promise<void> => {
     return;
   }
   if (user.role === "agent") {
-    const role = await getBoardRole(user, row.departmentId);
+    const role = await getBoardRole(user, row.departmentId, "tickets");
     if (!role) {
       res.status(403).json({ error: "Forbidden" });
       return;
@@ -590,7 +587,7 @@ router.patch("/tickets/:id", async (req, res): Promise<void> => {
     return;
   }
   if (user.role === "agent") {
-    const role = await getBoardRole(user, existing.departmentId);
+    const role = await getBoardRole(user, existing.departmentId, "tickets");
     if (!roleAtLeast(role, "modify")) {
       res.status(403).json({ error: "Read-only on this board" });
       return;
@@ -713,7 +710,7 @@ router.delete("/tickets/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Ticket not found" });
     return;
   }
-  const role = await getBoardRole(user, existing.departmentId);
+  const role = await getBoardRole(user, existing.departmentId, "tickets");
   if (role !== "owner") {
     res.status(403).json({ error: "Full Control required" });
     return;
@@ -746,7 +743,7 @@ router.post("/tickets/:id/comments", async (req, res): Promise<void> => {
     return;
   }
   if (user.role === "agent") {
-    const role = await getBoardRole(user, ticket.departmentId);
+    const role = await getBoardRole(user, ticket.departmentId, "tickets");
     if (!roleAtLeast(role, "modify")) {
       res.status(403).json({ error: "Read-only on this board" });
       return;

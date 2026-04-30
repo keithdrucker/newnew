@@ -1,5 +1,11 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { db, boardMembersTable, type BoardRole } from "@workspace/db";
+import {
+  db,
+  boardMembersTable,
+  type BoardRole,
+  type BoardSection,
+  type BoardSectionRoles,
+} from "@workspace/db";
 import type { SessionUser } from "./session";
 
 const ROLE_RANK: Record<BoardRole, number> = {
@@ -9,19 +15,42 @@ const ROLE_RANK: Record<BoardRole, number> = {
   owner: 4,
 };
 
+// Resolve the per-section override on a membership row. Returns:
+//   - null   → caller should fall back to the default `role` column
+//   - "none" → access is explicitly revoked for this section
+//   - a BoardRole → use that role for this section
+function resolveSectionOverride(
+  sectionRoles: BoardSectionRoles | null,
+  section: BoardSection | undefined,
+): BoardRole | "none" | null {
+  if (!section || !sectionRoles) return null;
+  const v = sectionRoles[section];
+  if (!v) return null;
+  return v;
+}
+
 // Returns the highest role the user has on a department, treating
 // the legacy `users.departmentId` link as an implicit "modify"
 // membership (so existing seed data keeps working). Admins are
 // always treated as "owner" everywhere.
+//
+// When `section` is provided, per-section overrides on the membership
+// row take precedence: `sectionRoles[section] === "none"` revokes
+// access; any other value wins; missing falls back to the legacy
+// `role` column.
 export async function getBoardRole(
   user: SessionUser,
   departmentId: number,
+  section?: BoardSection,
 ): Promise<BoardRole | null> {
   if (user.role === "admin") return "owner";
   if (user.role !== "agent") return null;
 
   const explicit = await db
-    .select({ role: boardMembersTable.role })
+    .select({
+      role: boardMembersTable.role,
+      sectionRoles: boardMembersTable.sectionRoles,
+    })
     .from(boardMembersTable)
     .where(
       and(
@@ -30,6 +59,20 @@ export async function getBoardRole(
       ),
     )
     .limit(1);
+
+  // Explicit per-section override always wins — including over the
+  // legacy implicit `users.departmentId` membership. This is critical
+  // for revocation (`"none"`) and for downgrades (e.g. a home-dept
+  // agent set to `read_only` on Projects must NOT be escalated to
+  // "modify" by the legacy fallback).
+  if (explicit[0]) {
+    const override = resolveSectionOverride(
+      explicit[0].sectionRoles,
+      section,
+    );
+    if (override === "none") return null;
+    if (override) return override;
+  }
 
   const rolesFound: BoardRole[] = [];
   if (explicit[0]) rolesFound.push(explicit[0].role as BoardRole);
@@ -40,6 +83,99 @@ export async function getBoardRole(
     (best, r) => (ROLE_RANK[r] > ROLE_RANK[best] ? r : best),
     rolesFound[0],
   );
+}
+
+// Returns the set of department ids where the agent has at least read
+// access on the given section. Mirrors `getBoardRole` semantics:
+//   - explicit `sectionRoles[section]` wins (incl. `"none"` revoke)
+//   - otherwise falls back to membership `role`
+//   - legacy `users.departmentId` adds "modify" only when no explicit
+//     override was set for this section
+// Admin → null (= "all"); end_user → empty.
+export async function sectionVisibleDepartmentIds(
+  user: SessionUser,
+  section: BoardSection,
+): Promise<number[] | null> {
+  if (user.role === "admin") return null;
+  if (user.role !== "agent") return [];
+
+  const rows = await db
+    .select({
+      deptId: boardMembersTable.departmentId,
+      role: boardMembersTable.role,
+      sectionRoles: boardMembersTable.sectionRoles,
+    })
+    .from(boardMembersTable)
+    .where(eq(boardMembersTable.userId, user.id));
+
+  const set = new Set<number>();
+  const overriddenDepts = new Set<number>();
+  for (const r of rows) {
+    const override = resolveSectionOverride(r.sectionRoles, section);
+    if (override === "none") {
+      overriddenDepts.add(r.deptId);
+      continue; // explicit revoke — do not include
+    }
+    if (override) {
+      overriddenDepts.add(r.deptId);
+      set.add(r.deptId);
+      continue;
+    }
+    set.add(r.deptId); // falls back to row.role (which is always a real role)
+  }
+  // Legacy implicit membership: only add the home dept when there
+  // wasn't an explicit per-section override (which would have already
+  // been honored above — a "none" override stays revoked).
+  if (
+    user.departmentId != null &&
+    !overriddenDepts.has(user.departmentId)
+  ) {
+    set.add(user.departmentId);
+  }
+  return Array.from(set);
+}
+
+// Returns the set of department ids where the agent has at least the
+// given role on the given section. See sectionVisibleDepartmentIds for
+// the override-precedence rules.
+export async function sectionModifiableDepartmentIds(
+  user: SessionUser,
+  section: BoardSection,
+  min: BoardRole = "modify",
+): Promise<number[] | null> {
+  if (user.role === "admin") return null;
+  if (user.role !== "agent") return [];
+
+  const rows = await db
+    .select({
+      deptId: boardMembersTable.departmentId,
+      role: boardMembersTable.role,
+      sectionRoles: boardMembersTable.sectionRoles,
+    })
+    .from(boardMembersTable)
+    .where(eq(boardMembersTable.userId, user.id));
+
+  const set = new Set<number>();
+  const overriddenDepts = new Set<number>();
+  for (const r of rows) {
+    const override = resolveSectionOverride(r.sectionRoles, section);
+    if (override === "none") {
+      overriddenDepts.add(r.deptId);
+      continue;
+    }
+    const effective: BoardRole =
+      override ?? (r.role as BoardRole);
+    if (override) overriddenDepts.add(r.deptId);
+    if (ROLE_RANK[effective] >= ROLE_RANK[min]) set.add(r.deptId);
+  }
+  if (
+    user.departmentId != null &&
+    !overriddenDepts.has(user.departmentId) &&
+    ROLE_RANK["modify"] >= ROLE_RANK[min]
+  ) {
+    set.add(user.departmentId);
+  }
+  return Array.from(set);
 }
 
 export function roleAtLeast(role: BoardRole | null, min: BoardRole): boolean {
