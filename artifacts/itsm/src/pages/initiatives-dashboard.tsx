@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "wouter";
 import {
   useListInitiatives,
-  useListDepartments,
   getListInitiativesQueryKey,
   type Initiative,
   type InitiativeStatus,
@@ -13,13 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   Lightbulb,
@@ -31,6 +23,14 @@ import {
   CalendarDays,
   Clock,
 } from "lucide-react";
+import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
+import {
+  useDashboardFilters,
+  TimeRangePicker,
+  AssigneePicker,
+  useAgentOptions,
+  isInRange,
+} from "@/lib/dashboard-filters";
 
 const STATUS_LABEL: Record<InitiativeStatus, string> = {
   backlog: "Backlog",
@@ -46,9 +46,9 @@ const STATUS_BADGE_CLASS: Record<InitiativeStatus, string> = {
   rejected_deferred: "bg-rose-100 text-rose-700",
 };
 
-function formatDate(iso: string | null | undefined) {
+function formatDate(iso: string | Date | null | undefined) {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso as string).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -56,14 +56,10 @@ function formatDate(iso: string | null | undefined) {
 }
 
 export default function InitiativesDashboard() {
-  const [departmentId, setDepartmentId] = useState<string>("all");
-  const { data: departments } = useListDepartments({ scope: "accessible" });
+  const scope = useTeamScope();
+  const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
+  const filters = useDashboardFilters(queryDeptId);
 
-  const queryDeptId =
-    departmentId === "all" ? undefined : Number(departmentId);
-
-  // Single fetch of all (accessible) initiatives — we summarize client-side
-  // so the user can flip between status breakdowns without extra requests.
   const params = queryDeptId != null ? { departmentId: queryDeptId } : {};
   const {
     data: initiatives,
@@ -81,11 +77,27 @@ export default function InitiativesDashboard() {
     },
   });
 
+  const agents = useAgentOptions(queryDeptId);
+
   const errStatus = (error as { status?: number } | null)?.status;
   const forbidden = isError && errStatus === 403;
 
+  // Apply scope → time range → assignee. We filter on `updatedAt` so a
+  // long-lived initiative that was decided this week still appears in
+  // a "Last 30 days" view.
+  const filtered = useMemo<Initiative[]>(() => {
+    let list: Initiative[] = initiatives ?? [];
+    if (!scope.single && !scope.isAll) {
+      list = filterByTeamScope(list, scope);
+    }
+    list = list.filter((i) => isInRange(i.updatedAt, filters.bounds));
+    if (scope.single && filters.assigneeFilter != null) {
+      list = list.filter((i) => i.assigneeId === filters.assigneeFilter);
+    }
+    return list;
+  }, [initiatives, scope, filters.bounds, filters.assigneeFilter]);
+
   const stats = useMemo(() => {
-    const list: Initiative[] = initiatives ?? [];
     const counts: Record<InitiativeStatus, number> = {
       backlog: 0,
       under_review: 0,
@@ -94,7 +106,7 @@ export default function InitiativesDashboard() {
     };
     const byDept = new Map<string, number>();
     const byCategory = new Map<string, number>();
-    for (const i of list) {
+    for (const i of filtered) {
       counts[i.status] = (counts[i.status] ?? 0) + 1;
       const deptKey = i.departmentName ?? "Cross-functional";
       byDept.set(deptKey, (byDept.get(deptKey) ?? 0) + 1);
@@ -109,18 +121,16 @@ export default function InitiativesDashboard() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
 
-    // "Needs review" — under_review items oldest-first so the team
-    // can clear the backlog from the top.
-    const needsReview = list
+    const needsReview = filtered
       .filter((i) => i.status === "under_review")
       .sort(
         (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+          new Date(a.createdAt as string).getTime() -
+          new Date(b.createdAt as string).getTime(),
       )
       .slice(0, 6);
 
-    // Recently decided — most-recent approvals/rejections.
-    const recentlyDecided = list
+    const recentlyDecided = filtered
       .filter(
         (i) =>
           (i.status === "approved" || i.status === "rejected_deferred") &&
@@ -128,19 +138,29 @@ export default function InitiativesDashboard() {
       )
       .sort(
         (a, b) =>
-          new Date(b.decidedAt!).getTime() - new Date(a.decidedAt!).getTime(),
+          new Date(b.decidedAt as string).getTime() -
+          new Date(a.decidedAt as string).getTime(),
       )
       .slice(0, 6);
 
     return {
-      total: list.length,
+      total: filtered.length,
       counts,
       departmentBreakdown,
       categoryBreakdown,
       needsReview,
       recentlyDecided,
     };
-  }, [initiatives]);
+  }, [filtered]);
+
+  const scopeLabel = useMemo(() => {
+    if (scope.isAll) return "All Teams";
+    if (scope.single) {
+      const dept = scope.accessible.find((d) => d.id === scope.singleId);
+      return dept?.name ?? "1 team";
+    }
+    return `${scope.selectedIds.length} teams`;
+  }, [scope]);
 
   return (
     <div className="space-y-6" data-testid="initiatives-dashboard">
@@ -149,30 +169,28 @@ export default function InitiativesDashboard() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Initiatives Dashboard
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Idea pipeline across{" "}
-            {departmentId === "all"
-              ? "all departments"
-              : (departments?.find((d) => d.id === Number(departmentId))?.name ??
-                "selected department")}
+          <p
+            className="text-sm text-muted-foreground mt-1"
+            data-testid="text-scope-label"
+          >
+            {scopeLabel} · {filters.rangeLabel}
           </p>
         </div>
-        <Select value={departmentId} onValueChange={setDepartmentId}>
-          <SelectTrigger
-            className="w-[220px]"
-            data-testid="select-initiatives-dashboard-dept"
-          >
-            <SelectValue placeholder="All Departments" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {departments?.map((d) => (
-              <SelectItem key={d.id} value={String(d.id)}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3 flex-wrap">
+          {scope.single && (
+            <AssigneePicker
+              value={filters.assigneeId}
+              onChange={filters.setAssigneeId}
+              agents={agents}
+              testId="select-initiatives-dashboard-assignee"
+            />
+          )}
+          <TimeRangePicker
+            value={filters.range}
+            onChange={filters.setRange}
+            testId="select-initiatives-dashboard-range"
+          />
+        </div>
       </div>
 
       {forbidden ? (
@@ -239,13 +257,13 @@ export default function InitiativesDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium">
-                  Initiatives by department
+                  Initiatives by team
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {stats.departmentBreakdown.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No initiatives yet.
+                    No initiatives in this window.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -359,7 +377,7 @@ export default function InitiativesDashboard() {
               <CardContent>
                 {stats.recentlyDecided.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No decisions recorded yet.
+                    No decisions in this window.
                   </p>
                 ) : (
                   <div className="divide-y">

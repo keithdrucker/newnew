@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "wouter";
 import {
   useListProjects,
-  useListDepartments,
   getListProjectsQueryKey,
   type ProjectSummary,
 } from "@workspace/api-client-react";
@@ -12,13 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   ResponsiveContainer,
@@ -42,6 +34,14 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
+import {
+  useDashboardFilters,
+  TimeRangePicker,
+  AssigneePicker,
+  useAgentOptions,
+  isInRange,
+} from "@/lib/dashboard-filters";
 
 const STATUS_LABEL: Record<ProjectSummary["status"], string> = {
   active: "Active",
@@ -53,12 +53,12 @@ const STATUS_LABEL: Record<ProjectSummary["status"], string> = {
 function isOverdue(p: ProjectSummary) {
   if (!p.dueAt) return false;
   if (p.status === "completed" || p.status === "archived") return false;
-  return new Date(p.dueAt).getTime() < Date.now();
+  return new Date(p.dueAt as unknown as string).getTime() < Date.now();
 }
 
-function formatDue(iso: string | null | undefined) {
+function formatDue(iso: string | Date | null | undefined) {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso as string).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -66,11 +66,9 @@ function formatDue(iso: string | null | undefined) {
 }
 
 export default function ProjectsDashboard() {
-  const [departmentId, setDepartmentId] = useState<string>("all");
-  const { data: departments } = useListDepartments({ scope: "accessible" });
-
-  const queryDeptId =
-    departmentId === "all" ? undefined : Number(departmentId);
+  const scope = useTeamScope();
+  const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
+  const filters = useDashboardFilters(queryDeptId);
 
   const projectsParams = { departmentId: queryDeptId };
   const { data: projects, isLoading, isError, error } = useListProjects(
@@ -87,11 +85,27 @@ export default function ProjectsDashboard() {
     },
   );
 
+  const agents = useAgentOptions(queryDeptId);
+
   const errStatus = (error as { status?: number } | null)?.status;
   const forbidden = isError && errStatus === 403;
 
+  // Apply scope → time range → assignee. Filter on `updatedAt` so a
+  // long-running project that had recent activity still appears in
+  // short windows.
+  const filtered = useMemo<ProjectSummary[]>(() => {
+    let list: ProjectSummary[] = projects ?? [];
+    if (!scope.single && !scope.isAll) {
+      list = filterByTeamScope(list, scope);
+    }
+    list = list.filter((p) => isInRange(p.updatedAt, filters.bounds));
+    if (scope.single && filters.assigneeFilter != null) {
+      list = list.filter((p) => p.ownerId === filters.assigneeFilter);
+    }
+    return list;
+  }, [projects, scope, filters.bounds, filters.assigneeFilter]);
+
   const stats = useMemo(() => {
-    const list = projects ?? [];
     const counts = { active: 0, on_hold: 0, completed: 0, archived: 0 };
     let totalTasks = 0;
     let doneTasks = 0;
@@ -99,7 +113,7 @@ export default function ProjectsDashboard() {
     const byDept = new Map<string, number>();
     const byOwner = new Map<string, number>();
 
-    for (const p of list) {
+    for (const p of filtered) {
       counts[p.status] += 1;
       totalTasks += p.checklistTotal;
       doneTasks += p.checklistDone;
@@ -114,7 +128,7 @@ export default function ProjectsDashboard() {
     const overallPct =
       totalTasks === 0 ? 0 : Math.round((doneTasks / totalTasks) * 100);
 
-    const topProgress = [...list]
+    const topProgress = [...filtered]
       .filter((p) => p.checklistTotal > 0)
       .map((p) => ({
         name: p.name,
@@ -133,16 +147,17 @@ export default function ProjectsDashboard() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    const overdueList = list
+    const overdueList = filtered
       .filter(isOverdue)
       .sort(
         (a, b) =>
-          new Date(a.dueAt!).getTime() - new Date(b.dueAt!).getTime(),
+          new Date(a.dueAt as unknown as string).getTime() -
+          new Date(b.dueAt as unknown as string).getTime(),
       )
       .slice(0, 6);
 
     return {
-      total: list.length,
+      total: filtered.length,
       counts,
       totalTasks,
       doneTasks,
@@ -153,7 +168,16 @@ export default function ProjectsDashboard() {
       topOwners,
       overdueList,
     };
-  }, [projects]);
+  }, [filtered]);
+
+  const scopeLabel = useMemo(() => {
+    if (scope.isAll) return "All Teams";
+    if (scope.single) {
+      const dept = scope.accessible.find((d) => d.id === scope.singleId);
+      return dept?.name ?? "1 team";
+    }
+    return `${scope.selectedIds.length} teams`;
+  }, [scope]);
 
   return (
     <div className="space-y-6" data-testid="projects-dashboard">
@@ -162,30 +186,28 @@ export default function ProjectsDashboard() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Projects Dashboard
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Delivery health across{" "}
-            {departmentId === "all"
-              ? "all departments"
-              : (departments?.find((d) => d.id === Number(departmentId))?.name ??
-                "selected department")}
+          <p
+            className="text-sm text-muted-foreground mt-1"
+            data-testid="text-scope-label"
+          >
+            {scopeLabel} · {filters.rangeLabel}
           </p>
         </div>
-        <Select value={departmentId} onValueChange={setDepartmentId}>
-          <SelectTrigger
-            className="w-[220px]"
-            data-testid="select-projects-dashboard-dept"
-          >
-            <SelectValue placeholder="All Departments" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {departments?.map((d) => (
-              <SelectItem key={d.id} value={String(d.id)}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3 flex-wrap">
+          {scope.single && (
+            <AssigneePicker
+              value={filters.assigneeId}
+              onChange={filters.setAssigneeId}
+              agents={agents}
+              testId="select-projects-dashboard-assignee"
+            />
+          )}
+          <TimeRangePicker
+            value={filters.range}
+            onChange={filters.setRange}
+            testId="select-projects-dashboard-range"
+          />
+        </div>
       </div>
 
       {forbidden ? (
@@ -282,8 +304,7 @@ export default function ProjectsDashboard() {
               <CardContent className="h-[300px]">
                 {stats.topProgress.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No tasks to chart yet. Add tasks to your projects to
-                    see progress.
+                    No tasks to chart in this window.
                   </p>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -351,13 +372,13 @@ export default function ProjectsDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium">
-                  Projects by department
+                  Projects by team
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {stats.departmentBreakdown.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No projects yet.
+                    No projects in this window.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -400,17 +421,10 @@ export default function ProjectsDashboard() {
                   </p>
                 ) : (
                   <div className="divide-y">
-                    {stats.overdueList.map((p) => {
-                      const slug = departments?.find(
-                        (d) => d.id === p.departmentId,
-                      )?.slug;
-                      const href = slug
-                        ? `/projects/dept/${slug}`
-                        : "/projects";
-                      return (
+                    {stats.overdueList.map((p) => (
                       <Link
                         key={p.id}
-                        href={href}
+                        href="/projects"
                         data-testid={`overdue-project-${p.id}`}
                         className="flex items-center justify-between py-2.5 text-sm hover:bg-muted/40 -mx-2 px-2 rounded"
                       >
@@ -438,8 +452,7 @@ export default function ProjectsDashboard() {
                           </span>
                         </div>
                       </Link>
-                      );
-                    })}
+                    ))}
                   </div>
                 )}
               </CardContent>

@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "wouter";
 import {
   useListOperationalTasks,
-  useListDepartments,
   getListOperationalTasksQueryKey,
   type OperationalTask,
   type OperationalTaskStatus,
@@ -14,13 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   ListChecks,
@@ -31,6 +23,14 @@ import {
   CalendarDays,
   Repeat,
 } from "lucide-react";
+import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
+import {
+  useDashboardFilters,
+  TimeRangePicker,
+  AssigneePicker,
+  useAgentOptions,
+  isInRange,
+} from "@/lib/dashboard-filters";
 
 const STATUS_LABEL: Record<OperationalTaskStatus, string> = {
   scheduled: "Scheduled",
@@ -84,15 +84,15 @@ function isDueWithinDays(yyyyMmDd: string, days: number): boolean {
 }
 
 export default function OperationalTasksDashboard() {
-  const [departmentId, setDepartmentId] = useState<string>("all");
-  const { data: departments } = useListDepartments({ scope: "accessible" });
+  const scope = useTeamScope();
 
-  const queryDeptId =
-    departmentId === "all" ? undefined : Number(departmentId);
-
-  // Fetch all open + completed so we can show real counts; client-side
-  // summarization keeps this dashboard to a single API hit.
-  const params = queryDeptId != null ? { departmentId: queryDeptId } : {};
+  // Single-team narrows server-side via departmentId; "All Teams" /
+  // multi-team fetch the user's full accessible set then we narrow
+  // client-side via filterByTeamScope.
+  const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
+  const filters = useDashboardFilters(queryDeptId);
+  const params =
+    queryDeptId != null ? { departmentId: queryDeptId } : {};
   const {
     data: tasks,
     isLoading,
@@ -109,11 +109,26 @@ export default function OperationalTasksDashboard() {
     },
   });
 
+  // Agent picker only meaningful on a single team; reset when scope flips.
+  const agents = useAgentOptions(queryDeptId);
+
   const errStatus = (error as { status?: number } | null)?.status;
   const forbidden = isError && errStatus === 403;
 
+  // Apply scope → time range → assignee in that order.
+  const filtered = useMemo<OperationalTask[]>(() => {
+    let list: OperationalTask[] = tasks ?? [];
+    if (!scope.single && !scope.isAll) {
+      list = filterByTeamScope(list, scope);
+    }
+    list = list.filter((t) => isInRange(t.updatedAt, filters.bounds));
+    if (scope.single && filters.assigneeFilter != null) {
+      list = list.filter((t) => t.ownerId === filters.assigneeFilter);
+    }
+    return list;
+  }, [tasks, scope, filters.bounds, filters.assigneeFilter]);
+
   const stats = useMemo(() => {
-    const list: OperationalTask[] = tasks ?? [];
     const counts: Record<OperationalTaskStatus, number> = {
       scheduled: 0,
       in_progress: 0,
@@ -125,7 +140,7 @@ export default function OperationalTasksDashboard() {
     const byDept = new Map<string, number>();
     const byFreq = new Map<string, number>();
 
-    for (const t of list) {
+    for (const t of filtered) {
       counts[t.status] = (counts[t.status] ?? 0) + 1;
       if (t.isOverdue && t.status !== "completed") overdue += 1;
       if (
@@ -153,7 +168,7 @@ export default function OperationalTasksDashboard() {
       .sort((a, b) => b.count - a.count);
 
     // "Needs attention" = overdue first, then due-soonest open tasks.
-    const openTasks = list.filter((t) => t.status !== "completed");
+    const openTasks = filtered.filter((t) => t.status !== "completed");
     const needsAttention = [...openTasks]
       .sort((a, b) => {
         if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
@@ -165,7 +180,7 @@ export default function OperationalTasksDashboard() {
       .slice(0, 6);
 
     return {
-      total: list.length,
+      total: filtered.length,
       counts,
       overdue,
       dueThisWeek,
@@ -173,7 +188,16 @@ export default function OperationalTasksDashboard() {
       frequencyBreakdown,
       needsAttention,
     };
-  }, [tasks]);
+  }, [filtered]);
+
+  const scopeLabel = useMemo(() => {
+    if (scope.isAll) return "All Teams";
+    if (scope.single) {
+      const dept = scope.accessible.find((d) => d.id === scope.singleId);
+      return dept?.name ?? "1 team";
+    }
+    return `${scope.selectedIds.length} teams`;
+  }, [scope]);
 
   return (
     <div className="space-y-6" data-testid="operational-tasks-dashboard">
@@ -182,30 +206,28 @@ export default function OperationalTasksDashboard() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Operational Tasks Dashboard
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Recurring &amp; one-time work across{" "}
-            {departmentId === "all"
-              ? "all departments"
-              : (departments?.find((d) => d.id === Number(departmentId))?.name ??
-                "selected department")}
+          <p
+            className="text-sm text-muted-foreground mt-1"
+            data-testid="text-scope-label"
+          >
+            {scopeLabel} · {filters.rangeLabel}
           </p>
         </div>
-        <Select value={departmentId} onValueChange={setDepartmentId}>
-          <SelectTrigger
-            className="w-[220px]"
-            data-testid="select-ops-tasks-dashboard-dept"
-          >
-            <SelectValue placeholder="All Departments" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {departments?.map((d) => (
-              <SelectItem key={d.id} value={String(d.id)}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3 flex-wrap">
+          {scope.single && (
+            <AssigneePicker
+              value={filters.assigneeId}
+              onChange={filters.setAssigneeId}
+              agents={agents}
+              testId="select-ops-tasks-dashboard-assignee"
+            />
+          )}
+          <TimeRangePicker
+            value={filters.range}
+            onChange={filters.setRange}
+            testId="select-ops-tasks-dashboard-range"
+          />
+        </div>
       </div>
 
       {forbidden ? (
@@ -299,7 +321,7 @@ export default function OperationalTasksDashboard() {
               <CardContent>
                 {stats.frequencyBreakdown.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No tasks yet.
+                    No tasks in this window.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -332,13 +354,13 @@ export default function OperationalTasksDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium">
-                  Tasks by department
+                  Tasks by team
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {stats.departmentBreakdown.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No tasks yet.
+                    No tasks in this window.
                   </p>
                 ) : (
                   <div className="space-y-2">
