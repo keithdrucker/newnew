@@ -66,9 +66,9 @@ const DASHBOARD_VIEW_KEY = "itsm.dashboard.view";
 
 const DASHBOARD_VIEW_LABEL: Record<DashboardView, string> = {
   tickets: "Tickets",
-  projects: "Projects",
-  initiatives: "Initiatives",
   operational_tasks: "Operational Tasks",
+  initiatives: "Initiatives",
+  projects: "Projects",
 };
 
 function isDashboardView(v: string): v is DashboardView {
@@ -131,14 +131,14 @@ export default function Dashboard() {
             </SelectItem>
             {showAgentViews && (
               <>
-                <SelectItem value="projects">
-                  {DASHBOARD_VIEW_LABEL.projects}
+                <SelectItem value="operational_tasks">
+                  {DASHBOARD_VIEW_LABEL.operational_tasks}
                 </SelectItem>
                 <SelectItem value="initiatives">
                   {DASHBOARD_VIEW_LABEL.initiatives}
                 </SelectItem>
-                <SelectItem value="operational_tasks">
-                  {DASHBOARD_VIEW_LABEL.operational_tasks}
+                <SelectItem value="projects">
+                  {DASHBOARD_VIEW_LABEL.projects}
                 </SelectItem>
               </>
             )}
