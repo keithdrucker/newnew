@@ -1047,6 +1047,7 @@ export default function InitiativesPage() {
       <CreateDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
+        defaultDepartmentId={activeDept?.id ?? null}
       />
       {selected && (
         <DetailDialog
@@ -1239,9 +1240,11 @@ function InitiativeCard({
 function CreateDialog({
   open,
   onOpenChange,
+  defaultDepartmentId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  defaultDepartmentId: number | null;
 }) {
   const qc = useQueryClient();
   const create = useCreateInitiative({
@@ -1260,20 +1263,26 @@ function CreateDialog({
   const [problemOpportunity, setProblemOpportunity] = useState("");
   const [expectedBenefit, setExpectedBenefit] = useState("");
   const [impactScope, setImpactScope] = useState("");
-  const [departmentId, setDepartmentId] = useState<string>("none");
+  const [departmentId, setDepartmentId] = useState<string>(
+    defaultDepartmentId != null ? String(defaultDepartmentId) : "none",
+  );
   const [additionalNotes, setAdditionalNotes] = useState("");
 
-  // Reset on close.
+  // Reset on close, and re-seed the team selector with the active board's
+  // department whenever the dialog (re)opens — so opening "New initiative"
+  // from the IT board pre-selects IT, from HR pre-selects HR, etc.
   useEffect(() => {
     if (!open) {
       setTitle("");
       setProblemOpportunity("");
       setExpectedBenefit("");
       setImpactScope("");
-      setDepartmentId("none");
       setAdditionalNotes("");
     }
-  }, [open]);
+    setDepartmentId(
+      defaultDepartmentId != null ? String(defaultDepartmentId) : "none",
+    );
+  }, [open, defaultDepartmentId]);
 
   const canSubmit =
     title.trim().length > 0 &&
