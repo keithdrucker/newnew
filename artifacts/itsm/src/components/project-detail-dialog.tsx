@@ -1268,7 +1268,7 @@ function ChecklistEditor({
     <div className="space-y-2" data-testid="checklist-editor">
       <div className="flex items-center gap-2 text-[12px] font-medium text-zinc-700">
         <CheckSquare className="h-3.5 w-3.5" />
-        Checklist
+        Steps to complete the Project
         <span className="text-muted-foreground font-normal">
           {sorted.filter((i) => i.done).length} / {sorted.length} done
         </span>
