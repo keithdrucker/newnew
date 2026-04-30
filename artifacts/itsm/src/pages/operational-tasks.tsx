@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Redirect, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
   Calendar as CalendarIcon,
   Check,
   ChevronDown,
+  ChevronRight,
+  Columns3,
+  Filter as FilterIcon,
+  FileDown,
   ListChecks,
   Plus,
   RefreshCw,
@@ -27,6 +34,7 @@ import {
   getGetSessionQueryKey,
   getListOperationalTasksQueryKey,
 } from "@workspace/api-client-react";
+import type { OperationalTask } from "@workspace/api-client-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +43,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,6 +120,179 @@ function typeLabel(value: string) {
 function statusLabel(value: string) {
   return STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
+
+// ---- Column system -----------------------------------------------
+//
+// Mirrors the Tickets page: columns are user-controlled (toggle +
+// reorder) and the choice persists per-user via localStorage. Every
+// column has a label, a renderer for the table cell, and a plain-text
+// formatter used by Export PDF.
+
+type ColumnKey =
+  | "name"
+  | "frequency"
+  | "type"
+  | "nextDueDate"
+  | "ownerName"
+  | "status"
+  | "description"
+  | "completedAt"
+  | "createdAt";
+
+type ColumnDef = {
+  key: ColumnKey;
+  label: string;
+  alwaysVisible?: boolean;
+  // Width hint for the table header (CSS class, not enforced).
+  className?: string;
+  // Plain text used by the PDF export. Not used for table rendering.
+  text: (t: OperationalTask) => string;
+};
+
+const COLUMN_DEFS: Record<ColumnKey, ColumnDef> = {
+  name: {
+    key: "name",
+    label: "Task Name",
+    alwaysVisible: true,
+    className: "w-[28%]",
+    text: (t) => t.name,
+  },
+  frequency: {
+    key: "frequency",
+    label: "Frequency",
+    className: "w-[110px]",
+    text: (t) => freqLabel(t.frequency),
+  },
+  type: {
+    key: "type",
+    label: "Type",
+    className: "w-[100px]",
+    text: (t) => typeLabel(t.type),
+  },
+  nextDueDate: {
+    key: "nextDueDate",
+    label: "Next Due",
+    className: "w-[120px]",
+    text: (t) => formatDate(t.nextDueDate),
+  },
+  ownerName: {
+    key: "ownerName",
+    label: "Owner",
+    className: "w-[160px]",
+    text: (t) => t.ownerName ?? "Unassigned",
+  },
+  status: {
+    key: "status",
+    label: "Status",
+    className: "w-[130px]",
+    text: (t) =>
+      t.isOverdue && t.status !== "completed"
+        ? "Overdue"
+        : statusLabel(t.status),
+  },
+  description: {
+    key: "description",
+    label: "Description",
+    className: "min-w-[200px]",
+    text: (t) => t.description || "",
+  },
+  completedAt: {
+    key: "completedAt",
+    label: "Last Completed",
+    className: "w-[140px]",
+    text: (t) =>
+      t.completedAt ? formatDate(t.completedAt.slice(0, 10)) : "",
+  },
+  createdAt: {
+    key: "createdAt",
+    label: "Created",
+    className: "w-[120px]",
+    text: (t) => formatDate(t.createdAt.slice(0, 10)),
+  },
+};
+
+const ALL_COLUMN_KEYS: ColumnKey[] = [
+  "name",
+  "frequency",
+  "type",
+  "nextDueDate",
+  "ownerName",
+  "status",
+  "description",
+  "completedAt",
+  "createdAt",
+];
+
+const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = [
+  "name",
+  "frequency",
+  "type",
+  "nextDueDate",
+  "ownerName",
+  "status",
+];
+
+const COLUMN_VISIBILITY_KEY = "itsm.operationalTasks.visibleColumns";
+
+// Cell renderer keyed by ColumnKey. Most cells are plain text from
+// the column def, but a few (Next Due icon, Status badge) get richer
+// rendering. Kept as a top-level helper so the table body stays
+// declarative.
+function renderCell(key: ColumnKey, t: OperationalTask) {
+  switch (key) {
+    case "nextDueDate":
+      return (
+        <span className="inline-flex items-center gap-1 text-sm">
+          <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+          {formatDate(t.nextDueDate)}
+        </span>
+      );
+    case "status":
+      return <StatusBadge status={t.status} isOverdue={t.isOverdue} />;
+    case "completedAt":
+      return t.completedAt ? formatDate(t.completedAt.slice(0, 10)) : "—";
+    case "createdAt":
+      return formatDate(t.createdAt.slice(0, 10));
+    case "description":
+      return (
+        <span className="line-clamp-1" title={t.description || undefined}>
+          {t.description || "—"}
+        </span>
+      );
+    default:
+      return COLUMN_DEFS[key].text(t);
+  }
+}
+
+// ---- Filters -----------------------------------------------------
+
+type Filters = {
+  search: string;
+  status: string[]; // multi-select
+  ownerId: string; // "all" | "<id>"
+  frequency: string; // "all" | freq
+  type: string; // "all" | type
+  dueWindow: string; // "all" | "today" | "week" | "overdue"
+};
+
+const DEFAULT_FILTERS: Filters = {
+  search: "",
+  status: [],
+  ownerId: "all",
+  frequency: "all",
+  type: "all",
+  dueWindow: "all",
+};
+
+type FilterCategoryKey = Exclude<keyof Filters, "search">;
+
+const FILTER_CATEGORIES: { key: FilterCategoryKey; label: string }[] = [
+  { key: "status", label: "Status" },
+  { key: "ownerId", label: "Owner" },
+  { key: "frequency", label: "Frequency" },
+  { key: "type", label: "Type" },
+  { key: "dueWindow", label: "Due date" },
+];
 
 function todayYmd() {
   const d = new Date();
@@ -207,37 +394,88 @@ export default function OperationalTasks() {
   }, [deptSlug, explicitlyAll, session, departments, setLocation]);
 
   // ---- Filters -------------------------------------------------------
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [ownerFilter, setOwnerFilter] = useState<string>("all");
-  const [frequencyFilter, setFrequencyFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [dueWindowFilter, setDueWindowFilter] = useState<string>("all");
+  // One-shape Filters object mirrors the Tickets toolbar so the
+  // categorical popover, the chip strip, and the URL/query layer can
+  // all read from the same source of truth.
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const setFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => {
+    setFilters((f) => ({ ...f, [key]: value }));
+  };
+  const clearFilter = (key: keyof Filters) =>
+    setFilter(key, DEFAULT_FILTERS[key] as never);
+  const clearAllFilters = () => setFilters(DEFAULT_FILTERS);
+
+  // Filters popover state
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activeCategory, setActiveCategory] =
+    useState<FilterCategoryKey | null>("status");
+  const [optionSearch, setOptionSearch] = useState("");
+
+  // ---- Visible columns (persisted per-user via localStorage) -------
+  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_VISIBLE_COLUMNS;
+    try {
+      const raw = window.localStorage.getItem(COLUMN_VISIBILITY_KEY);
+      if (!raw) return DEFAULT_VISIBLE_COLUMNS;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return DEFAULT_VISIBLE_COLUMNS;
+      const valid = parsed.filter(
+        (k): k is ColumnKey =>
+          typeof k === "string" && (ALL_COLUMN_KEYS as string[]).includes(k),
+      );
+      // Always include alwaysVisible columns (e.g. "name") even if the
+      // saved list dropped them.
+      const required = ALL_COLUMN_KEYS.filter(
+        (k) => COLUMN_DEFS[k].alwaysVisible,
+      );
+      const merged = Array.from(new Set([...required, ...valid]));
+      return merged.length > 0 ? merged : DEFAULT_VISIBLE_COLUMNS;
+    } catch {
+      return DEFAULT_VISIBLE_COLUMNS;
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        COLUMN_VISIBILITY_KEY,
+        JSON.stringify(visibleColumns),
+      );
+    } catch {
+      // localStorage unavailable (private mode, quota, etc.) — silent.
+    }
+  }, [visibleColumns]);
 
   const queryParams = useMemo(() => {
     const p: Parameters<typeof useListOperationalTasks>[0] = {};
     if (activeDept) p.departmentId = activeDept.id;
-    if (statusFilter !== "all") p.status = statusFilter;
-    if (ownerFilter !== "all") p.ownerId = Number(ownerFilter);
-    if (frequencyFilter !== "all")
-      p.frequency = frequencyFilter as never;
-    if (typeFilter !== "all") p.type = typeFilter as never;
-    if (dueWindowFilter !== "all")
-      p.dueWindow = dueWindowFilter as never;
-    if (search.trim()) p.search = search.trim();
+    // Server `status` is single-string; if multiple selected we let
+    // server return all and then narrow client-side below.
+    if (filters.status.length === 1) p.status = filters.status[0];
+    if (filters.ownerId !== "all") p.ownerId = Number(filters.ownerId);
+    if (filters.frequency !== "all")
+      p.frequency = filters.frequency as never;
+    if (filters.type !== "all") p.type = filters.type as never;
+    if (filters.dueWindow !== "all")
+      p.dueWindow = filters.dueWindow as never;
+    if (filters.search.trim()) p.search = filters.search.trim();
     return p;
-  }, [
-    activeDept,
-    statusFilter,
-    ownerFilter,
-    frequencyFilter,
-    typeFilter,
-    dueWindowFilter,
-    search,
-  ]);
+  }, [activeDept, filters]);
 
   const { data: tasks, isLoading: tasksLoading, refetch } =
     useListOperationalTasks(queryParams);
+
+  // When the user selects multiple statuses (e.g. Scheduled + In
+  // Progress) the server can only filter on a single status, so we
+  // also narrow the result set client-side. Single-select and empty
+  // selection are no-ops here because queryParams already pushed them
+  // to the server.
+  const visibleTasks = useMemo<OperationalTask[]>(() => {
+    const list = (tasks ?? []) as OperationalTask[];
+    if (filters.status.length <= 1) return list;
+    const set = new Set(filters.status);
+    return list.filter((t) => set.has(t.status));
+  }, [tasks, filters.status]);
 
   // Owner picker — load agents for whichever department is active
   // (fall back to global list when "All Operational Tasks").
@@ -292,21 +530,117 @@ export default function OperationalTasks() {
   const currentBoardIsDefault =
     (session.defaultOperationalTaskBoard ?? null) === (deptSlug ?? null);
 
-  const filtersActive =
-    statusFilter !== "all" ||
-    ownerFilter !== "all" ||
-    frequencyFilter !== "all" ||
-    typeFilter !== "all" ||
-    dueWindowFilter !== "all" ||
-    search.trim() !== "";
+  // Active filter chips: one chip per non-default filter. The chip
+  // strip lives below the toolbar and lets the user clear filters one
+  // at a time without opening the popover.
+  const ownerLabel = (id: string) =>
+    id === "all"
+      ? "All owners"
+      : (agents ?? []).find((a) => String(a.id) === id)?.name ?? `#${id}`;
+  const dueLabel = (v: string) =>
+    DUE_WINDOW_OPTIONS.find((o) => o.value === v)?.label ?? v;
 
-  function clearFilters() {
-    setStatusFilter("all");
-    setOwnerFilter("all");
-    setFrequencyFilter("all");
-    setTypeFilter("all");
-    setDueWindowFilter("all");
-    setSearch("");
+  type FilterChip = {
+    key: string;
+    categoryLabel: string;
+    valueLabel: string;
+    clear: () => void;
+  };
+  const activeFilterChips: FilterChip[] = [];
+  for (const s of filters.status) {
+    activeFilterChips.push({
+      key: `status:${s}`,
+      categoryLabel: "Status",
+      valueLabel: statusLabel(s),
+      clear: () =>
+        setFilter(
+          "status",
+          filters.status.filter((v) => v !== s),
+        ),
+    });
+  }
+  if (filters.ownerId !== "all") {
+    activeFilterChips.push({
+      key: "ownerId",
+      categoryLabel: "Owner",
+      valueLabel: ownerLabel(filters.ownerId),
+      clear: () => clearFilter("ownerId"),
+    });
+  }
+  if (filters.frequency !== "all") {
+    activeFilterChips.push({
+      key: "frequency",
+      categoryLabel: "Frequency",
+      valueLabel: freqLabel(filters.frequency),
+      clear: () => clearFilter("frequency"),
+    });
+  }
+  if (filters.type !== "all") {
+    activeFilterChips.push({
+      key: "type",
+      categoryLabel: "Type",
+      valueLabel: typeLabel(filters.type),
+      clear: () => clearFilter("type"),
+    });
+  }
+  if (filters.dueWindow !== "all") {
+    activeFilterChips.push({
+      key: "dueWindow",
+      categoryLabel: "Due date",
+      valueLabel: dueLabel(filters.dueWindow),
+      clear: () => clearFilter("dueWindow"),
+    });
+  }
+  const activeFilterCount = activeFilterChips.length;
+  const filtersActive =
+    activeFilterCount > 0 || filters.search.trim() !== "";
+
+  // Options shown in the right-hand pane of the filters popover for
+  // the currently active category.
+  function optionsForCategory(
+    cat: FilterCategoryKey,
+  ): Array<{ value: string; label: string }> {
+    switch (cat) {
+      case "status":
+        return STATUS_OPTIONS.map((s) => ({ ...s }));
+      case "ownerId":
+        return [
+          { value: "all", label: "All owners" },
+          ...(agents ?? []).map((a) => ({
+            value: String(a.id),
+            label: a.name,
+          })),
+        ];
+      case "frequency":
+        return [
+          { value: "all", label: "All frequencies" },
+          ...FREQUENCY_OPTIONS.map((f) => ({ ...f })),
+        ];
+      case "type":
+        return [
+          { value: "all", label: "All types" },
+          ...TYPE_OPTIONS.map((t) => ({ ...t })),
+        ];
+      case "dueWindow":
+        return DUE_WINDOW_OPTIONS.map((d) => ({ ...d }));
+    }
+  }
+
+  async function handleExportPdf() {
+    if (visibleTasks.length === 0) {
+      toast.message("Nothing to export — no tasks match the current filters.");
+      return;
+    }
+    try {
+      await exportTasksToPdf({
+        title: `Operational Tasks — ${boardLabel}`,
+        columns: visibleColumns.map((k) => COLUMN_DEFS[k]),
+        tasks: visibleTasks,
+      });
+    } catch (err) {
+      console.error("PDF export failed", err);
+      toast.error("Couldn’t export PDF. Please try again.");
+    }
   }
 
   return (
@@ -419,138 +753,434 @@ export default function OperationalTasks() {
         </div>
       </header>
 
-      {/* Filter bar — matches Tickets layout */}
-      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card/40 px-3 py-2">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      {/* Toolbar: Filters | Search | (right) Export PDF | Edit Columns | Refresh */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Filters popover — categorical, mirrors the Tickets pattern.
+            Categories sit in a left rail; the selected category's
+            options render on the right. Status is multi-select (an
+            unchecked status means "don't filter on that status"). All
+            other categories are single-select with an explicit
+            "All …" option that maps to the default. */}
+        <Popover
+          open={filtersOpen}
+          onOpenChange={(o) => {
+            setFiltersOpen(o);
+            if (o) setOptionSearch("");
+          }}
+        >
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2"
+              data-testid="button-filters"
+            >
+              <FilterIcon className="h-4 w-4" />
+              <span className="font-medium">Filters</span>
+              {activeFilterCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="h-5 min-w-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px]"
+                  data-testid="badge-filter-count"
+                >
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="p-0 w-[520px]"
+            data-testid="popover-filters"
+          >
+            <div className="flex h-[340px]">
+              {/* Left: categories */}
+              <div className="w-[180px] border-r bg-muted/30 py-2 overflow-y-auto">
+                {FILTER_CATEGORIES.map((cat) => {
+                  const isActive = activeCategory === cat.key;
+                  const isSet =
+                    cat.key === "status"
+                      ? filters.status.length > 0
+                      : filters[cat.key] !== DEFAULT_FILTERS[cat.key];
+                  return (
+                    <button
+                      key={cat.key}
+                      onClick={() => {
+                        setActiveCategory(cat.key);
+                        setOptionSearch("");
+                      }}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors ${
+                        isActive
+                          ? "bg-background text-foreground font-medium"
+                          : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                      }`}
+                      data-testid={`filter-category-${cat.key}`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{cat.label}</span>
+                        {isSet && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                        )}
+                      </span>
+                      <ChevronRight className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right: options for the selected category */}
+              <div className="flex-1 flex flex-col">
+                {activeCategory && (
+                  <>
+                    <div className="p-2 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/70" />
+                        <Input
+                          placeholder="Search…"
+                          value={optionSearch}
+                          onChange={(e) => setOptionSearch(e.target.value)}
+                          className="pl-8 h-9"
+                          data-testid="input-filter-options-search"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto py-1">
+                      {optionsForCategory(activeCategory)
+                        .filter((o) =>
+                          o.label
+                            .toLowerCase()
+                            .includes(optionSearch.toLowerCase()),
+                        )
+                        .map((opt) => {
+                          // Status is multi-select; everything else is
+                          // a single value with an explicit "all" reset.
+                          const checked =
+                            activeCategory === "status"
+                              ? filters.status.includes(opt.value)
+                              : (filters[activeCategory] as string) ===
+                                opt.value;
+                          return (
+                            <label
+                              key={opt.value}
+                              className="flex items-center gap-3 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50"
+                              data-testid={`filter-option-${activeCategory}-${opt.value}`}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  if (activeCategory === "status") {
+                                    const next = v
+                                      ? Array.from(
+                                          new Set([
+                                            ...filters.status,
+                                            opt.value,
+                                          ]),
+                                        )
+                                      : filters.status.filter(
+                                          (s) => s !== opt.value,
+                                        );
+                                    setFilter("status", next);
+                                    return;
+                                  }
+                                  setFilter(
+                                    activeCategory,
+                                    (v
+                                      ? opt.value
+                                      : DEFAULT_FILTERS[
+                                          activeCategory
+                                        ]) as never,
+                                  );
+                                }}
+                                className="h-4 w-4"
+                              />
+                              <span className="truncate">{opt.label}</span>
+                            </label>
+                          );
+                        })}
+                      {optionsForCategory(activeCategory).length === 0 && (
+                        <p className="px-3 py-3 text-sm text-muted-foreground">
+                          No options available.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between p-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8"
+                onClick={clearAllFilters}
+                disabled={!filtersActive}
+                data-testid="button-clear-filters"
+              >
+                Clear all
+              </Button>
+              <Button
+                size="sm"
+                className="h-8"
+                onClick={() => setFiltersOpen(false)}
+                data-testid="button-apply-filters"
+              >
+                Done
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <div className="relative flex-1 min-w-[220px] max-w-[420px]">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/70" />
           <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tasks…"
-            className="pl-7 h-8"
+            value={filters.search}
+            onChange={(e) => setFilter("search", e.target.value)}
+            className="pl-8 h-9"
             data-testid="input-search-tasks"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger
-            className="h-8 w-[140px]"
-            data-testid="select-filter-status"
-          >
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {STATUS_OPTIONS.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-          <SelectTrigger
-            className="h-8 w-[160px]"
-            data-testid="select-filter-owner"
-          >
-            <SelectValue placeholder="Owner" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All owners</SelectItem>
-            {(agents ?? []).map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>
-                {a.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={frequencyFilter} onValueChange={setFrequencyFilter}>
-          <SelectTrigger
-            className="h-8 w-[140px]"
-            data-testid="select-filter-frequency"
-          >
-            <SelectValue placeholder="Frequency" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All frequencies</SelectItem>
-            {FREQUENCY_OPTIONS.map((f) => (
-              <SelectItem key={f.value} value={f.value}>
-                {f.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger
-            className="h-8 w-[130px]"
-            data-testid="select-filter-type"
-          >
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            {TYPE_OPTIONS.map((t) => (
-              <SelectItem key={t.value} value={t.value}>
-                {t.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={dueWindowFilter} onValueChange={setDueWindowFilter}>
-          <SelectTrigger
-            className="h-8 w-[140px]"
-            data-testid="select-filter-due"
-          >
-            <SelectValue placeholder="Due date" />
-          </SelectTrigger>
-          <SelectContent>
-            {DUE_WINDOW_OPTIONS.map((d) => (
-              <SelectItem key={d.value} value={d.value}>
-                {d.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {filtersActive && (
+
+        <div className="flex-1" />
+
+        {/* Export PDF — exports the rows currently on screen (after
+            filters and search) using the user's chosen visible columns
+            and order. Disabled when there is nothing to export. */}
+        <Button
+          variant="outline"
+          className="h-9 gap-2"
+          onClick={handleExportPdf}
+          disabled={visibleTasks.length === 0}
+          data-testid="button-export-pdf"
+        >
+          <FileDown className="h-4 w-4" />
+          Export PDF
+        </Button>
+
+        {/* Edit Columns — toggle visibility and reorder the table
+            columns. Choices persist per-user via localStorage. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="h-9 gap-2"
+              data-testid="button-manage-columns"
+            >
+              <Columns3 className="h-4 w-4" />
+              Edit Columns
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-2" align="end">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              Visible columns — drag the arrows to reorder
+            </div>
+            <div className="space-y-0.5">
+              {visibleColumns.map((key, idx) => {
+                const def = COLUMN_DEFS[key];
+                const disabledCheckbox = def.alwaysVisible;
+                const isFirst = idx === 0;
+                const isLast = idx === visibleColumns.length - 1;
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60"
+                    data-testid={`column-row-${key}`}
+                  >
+                    <Checkbox
+                      checked
+                      disabled={disabledCheckbox}
+                      onCheckedChange={(v) => {
+                        if (disabledCheckbox) return;
+                        if (!v) {
+                          setVisibleColumns((prev) =>
+                            prev.filter((k) => k !== key),
+                          );
+                        }
+                      }}
+                      data-testid={`column-toggle-${key}`}
+                    />
+                    <span className="flex-1 truncate">{def.label}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={isFirst}
+                      onClick={() =>
+                        setVisibleColumns((prev) => {
+                          const next = [...prev];
+                          [next[idx - 1], next[idx]] = [
+                            next[idx],
+                            next[idx - 1],
+                          ];
+                          return next;
+                        })
+                      }
+                      title="Move up"
+                      data-testid={`column-move-up-${key}`}
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={isLast}
+                      onClick={() =>
+                        setVisibleColumns((prev) => {
+                          const next = [...prev];
+                          [next[idx], next[idx + 1]] = [
+                            next[idx + 1],
+                            next[idx],
+                          ];
+                          return next;
+                        })
+                      }
+                      title="Move down"
+                      data-testid={`column-move-down-${key}`}
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {(() => {
+              const hidden = ALL_COLUMN_KEYS.filter(
+                (k) => !visibleColumns.includes(k),
+              );
+              if (hidden.length === 0) return null;
+              return (
+                <>
+                  <Separator className="my-2" />
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                    Hidden columns
+                  </div>
+                  <div className="space-y-0.5">
+                    {hidden.map((key) => {
+                      const def = COLUMN_DEFS[key];
+                      return (
+                        <label
+                          key={key}
+                          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60 cursor-pointer"
+                          data-testid={`column-row-${key}`}
+                        >
+                          <Checkbox
+                            checked={false}
+                            onCheckedChange={(v) => {
+                              if (!v) return;
+                              setVisibleColumns((prev) =>
+                                Array.from(new Set([...prev, key])),
+                              );
+                            }}
+                            data-testid={`column-toggle-${key}`}
+                          />
+                          <span className="flex-1 truncate">{def.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+
+            <Separator className="my-2" />
+            <div className="flex items-center justify-between px-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setVisibleColumns(ALL_COLUMN_KEYS)}
+                data-testid="button-columns-show-all"
+              >
+                Show all
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() =>
+                  setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)
+                }
+                data-testid="button-columns-reset"
+              >
+                Reset
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+      </div>
+
+      {/* Active filter chip strip */}
+      {activeFilterChips.length > 0 && (
+        <div
+          className="flex items-center gap-2 flex-wrap -mt-2"
+          data-testid="active-filter-chips"
+        >
+          {activeFilterChips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-full bg-muted text-xs font-medium"
+              data-testid={`chip-${chip.key}`}
+            >
+              <span className="text-muted-foreground">
+                {chip.categoryLabel}:
+              </span>
+              <span className="text-foreground">{chip.valueLabel}</span>
+              <button
+                onClick={chip.clear}
+                className="ml-0.5 h-5 w-5 rounded-full hover:bg-background/80 flex items-center justify-center"
+                aria-label={`Clear ${chip.categoryLabel} filter`}
+                data-testid={`chip-${chip.key}-clear`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
           <Button
             variant="ghost"
             size="sm"
-            onClick={clearFilters}
-            className="h-8"
-            data-testid="button-clear-filters"
+            className="h-7 px-2 text-xs"
+            onClick={clearAllFilters}
+            data-testid="button-clear-all-chips"
           >
-            <X className="h-3.5 w-3.5 mr-1" />
-            Clear
+            Clear all
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Table */}
+      {/* Table — driven by visibleColumns so it reflects whatever the
+          user picked in the Edit Columns popover. */}
       <div className="rounded-md border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[35%]">Task Name</TableHead>
-              <TableHead className="w-[120px]">Frequency</TableHead>
-              <TableHead className="w-[110px]">Type</TableHead>
-              <TableHead className="w-[130px]">Next Due</TableHead>
-              <TableHead className="w-[180px]">Owner</TableHead>
-              <TableHead className="w-[140px]">Status</TableHead>
+              {visibleColumns.map((key) => {
+                const def = COLUMN_DEFS[key];
+                return (
+                  <TableHead key={key} className={def.className}>
+                    {def.label}
+                  </TableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
             {tasksLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={visibleColumns.length}
                   className="text-center text-sm text-muted-foreground py-8"
                 >
                   Loading…
                 </TableCell>
               </TableRow>
-            ) : (tasks ?? []).length === 0 ? (
+            ) : visibleTasks.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={visibleColumns.length}
                   className="text-center text-sm text-muted-foreground py-10"
                 >
                   {filtersActive
@@ -559,32 +1189,25 @@ export default function OperationalTasks() {
                 </TableCell>
               </TableRow>
             ) : (
-              (tasks ?? []).map((t) => (
+              visibleTasks.map((t) => (
                 <TableRow
                   key={t.id}
                   className="cursor-pointer hover:bg-muted/40"
                   onClick={() => setDetailId(t.id)}
                   data-testid={`row-operational-task-${t.id}`}
                 >
-                  <TableCell className="font-medium">{t.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {freqLabel(t.frequency)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {typeLabel(t.type)}
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center gap-1 text-sm">
-                      <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                      {formatDate(t.nextDueDate)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {t.ownerName ?? "Unassigned"}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={t.status} isOverdue={t.isOverdue} />
-                  </TableCell>
+                  {visibleColumns.map((key) => (
+                    <TableCell
+                      key={key}
+                      className={
+                        key === "name"
+                          ? "font-medium"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {renderCell(key, t)}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))
             )}
@@ -876,7 +1499,22 @@ function TaskDetailDialog({
   async function handleComplete() {
     setError(null);
     try {
-      await completeTask.mutateAsync({ id: taskId });
+      // The API returns both the just-completed task and (for
+      // recurring tasks) the auto-spawned next instance. Surface that
+      // through a toast so the user can see exactly when the next
+      // occurrence will land — otherwise the new instance just
+      // appears in the list with no explanation.
+      const result = await completeTask.mutateAsync({ id: taskId });
+      const next = result?.nextInstance;
+      if (next) {
+        toast.success(
+          `Marked complete. Next instance scheduled for ${formatDate(
+            next.nextDueDate,
+          )}.`,
+        );
+      } else {
+        toast.success("Marked complete.");
+      }
       onMutated();
       onClose();
     } catch (e) {
@@ -1191,4 +1829,114 @@ function TaskDetailDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+
+// ---- Export to PDF -------------------------------------------------
+//
+// Generates a simple table-style PDF of the rows currently visible in
+// the table (after filters + search) using whichever columns the user
+// has chosen and in their order. The @react-pdf/renderer module is
+// loaded lazily so the page doesn't pay its 300KB+ cost until the
+// user actually clicks "Export PDF".
+
+async function exportTasksToPdf({
+  title,
+  columns,
+  tasks,
+}: {
+  title: string;
+  columns: ColumnDef[];
+  tasks: OperationalTask[];
+}): Promise<void> {
+  if (tasks.length === 0) return;
+  const mod = await import("@react-pdf/renderer");
+  const { Document, Page, Text, View, StyleSheet, pdf } = mod;
+  const styles = StyleSheet.create({
+    page: { padding: 28, fontSize: 9, fontFamily: "Helvetica" },
+    title: { fontSize: 14, fontWeight: 700, marginBottom: 4 },
+    meta: { fontSize: 9, color: "#666", marginBottom: 12 },
+    headerRow: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: "#222",
+      paddingBottom: 4,
+      marginBottom: 4,
+    },
+    headerCell: { fontSize: 9, fontWeight: 700 },
+    row: {
+      flexDirection: "row",
+      borderBottomWidth: 0.5,
+      borderBottomColor: "#ddd",
+      paddingTop: 4,
+      paddingBottom: 4,
+    },
+    cell: { fontSize: 9, paddingRight: 6 },
+    footer: {
+      position: "absolute",
+      bottom: 16,
+      left: 28,
+      right: 28,
+      textAlign: "center",
+      fontSize: 8,
+      color: "#888",
+    },
+  });
+
+  // Equal-weight columns for simplicity; long descriptions just wrap
+  // within their flex column.
+  const colWidth = `${100 / columns.length}%`;
+  const generated = new Date().toLocaleString();
+
+  const doc = (
+    <Document>
+      <Page size="A4" orientation="landscape" style={styles.page}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.meta}>
+          {tasks.length} {tasks.length === 1 ? "task" : "tasks"} · Generated{" "}
+          {generated}
+        </Text>
+        <View style={styles.headerRow} fixed>
+          {columns.map((c) => (
+            <View
+              key={c.key}
+              style={{ width: colWidth, paddingRight: 6 }}
+            >
+              <Text style={styles.headerCell}>{c.label}</Text>
+            </View>
+          ))}
+        </View>
+        {tasks.map((t) => (
+          // Allow long-description rows to flow across page breaks —
+          // wrap={false} would clip them. react-pdf will split a row
+          // between pages when the cell text wraps beyond a single page.
+          <View key={t.id} style={styles.row}>
+            {columns.map((c) => (
+              <View key={c.key} style={{ width: colWidth }}>
+                <Text style={styles.cell}>{c.text(t) || "—"}</Text>
+              </View>
+            ))}
+          </View>
+        ))}
+        <Text
+          style={styles.footer}
+          render={({ pageNumber, totalPages }) =>
+            `Page ${pageNumber} of ${totalPages}`
+          }
+          fixed
+        />
+      </Page>
+    </Document>
+  );
+
+  const blob = await pdf(doc).toBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.download = `operational-tasks-${stamp}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
