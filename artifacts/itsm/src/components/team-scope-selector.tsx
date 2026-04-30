@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown, Users, Layers } from "lucide-react";
+import { Check, ChevronDown, Users, Layers, X } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -103,8 +103,25 @@ export function TeamScopeSelector() {
           className="w-72 p-2"
           data-testid="popover-team-scope"
         >
-          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Active Teams
+          <div className="flex items-center justify-between px-2 py-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Active Teams
+            </span>
+            {/* Reset clears any narrowed selection and snaps back to
+                "All Teams" — the same default a brand-new user with
+                multiple teams sees. Only meaningful when the user has
+                actually narrowed scope. */}
+            {!isAll && (
+              <button
+                type="button"
+                onClick={() => setAll()}
+                className="inline-flex items-center gap-1 rounded text-[10px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="button-team-scope-reset"
+              >
+                <X className="h-3 w-3" />
+                Reset
+              </button>
+            )}
           </div>
           <Button
             type="button"
