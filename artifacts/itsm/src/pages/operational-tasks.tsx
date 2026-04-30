@@ -4,8 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertCircle,
-  ArrowDown,
-  ArrowUp,
   Calendar as CalendarIcon,
   Check,
   ChevronRight,
@@ -21,6 +19,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { DraggableColumnList } from "@/components/draggable-column-list";
 import {
   useGetSession,
   useListAgents,
@@ -1062,78 +1061,21 @@ export default function OperationalTasks() {
           </PopoverTrigger>
           <PopoverContent className="w-72 p-2" align="end">
             <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-              Visible columns — drag the arrows to reorder
+              Visible columns — drag to reorder
             </div>
-            <div className="space-y-0.5">
-              {visibleColumns.map((key, idx) => {
-                const def = COLUMN_DEFS[key];
-                const disabledCheckbox = def.alwaysVisible;
-                const isFirst = idx === 0;
-                const isLast = idx === visibleColumns.length - 1;
-                return (
-                  <div
-                    key={key}
-                    className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60"
-                    data-testid={`column-row-${key}`}
-                  >
-                    <Checkbox
-                      checked
-                      disabled={disabledCheckbox}
-                      onCheckedChange={(v) => {
-                        if (disabledCheckbox) return;
-                        if (!v) {
-                          setVisibleColumns((prev) =>
-                            prev.filter((k) => k !== key),
-                          );
-                        }
-                      }}
-                      data-testid={`column-toggle-${key}`}
-                    />
-                    <span className="flex-1 truncate">{def.label}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      disabled={isFirst}
-                      onClick={() =>
-                        setVisibleColumns((prev) => {
-                          const next = [...prev];
-                          [next[idx - 1], next[idx]] = [
-                            next[idx],
-                            next[idx - 1],
-                          ];
-                          return next;
-                        })
-                      }
-                      title="Move up"
-                      data-testid={`column-move-up-${key}`}
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      disabled={isLast}
-                      onClick={() =>
-                        setVisibleColumns((prev) => {
-                          const next = [...prev];
-                          [next[idx], next[idx + 1]] = [
-                            next[idx + 1],
-                            next[idx],
-                          ];
-                          return next;
-                        })
-                      }
-                      title="Move down"
-                      data-testid={`column-move-down-${key}`}
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
+            <DraggableColumnList
+              items={visibleColumns.map((key) => ({
+                key,
+                label: COLUMN_DEFS[key].label,
+                alwaysVisible: COLUMN_DEFS[key].alwaysVisible,
+              }))}
+              onReorder={(next) =>
+                setVisibleColumns(next as typeof visibleColumns)
+              }
+              onHide={(key) =>
+                setVisibleColumns((prev) => prev.filter((k) => k !== key))
+              }
+            />
 
             {(() => {
               const hidden = ALL_COLUMN_KEYS.filter(
