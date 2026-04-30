@@ -484,30 +484,31 @@ function TicketsDashboardContent() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {scope.single && (
-            <Select value={assigneeId} onValueChange={setAssigneeId}>
-              <SelectTrigger
-                className="w-[200px]"
-                data-testid="select-assignee"
-              >
-                <SelectValue placeholder="All Agents" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Agents</SelectItem>
-                {agents && agents.length > 0 ? (
-                  agents.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    No agents in this team
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
-          )}
+          {/* Always render the agent picker. The agent list is narrowed
+              to the active team when one is in scope, and falls back
+              to every agent when scope is multi or "All Teams". */}
+          <Select value={assigneeId} onValueChange={setAssigneeId}>
+            <SelectTrigger
+              className="w-[200px]"
+              data-testid="select-assignee"
+            >
+              <SelectValue placeholder="All Agents" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Agents</SelectItem>
+              {agents && agents.length > 0 ? (
+                agents.map((a) => (
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {a.name}
+                  </SelectItem>
+                ))
+              ) : (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                  No agents available
+                </div>
+              )}
+            </SelectContent>
+          </Select>
           <Select
             value={rangeDays}
             onValueChange={(v) => setRangeDays(v as "30" | "180" | "365")}
