@@ -1,12 +1,16 @@
 import { Router, type IRouter } from "express";
-import { and, asc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import {
   db,
   operationalTasksTable,
+  operationalTaskTimeEntriesTable,
+  operationalTaskActivityTable,
   departmentsTable,
   usersTable,
   type OperationalTaskRow,
   type OperationalTaskChecklistItem,
+  type OperationalTaskTimeEntryRow,
+  type OperationalTaskActivityRow,
 } from "@workspace/db";
 import {
   ListOperationalTasksQueryParams,
@@ -16,6 +20,13 @@ import {
   UpdateOperationalTaskBody,
   DeleteOperationalTaskParams,
   CompleteOperationalTaskParams,
+  ListOperationalTaskActivityParams,
+  ListOperationalTaskTimeEntriesParams,
+  CreateOperationalTaskTimeEntryParams,
+  CreateOperationalTaskTimeEntryBody,
+  UpdateOperationalTaskTimeEntryParams,
+  UpdateOperationalTaskTimeEntryBody,
+  DeleteOperationalTaskTimeEntryParams,
 } from "@workspace/api-zod";
 import { getCurrentUser, type SessionUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
@@ -26,6 +37,11 @@ import {
   sectionModifiableDepartmentIds,
 } from "../lib/board-access";
 import { randomUUID } from "node:crypto";
+
+// Minimal structural type so `recordActivity` can accept either the
+// top-level db handle or a Drizzle transaction without dragging in
+// the full PgTransaction generic. We only ever call `.insert()` on it.
+type DbOrTx = { insert: typeof db.insert };
 
 const router: IRouter = Router();
 
@@ -106,8 +122,60 @@ function advanceDueDate(currentYmd: string, frequency: string): string {
 }
 
 function isOverdue(row: { nextDueDate: string; status: string }): boolean {
-  if (row.status === "completed") return false;
+  // Completed and closed tasks are terminal — they can't be overdue
+  // even if their original due date is in the past.
+  if (row.status === "completed" || row.status === "closed") return false;
   return row.nextDueDate < todayYmd();
+}
+
+// ---- Activity log -------------------------------------------------
+
+// Centralised helper. Every state-changing route appends one row so
+// the audit trail is uniform. `userId` is null for system actions
+// (lazy auto-close after 24h).
+async function recordActivity(
+  tx: DbOrTx,
+  taskId: number,
+  userId: number | null,
+  action: string,
+  details: Record<string, unknown> = {},
+): Promise<void> {
+  await tx.insert(operationalTaskActivityTable).values({
+    taskId,
+    userId,
+    action,
+    details,
+  });
+}
+
+// ---- Lazy auto-close (one-time, 24h after completion) -------------
+
+// Per spec: a one_time task that has been `completed` for >24h is
+// automatically transitioned to `closed`. We do this lazily on read
+// rather than via a cron — the moment any user touches the task or
+// the list, we promote eligible rows in a single UPDATE and write a
+// system activity entry. This keeps the read path correct without a
+// separate background process.
+async function lazyCloseEligible(taskIds: number[]): Promise<void> {
+  if (taskIds.length === 0) return;
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const promoted = await db
+    .update(operationalTasksTable)
+    .set({ status: "closed", updatedAt: new Date() })
+    .where(
+      and(
+        inArray(operationalTasksTable.id, taskIds),
+        eq(operationalTasksTable.type, "one_time"),
+        eq(operationalTasksTable.status, "completed"),
+        sql`${operationalTasksTable.completedAt} <= ${cutoff}`,
+      ),
+    )
+    .returning({ id: operationalTasksTable.id });
+  for (const p of promoted) {
+    await recordActivity(db, p.id, null, "closed", {
+      reason: "auto_close_after_24h",
+    });
+  }
 }
 
 // ---- Checklist normalization --------------------------------------
@@ -125,7 +193,59 @@ function normalizeChecklist(
     assigneeId: it.assigneeId ?? null,
     assigneeName: it.assigneeName ?? null,
     dueDate: it.dueDate ?? null,
+    completedAt: it.completedAt ?? null,
   }));
+}
+
+// Diff old vs new checklist arrays. Stamps `completedAt` the moment
+// `done` flips false → true; clears it when un-checked. Returns the
+// reconciled array PLUS a list of activity entries to write so the
+// audit log captures who ticked what and when.
+function reconcileChecklistTicks(
+  oldItems: OperationalTaskChecklistItem[],
+  incoming: OperationalTaskChecklistItem[],
+): {
+  next: OperationalTaskChecklistItem[];
+  ticked: Array<{ id: string; text: string }>;
+  unticked: Array<{ id: string; text: string }>;
+} {
+  const oldById = new Map<string, OperationalTaskChecklistItem>();
+  for (const o of oldItems) oldById.set(o.id, o);
+  const now = new Date().toISOString();
+  const ticked: Array<{ id: string; text: string }> = [];
+  const unticked: Array<{ id: string; text: string }> = [];
+  const next = incoming.map((it) => {
+    const id = it.id && it.id.length > 0 ? it.id : randomUUID();
+    const prev = oldById.get(id);
+    let completedAt = it.completedAt ?? null;
+    if (prev) {
+      if (!prev.done && it.done) {
+        completedAt = now;
+        ticked.push({ id, text: it.text ?? "" });
+      } else if (prev.done && !it.done) {
+        completedAt = null;
+        unticked.push({ id, text: it.text ?? "" });
+      } else if (it.done && !completedAt) {
+        // Already done coming in but no timestamp — preserve the prev one.
+        completedAt = prev.completedAt ?? now;
+      } else if (!it.done) {
+        completedAt = null;
+      }
+    } else if (it.done) {
+      completedAt = now;
+      ticked.push({ id, text: it.text ?? "" });
+    }
+    return {
+      id,
+      text: it.text ?? "",
+      done: !!it.done,
+      assigneeId: it.assigneeId ?? null,
+      assigneeName: it.assigneeName ?? null,
+      dueDate: it.dueDate ?? null,
+      completedAt,
+    };
+  });
+  return { next, ticked, unticked };
 }
 
 // Reset checks for a new recurring instance — keeps structure +
@@ -176,6 +296,7 @@ function shape(row: TaskWithRefs) {
     ownerName: row.ownerName,
     status: row.status,
     isOverdue: isOverdue(row),
+    controlCategory: row.controlCategory,
     checklist: row.checklist ?? [],
     seriesId: row.seriesId,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
@@ -187,8 +308,9 @@ function shape(row: TaskWithRefs) {
 }
 
 async function loadTaskById(id: number): Promise<TaskWithRefs | null> {
-  const owner = usersTable;
-  const completer = usersTable;
+  // Lazy auto-close eligible candidates before reading. The promote
+  // is a no-op if the row isn't eligible (wrong type/status/age).
+  await lazyCloseEligible([id]);
   const rows = await db
     .select({
       id: operationalTasksTable.id,
@@ -200,6 +322,7 @@ async function loadTaskById(id: number): Promise<TaskWithRefs | null> {
       nextDueDate: operationalTasksTable.nextDueDate,
       ownerId: operationalTasksTable.ownerId,
       status: operationalTasksTable.status,
+      controlCategory: operationalTasksTable.controlCategory,
       checklist: operationalTasksTable.checklist,
       seriesId: operationalTasksTable.seriesId,
       completedAt: operationalTasksTable.completedAt,
@@ -297,6 +420,11 @@ router.get("/operational-tasks", async (req, res) => {
       if (statuses.length > 0) {
         conds.push(inArray(operationalTasksTable.status, statuses));
       }
+    } else if (!q.includeClosed) {
+      // Closed tasks are hidden by default (Tickets-style "Show closed"
+      // toggle). When the caller explicitly filters by status they
+      // already control which buckets they see, so we honour that.
+      conds.push(ne(operationalTasksTable.status, "closed"));
     }
     if (q.search) {
       conds.push(
@@ -324,6 +452,24 @@ router.get("/operational-tasks", async (req, res) => {
       conds.push(sql`${operationalTasksTable.status} != 'completed'`);
     }
 
+    // First-pass: figure out which IDs are visible so we can lazy
+    // auto-close eligible candidates BEFORE the read. We then
+    // re-query (with the same filters) so the response reflects
+    // the post-promotion state.
+    const idsToCheck = await db
+      .select({ id: operationalTasksTable.id })
+      .from(operationalTasksTable)
+      .where(
+        and(
+          conds.length > 0 ? and(...conds) : undefined,
+          eq(operationalTasksTable.type, "one_time"),
+          eq(operationalTasksTable.status, "completed"),
+        )!,
+      );
+    if (idsToCheck.length > 0) {
+      await lazyCloseEligible(idsToCheck.map((r) => r.id));
+    }
+
     const rows = await db
       .select({
         id: operationalTasksTable.id,
@@ -335,6 +481,7 @@ router.get("/operational-tasks", async (req, res) => {
         nextDueDate: operationalTasksTable.nextDueDate,
         ownerId: operationalTasksTable.ownerId,
         status: operationalTasksTable.status,
+        controlCategory: operationalTasksTable.controlCategory,
         checklist: operationalTasksTable.checklist,
         seriesId: operationalTasksTable.seriesId,
         completedAt: operationalTasksTable.completedAt,
@@ -354,9 +501,10 @@ router.get("/operational-tasks", async (req, res) => {
       .where(conds.length > 0 ? and(...conds) : undefined)
       // Default sort is "overdue first, then nextDueDate ascending".
       // We compute overdue inline so the sort honors the rule even when
-      // the query doesn't filter by dueWindow.
+      // the query doesn't filter by dueWindow. Closed and completed
+      // are terminal so they fall to the bottom of the overdue bucket.
       .orderBy(
-        sql`CASE WHEN ${operationalTasksTable.status} != 'completed' AND ${operationalTasksTable.nextDueDate} < ${today} THEN 0 ELSE 1 END`,
+        sql`CASE WHEN ${operationalTasksTable.status} NOT IN ('completed', 'closed') AND ${operationalTasksTable.nextDueDate} < ${today} THEN 0 ELSE 1 END`,
         asc(operationalTasksTable.nextDueDate),
         asc(operationalTasksTable.id),
       );
@@ -428,9 +576,10 @@ router.post("/operational-tasks", async (req, res) => {
       return;
     }
     const checklist = normalizeChecklist(body.data.checklist);
-    // Wrap the insert + seriesId backfill in a single transaction so a
-    // recurring root row can never persist with a NULL seriesId if the
-    // process dies between the two statements.
+    // Wrap the insert + seriesId backfill + initial activity row in a
+    // single transaction so a recurring root row can never persist
+    // with a NULL seriesId — and the audit trail always starts with a
+    // `created` entry — if the process dies between statements.
     const insertedId = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(operationalTasksTable)
@@ -443,6 +592,7 @@ router.post("/operational-tasks", async (req, res) => {
           nextDueDate: body.data.nextDueDate,
           ownerId: body.data.ownerId ?? null,
           status: "scheduled",
+          controlCategory: body.data.controlCategory ?? null,
           checklist,
         })
         .returning({ id: operationalTasksTable.id });
@@ -454,6 +604,14 @@ router.post("/operational-tasks", async (req, res) => {
           .set({ seriesId: row.id })
           .where(eq(operationalTasksTable.id, row.id));
       }
+      await recordActivity(tx, row.id, user.id, "created", {
+        name: body.data.name,
+        type: body.data.type,
+        frequency: tf.frequency,
+        nextDueDate: body.data.nextDueDate,
+        ownerId: body.data.ownerId ?? null,
+        controlCategory: body.data.controlCategory ?? null,
+      });
       return row.id;
     });
     const task = await loadTaskById(insertedId);
@@ -494,11 +652,35 @@ router.patch("/operational-tasks/:id", async (req, res) => {
         .json({ error: "Need modify+ on Operational Tasks for this team" });
       return;
     }
-    if (existing.status === "completed") {
+    if (existing.status === "closed") {
       res
         .status(409)
-        .json({ error: "Cannot edit a completed task — completion is final" });
+        .json({
+          error: "Cannot edit a closed task — closed tasks are read-only",
+        });
       return;
+    }
+    // `completed` is a softer state: descriptive metadata stays
+    // editable so people can correct typos / re-categorize work after
+    // the fact, but the fields that *describe the completed instance*
+    // (due date, owner, status, checklist) are pinned. We enforce the
+    // restriction by stripping those fields from the patch body — that
+    // way callers using the dedicated `/complete` endpoint (and the
+    // lazy auto-close path) keep working without race conditions.
+    if (existing.status === "completed") {
+      const restrictedKeys: Array<keyof typeof body.data> = [
+        "nextDueDate",
+        "ownerId",
+        "status",
+        "checklist",
+      ];
+      const offenders = restrictedKeys.filter((k) => k in body.data);
+      if (offenders.length > 0) {
+        res.status(409).json({
+          error: `Cannot change ${offenders.join(", ")} on a completed task — these fields describe the completed instance.`,
+        });
+        return;
+      }
     }
 
     // Determine the resulting type + frequency so we can validate the
@@ -512,25 +694,133 @@ router.patch("/operational-tasks/:id", async (req, res) => {
       return;
     }
 
+    // Build the SQL update + the activity entries side-by-side. We
+    // diff every field that's present in the body so the audit log
+    // captures *what actually changed* rather than the whole payload.
     const update: Partial<typeof operationalTasksTable.$inferInsert> = {
       updatedAt: new Date(),
     };
-    if (body.data.name != null) update.name = body.data.name;
-    if (body.data.description != null) update.description = body.data.description;
-    if (body.data.type != null) update.type = body.data.type;
-    if ("frequency" in body.data) update.frequency = tf.frequency;
-    if (body.data.nextDueDate != null)
+    type Activity = { action: string; details: Record<string, unknown> };
+    const activities: Activity[] = [];
+
+    if (body.data.name != null && body.data.name !== existing.name) {
+      update.name = body.data.name;
+      activities.push({
+        action: "name_changed",
+        details: { from: existing.name, to: body.data.name },
+      });
+    }
+    if (
+      body.data.description != null &&
+      body.data.description !== existing.description
+    ) {
+      update.description = body.data.description;
+      activities.push({ action: "description_changed", details: {} });
+    }
+    if (body.data.type != null && body.data.type !== existing.type) {
+      update.type = body.data.type;
+      activities.push({
+        action: "type_changed",
+        details: { from: existing.type, to: body.data.type },
+      });
+    }
+    if ("frequency" in body.data && tf.frequency !== existing.frequency) {
+      update.frequency = tf.frequency;
+      activities.push({
+        action: "frequency_changed",
+        details: { from: existing.frequency, to: tf.frequency },
+      });
+    }
+    if (
+      body.data.nextDueDate != null &&
+      body.data.nextDueDate !== existing.nextDueDate
+    ) {
       update.nextDueDate = body.data.nextDueDate;
-    if ("ownerId" in body.data) update.ownerId = body.data.ownerId ?? null;
-    if (body.data.status != null) update.status = body.data.status;
+      activities.push({
+        action: "due_date_changed",
+        details: { from: existing.nextDueDate, to: body.data.nextDueDate },
+      });
+    }
+    if ("ownerId" in body.data) {
+      const nextOwner = body.data.ownerId ?? null;
+      if (nextOwner !== existing.ownerId) {
+        update.ownerId = nextOwner;
+        activities.push({
+          action: "owner_reassigned",
+          details: { from: existing.ownerId, to: nextOwner },
+        });
+      }
+    }
+    if (body.data.status != null && body.data.status !== existing.status) {
+      // The PATCH zod schema only allows `scheduled` and `in_progress`
+      // — `completed` and `closed` are reached through their dedicated
+      // endpoints (POST /complete and the lazy auto-close). So no
+      // extra guard is needed here.
+      update.status = body.data.status;
+      activities.push({
+        action: "status_changed",
+        details: { from: existing.status, to: body.data.status },
+      });
+    }
+    if ("controlCategory" in body.data) {
+      const nextCC = body.data.controlCategory ?? null;
+      if (nextCC !== existing.controlCategory) {
+        update.controlCategory = nextCC;
+        activities.push({
+          action: "control_category_changed",
+          details: { from: existing.controlCategory, to: nextCC },
+        });
+      }
+    }
     if (body.data.checklist != null) {
-      update.checklist = normalizeChecklist(body.data.checklist);
+      const reconciled = reconcileChecklistTicks(
+        existing.checklist ?? [],
+        body.data.checklist,
+      );
+      update.checklist = reconciled.next;
+      for (const t of reconciled.ticked) {
+        activities.push({
+          action: "checklist_item_completed",
+          details: { itemId: t.id, text: t.text },
+        });
+      }
+      for (const u of reconciled.unticked) {
+        activities.push({
+          action: "checklist_item_unchecked",
+          details: { itemId: u.id, text: u.text },
+        });
+      }
+      // Capture pure structural changes (add/remove/edit) too so the
+      // audit log isn't silent when somebody rewords a row.
+      const oldIds = new Set((existing.checklist ?? []).map((c) => c.id));
+      const newIds = new Set(reconciled.next.map((c) => c.id));
+      const added = reconciled.next.filter((c) => !oldIds.has(c.id));
+      const removed = (existing.checklist ?? []).filter(
+        (c) => !newIds.has(c.id),
+      );
+      for (const a of added) {
+        activities.push({
+          action: "checklist_item_added",
+          details: { itemId: a.id, text: a.text },
+        });
+      }
+      for (const r of removed) {
+        activities.push({
+          action: "checklist_item_removed",
+          details: { itemId: r.id, text: r.text },
+        });
+      }
     }
 
-    await db
-      .update(operationalTasksTable)
-      .set(update)
-      .where(eq(operationalTasksTable.id, params.data.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(operationalTasksTable)
+        .set(update)
+        .where(eq(operationalTasksTable.id, params.data.id));
+      for (const a of activities) {
+        await recordActivity(tx, params.data.id, user.id, a.action, a.details);
+      }
+    });
     const task = await loadTaskById(params.data.id);
     res.json(shape(task!));
   } catch (err) {
@@ -565,6 +855,14 @@ router.delete("/operational-tasks/:id", async (req, res) => {
         .json({ error: "Need manager+ to delete operational tasks" });
       return;
     }
+    // Activity rows cascade out with the task, so logging "deleted"
+    // here is mostly informational — but we keep the audit footprint
+    // consistent by emitting one event before the delete in case
+    // future callers (e.g. a separate audit-export pipeline) snapshot
+    // activity rows ahead of the cascade.
+    await recordActivity(db, params.data.id, user.id, "deleted", {
+      name: existing.name,
+    });
     await db
       .delete(operationalTasksTable)
       .where(eq(operationalTasksTable.id, params.data.id));
@@ -606,14 +904,24 @@ router.post("/operational-tasks/:id/complete", async (req, res) => {
         .json({ error: "Task is already completed" });
       return;
     }
+    // `closed` is terminal — it must never be transitioned back to
+    // completed (which would rewrite completedAt and break the
+    // immutable closure invariant). The lazy auto-close path is the
+    // only thing that can promote completed → closed, never the
+    // reverse.
+    if (existing.status === "closed") {
+      res
+        .status(409)
+        .json({ error: "Task is closed and cannot be re-completed" });
+      return;
+    }
 
     // Concurrency-safe completion: do the status flip with a
-    // conditional UPDATE that only fires if the row is still not
-    // completed, then RETURNING tells us whether we won the race.
-    // The successor insert only runs when our update actually moved
-    // the row — so two concurrent /complete requests on the same task
-    // result in exactly one success + one 409 + at most one new
-    // instance.
+    // conditional UPDATE that only fires if the row is still
+    // open (scheduled or in_progress), then RETURNING tells us
+    // whether we won the race. Restricting the predicate to the
+    // open states (rather than just `!= completed`) also blocks
+    // closed → completed regressions if a row is closed mid-flight.
     let nextInstanceId: number | null = null;
     let won = false;
     await db.transaction(async (tx) => {
@@ -628,7 +936,7 @@ router.post("/operational-tasks/:id/complete", async (req, res) => {
         .where(
           and(
             eq(operationalTasksTable.id, existing.id),
-            ne(operationalTasksTable.status, "completed"),
+            inArray(operationalTasksTable.status, ["scheduled", "in_progress"]),
           ),
         )
         .returning({ id: operationalTasksTable.id });
@@ -638,6 +946,9 @@ router.post("/operational-tasks/:id/complete", async (req, res) => {
         return;
       }
       won = true;
+      await recordActivity(tx, existing.id, user.id, "completed", {
+        wasRecurring: existing.type === "recurring",
+      });
 
       if (existing.type === "recurring" && existing.frequency) {
         const nextDue = advanceDueDate(
@@ -655,11 +966,16 @@ router.post("/operational-tasks/:id/complete", async (req, res) => {
             nextDueDate: nextDue,
             ownerId: existing.ownerId,
             status: "scheduled",
+            controlCategory: existing.controlCategory,
             checklist: resetChecks(existing.checklist ?? []),
             seriesId: existing.seriesId ?? existing.id,
           })
           .returning({ id: operationalTasksTable.id });
         nextInstanceId = next.id;
+        await recordActivity(tx, next.id, user.id, "created", {
+          fromCompletion: existing.id,
+          nextDueDate: nextDue,
+        });
       }
     });
 
@@ -682,5 +998,437 @@ router.post("/operational-tasks/:id/complete", async (req, res) => {
     res.status(status).json({ error: (err as Error).message });
   }
 });
+
+// ---- Activity log -------------------------------------------------
+
+router.get("/operational-tasks/:id/activity", async (req, res) => {
+  try {
+    const user = await getCurrentUser(req);
+    assertAgentOrAdmin(user);
+    const params = ListOperationalTaskActivityParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const task = await loadTaskById(params.data.id);
+    if (!task) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const role = await getBoardRole(
+      user,
+      task.departmentId,
+      "operational_tasks",
+    );
+    if (!role) {
+      res.status(403).json({ error: "No access to this board" });
+      return;
+    }
+    const rows = await db
+      .select({
+        id: operationalTaskActivityTable.id,
+        taskId: operationalTaskActivityTable.taskId,
+        userId: operationalTaskActivityTable.userId,
+        userName: usersTable.name,
+        action: operationalTaskActivityTable.action,
+        details: operationalTaskActivityTable.details,
+        createdAt: operationalTaskActivityTable.createdAt,
+      })
+      .from(operationalTaskActivityTable)
+      .leftJoin(
+        usersTable,
+        eq(usersTable.id, operationalTaskActivityTable.userId),
+      )
+      .where(eq(operationalTaskActivityTable.taskId, params.data.id))
+      .orderBy(asc(operationalTaskActivityTable.createdAt));
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        taskId: r.taskId,
+        userId: r.userId,
+        userName: r.userName,
+        action: r.action,
+        details: (r.details ?? {}) as Record<string, unknown>,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    );
+  } catch (err) {
+    const status = (err as { status?: number }).status ?? 500;
+    res.status(status).json({ error: (err as Error).message });
+  }
+});
+
+// ---- Time entries -------------------------------------------------
+
+// Round any duration to the nearest 15 minutes (matches the ticket
+// time-entry behaviour for consistent billing rollups). We always
+// round UP so partial increments don't get dropped — agents prefer
+// to over-account by a few minutes than under-account.
+function round15Up(minutes: number): number {
+  if (minutes <= 0) return 0;
+  return Math.ceil(minutes / 15) * 15;
+}
+
+function shapeTimeEntry(
+  row: OperationalTaskTimeEntryRow & { userName: string | null },
+) {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    userId: row.userId,
+    userName: row.userName,
+    departmentId: row.departmentId,
+    startAt: row.startAt.toISOString(),
+    endAt: row.endAt.toISOString(),
+    durationMinutes: row.durationMinutes,
+    note: row.note,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+router.get("/operational-tasks/:id/time-entries", async (req, res) => {
+  try {
+    const user = await getCurrentUser(req);
+    assertAgentOrAdmin(user);
+    const params = ListOperationalTaskTimeEntriesParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const task = await loadTaskById(params.data.id);
+    if (!task) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const role = await getBoardRole(
+      user,
+      task.departmentId,
+      "operational_tasks",
+    );
+    if (!role) {
+      res.status(403).json({ error: "No access to this board" });
+      return;
+    }
+    const rows = await db
+      .select({
+        id: operationalTaskTimeEntriesTable.id,
+        taskId: operationalTaskTimeEntriesTable.taskId,
+        userId: operationalTaskTimeEntriesTable.userId,
+        departmentId: operationalTaskTimeEntriesTable.departmentId,
+        startAt: operationalTaskTimeEntriesTable.startAt,
+        endAt: operationalTaskTimeEntriesTable.endAt,
+        durationMinutes: operationalTaskTimeEntriesTable.durationMinutes,
+        note: operationalTaskTimeEntriesTable.note,
+        createdAt: operationalTaskTimeEntriesTable.createdAt,
+        userName: usersTable.name,
+      })
+      .from(operationalTaskTimeEntriesTable)
+      .leftJoin(
+        usersTable,
+        eq(usersTable.id, operationalTaskTimeEntriesTable.userId),
+      )
+      .where(eq(operationalTaskTimeEntriesTable.taskId, params.data.id))
+      .orderBy(desc(operationalTaskTimeEntriesTable.startAt));
+    res.json(rows.map((r) => shapeTimeEntry(r)));
+  } catch (err) {
+    const status = (err as { status?: number }).status ?? 500;
+    res.status(status).json({ error: (err as Error).message });
+  }
+});
+
+router.post("/operational-tasks/:id/time-entries", async (req, res) => {
+  try {
+    const user = await getCurrentUser(req);
+    assertAgentOrAdmin(user);
+    const params = CreateOperationalTaskTimeEntryParams.safeParse(req.params);
+    const body = CreateOperationalTaskTimeEntryBody.safeParse(req.body);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const task = await loadTaskById(params.data.id);
+    if (!task) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const role = await getBoardRole(
+      user,
+      task.departmentId,
+      "operational_tasks",
+    );
+    if (!roleAtLeast(role, "modify")) {
+      res
+        .status(403)
+        .json({ error: "Need modify+ on Operational Tasks for this team" });
+      return;
+    }
+    if (task.status === "closed") {
+      res
+        .status(409)
+        .json({ error: "Cannot log time on a closed task" });
+      return;
+    }
+
+    const startAt = new Date(body.data.startAt);
+    const endAt = new Date(body.data.endAt);
+    if (
+      Number.isNaN(startAt.getTime()) ||
+      Number.isNaN(endAt.getTime()) ||
+      endAt <= startAt
+    ) {
+      res
+        .status(400)
+        .json({ error: "endAt must be a valid time after startAt" });
+      return;
+    }
+    const rawMinutes = Math.round((endAt.getTime() - startAt.getTime()) / 60000);
+    const durationMinutes = round15Up(rawMinutes);
+
+    const insertedId = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(operationalTaskTimeEntriesTable)
+        .values({
+          taskId: task.id,
+          userId: user.id,
+          departmentId: task.departmentId,
+          startAt,
+          endAt,
+          durationMinutes,
+          note: body.data.note ?? "",
+        })
+        .returning({ id: operationalTaskTimeEntriesTable.id });
+      await recordActivity(tx, task.id, user.id, "time_logged", {
+        entryId: row.id,
+        durationMinutes,
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+      });
+      return row.id;
+    });
+
+    const [created] = await db
+      .select({
+        id: operationalTaskTimeEntriesTable.id,
+        taskId: operationalTaskTimeEntriesTable.taskId,
+        userId: operationalTaskTimeEntriesTable.userId,
+        departmentId: operationalTaskTimeEntriesTable.departmentId,
+        startAt: operationalTaskTimeEntriesTable.startAt,
+        endAt: operationalTaskTimeEntriesTable.endAt,
+        durationMinutes: operationalTaskTimeEntriesTable.durationMinutes,
+        note: operationalTaskTimeEntriesTable.note,
+        createdAt: operationalTaskTimeEntriesTable.createdAt,
+        userName: usersTable.name,
+      })
+      .from(operationalTaskTimeEntriesTable)
+      .leftJoin(
+        usersTable,
+        eq(usersTable.id, operationalTaskTimeEntriesTable.userId),
+      )
+      .where(eq(operationalTaskTimeEntriesTable.id, insertedId))
+      .limit(1);
+    res.status(201).json(shapeTimeEntry(created));
+  } catch (err) {
+    const status = (err as { status?: number }).status ?? 500;
+    res.status(status).json({ error: (err as Error).message });
+  }
+});
+
+router.patch(
+  "/operational-tasks/:id/time-entries/:entryId",
+  async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      assertAgentOrAdmin(user);
+      const params = UpdateOperationalTaskTimeEntryParams.safeParse(req.params);
+      const body = UpdateOperationalTaskTimeEntryBody.safeParse(req.body);
+      if (!params.success) {
+        res.status(400).json({ error: params.error.message });
+        return;
+      }
+      if (!body.success) {
+        res.status(400).json({ error: body.error.message });
+        return;
+      }
+      const [existing] = await db
+        .select()
+        .from(operationalTaskTimeEntriesTable)
+        .where(
+          and(
+            eq(operationalTaskTimeEntriesTable.id, params.data.entryId),
+            eq(operationalTaskTimeEntriesTable.taskId, params.data.id),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      const task = await loadTaskById(params.data.id);
+      if (!task) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      const role = await getBoardRole(
+        user,
+        task.departmentId,
+        "operational_tasks",
+      );
+      // Owner of the entry can edit their own; managers+ can edit anyone's.
+      const isOwn = existing.userId === user.id;
+      if (!isOwn && !roleAtLeast(role, "manager")) {
+        res.status(403).json({
+          error:
+            "Can only edit your own time entries (or be a manager on this team)",
+        });
+        return;
+      }
+      if (task.status === "closed") {
+        res
+          .status(409)
+          .json({ error: "Cannot edit time on a closed task" });
+        return;
+      }
+
+      const startAt =
+        body.data.startAt != null ? new Date(body.data.startAt) : existing.startAt;
+      const endAt =
+        body.data.endAt != null ? new Date(body.data.endAt) : existing.endAt;
+      if (
+        Number.isNaN(startAt.getTime()) ||
+        Number.isNaN(endAt.getTime()) ||
+        endAt <= startAt
+      ) {
+        res
+          .status(400)
+          .json({ error: "endAt must be a valid time after startAt" });
+        return;
+      }
+      const rawMinutes = Math.round(
+        (endAt.getTime() - startAt.getTime()) / 60000,
+      );
+      const durationMinutes = round15Up(rawMinutes);
+
+      // `note` is NOT NULL in the schema (defaults to empty string),
+      // so coerce nulls/undefined into "".
+      const nextNote: string =
+        "note" in body.data
+          ? body.data.note ?? ""
+          : existing.note;
+      await db.transaction(async (tx) => {
+        await tx
+          .update(operationalTaskTimeEntriesTable)
+          .set({
+            startAt,
+            endAt,
+            durationMinutes,
+            note: nextNote,
+          })
+          .where(eq(operationalTaskTimeEntriesTable.id, params.data.entryId));
+        await recordActivity(tx, task.id, user.id, "time_edited", {
+          entryId: params.data.entryId,
+          durationMinutes,
+          startAt: startAt.toISOString(),
+          endAt: endAt.toISOString(),
+        });
+      });
+
+      const [updated] = await db
+        .select({
+          id: operationalTaskTimeEntriesTable.id,
+          taskId: operationalTaskTimeEntriesTable.taskId,
+          userId: operationalTaskTimeEntriesTable.userId,
+          departmentId: operationalTaskTimeEntriesTable.departmentId,
+          startAt: operationalTaskTimeEntriesTable.startAt,
+          endAt: operationalTaskTimeEntriesTable.endAt,
+          durationMinutes: operationalTaskTimeEntriesTable.durationMinutes,
+          note: operationalTaskTimeEntriesTable.note,
+          createdAt: operationalTaskTimeEntriesTable.createdAt,
+          userName: usersTable.name,
+        })
+        .from(operationalTaskTimeEntriesTable)
+        .leftJoin(
+          usersTable,
+          eq(usersTable.id, operationalTaskTimeEntriesTable.userId),
+        )
+        .where(eq(operationalTaskTimeEntriesTable.id, params.data.entryId))
+        .limit(1);
+      res.json(shapeTimeEntry(updated));
+    } catch (err) {
+      const status = (err as { status?: number }).status ?? 500;
+      res.status(status).json({ error: (err as Error).message });
+    }
+  },
+);
+
+router.delete(
+  "/operational-tasks/:id/time-entries/:entryId",
+  async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      assertAgentOrAdmin(user);
+      const params = DeleteOperationalTaskTimeEntryParams.safeParse(req.params);
+      if (!params.success) {
+        res.status(400).json({ error: params.error.message });
+        return;
+      }
+      const [existing] = await db
+        .select()
+        .from(operationalTaskTimeEntriesTable)
+        .where(
+          and(
+            eq(operationalTaskTimeEntriesTable.id, params.data.entryId),
+            eq(operationalTaskTimeEntriesTable.taskId, params.data.id),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        // Idempotent: 204 if already gone.
+        res.status(204).send();
+        return;
+      }
+      const task = await loadTaskById(params.data.id);
+      if (!task) {
+        res.status(204).send();
+        return;
+      }
+      const role = await getBoardRole(
+        user,
+        task.departmentId,
+        "operational_tasks",
+      );
+      const isOwn = existing.userId === user.id;
+      if (!isOwn && !roleAtLeast(role, "manager")) {
+        res.status(403).json({
+          error:
+            "Can only delete your own time entries (or be a manager on this team)",
+        });
+        return;
+      }
+      if (task.status === "closed") {
+        res
+          .status(409)
+          .json({ error: "Cannot remove time entries on a closed task" });
+        return;
+      }
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(operationalTaskTimeEntriesTable)
+          .where(eq(operationalTaskTimeEntriesTable.id, params.data.entryId));
+        await recordActivity(tx, task.id, user.id, "time_deleted", {
+          entryId: params.data.entryId,
+          durationMinutes: existing.durationMinutes,
+        });
+      });
+      res.status(204).send();
+    } catch (err) {
+      const status = (err as { status?: number }).status ?? 500;
+      res.status(status).json({ error: (err as Error).message });
+    }
+  },
+);
 
 export default router;

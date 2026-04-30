@@ -26,6 +26,12 @@ export interface OperationalTask {
   ownerName?: string | null;
   status: OperationalTaskStatus;
   isOverdue: boolean;
+  /**
+   * Optional ITIL-style tag (e.g. `security`, `backup_recovery`). The UI offers a fixed picker but the API accepts any string for forward compatibility.
+
+   * @nullable
+   */
+  controlCategory?: string | null;
   checklist: OperationalTaskChecklistItem[];
   /** @nullable */
   seriesId?: number | null;

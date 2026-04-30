@@ -20,4 +20,9 @@ export type ListOperationalTasksParams = {
   type?: OperationalTaskType;
   dueWindow?: ListOperationalTasksDueWindow;
   search?: string;
+  /**
+ * When true, include rows whose status is `closed`. Default is false: closed tasks are hidden so the working list stays focused on active work. (`completed` rows are always returned and can be filtered out via the `status` param.)
+
+ */
+  includeClosed?: boolean;
 };

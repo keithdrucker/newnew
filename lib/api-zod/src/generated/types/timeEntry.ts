@@ -5,12 +5,28 @@
  * Sidekick API
  * OpenAPI spec version: 0.1.0
  */
+import type { TimeEntrySource } from "./timeEntrySource";
 
+/**
+ * A unified time entry returned by `GET /time-entries`. The
+`source` discriminator distinguishes ticket work from
+operational-task work; the corresponding fields are populated
+for the matching source and null for the other.
+
+ */
 export interface TimeEntry {
   id: number;
-  ticketId: number;
-  ticketKey: string;
-  ticketTitle: string;
+  source: TimeEntrySource;
+  /** @nullable */
+  ticketId?: number | null;
+  /** @nullable */
+  ticketKey?: string | null;
+  /** @nullable */
+  ticketTitle?: string | null;
+  /** @nullable */
+  taskId?: number | null;
+  /** @nullable */
+  taskName?: string | null;
   departmentId: number;
   departmentName: string;
   userId: number;

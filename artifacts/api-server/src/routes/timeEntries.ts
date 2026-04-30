@@ -6,6 +6,8 @@ import {
   ticketsTable,
   usersTable,
   departmentsTable,
+  operationalTaskTimeEntriesTable,
+  operationalTasksTable,
 } from "@workspace/db";
 import {
   ListTicketTimeEntriesParams,
@@ -28,6 +30,8 @@ import {
 const router: IRouter = Router();
 
 type TimeEntryRow = typeof timeEntriesTable.$inferSelect;
+type OpTaskTimeEntryRow =
+  typeof operationalTaskTimeEntriesTable.$inferSelect;
 
 // Hydrates a row set into the API `TimeEntry` shape. We resolve ticket
 // + user + department names in batch (one round-trip each) so the
@@ -62,9 +66,58 @@ async function hydrate(rows: TimeEntryRow[]) {
 
   return rows.map((r) => ({
     id: r.id,
+    source: "ticket" as const,
     ticketId: r.ticketId,
     ticketKey: tMap.get(r.ticketId)?.ticketKey ?? `#${r.ticketId}`,
     ticketTitle: tMap.get(r.ticketId)?.title ?? "(deleted ticket)",
+    taskId: null,
+    taskName: null,
+    departmentId: r.departmentId,
+    departmentName: dMap.get(r.departmentId) ?? "—",
+    userId: r.userId,
+    userName: uMap.get(r.userId) ?? "—",
+    startAt: r.startAt.toISOString(),
+    endAt: r.endAt.toISOString(),
+    durationMinutes: r.durationMinutes,
+    note: r.note,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+// Hydrate operational-task time entries into the same unified `TimeEntry`
+// shape so the timesheet page can render ticket and operational work
+// in a single, consistently-structured list.
+async function hydrateOpTaskEntries(rows: OpTaskTimeEntryRow[]) {
+  if (rows.length === 0) return [];
+  const taskIds = [...new Set(rows.map((r) => r.taskId))];
+  const userIds = [...new Set(rows.map((r) => r.userId))];
+  const deptIds = [...new Set(rows.map((r) => r.departmentId))];
+  const [tasks, users, depts] = await Promise.all([
+    db
+      .select({ id: operationalTasksTable.id, name: operationalTasksTable.name })
+      .from(operationalTasksTable)
+      .where(inArray(operationalTasksTable.id, taskIds)),
+    db
+      .select({ id: usersTable.id, name: usersTable.name })
+      .from(usersTable)
+      .where(inArray(usersTable.id, userIds)),
+    db
+      .select({ id: departmentsTable.id, name: departmentsTable.name })
+      .from(departmentsTable)
+      .where(inArray(departmentsTable.id, deptIds)),
+  ]);
+  const tMap = new Map(tasks.map((t) => [t.id, t.name] as const));
+  const uMap = new Map(users.map((u) => [u.id, u.name] as const));
+  const dMap = new Map(depts.map((d) => [d.id, d.name] as const));
+
+  return rows.map((r) => ({
+    id: r.id,
+    source: "operational_task" as const,
+    ticketId: null,
+    ticketKey: null,
+    ticketTitle: null,
+    taskId: r.taskId,
+    taskName: tMap.get(r.taskId) ?? "(deleted task)",
     departmentId: r.departmentId,
     departmentName: dMap.get(r.departmentId) ?? "—",
     userId: r.userId,
@@ -220,18 +273,41 @@ router.get("/time-entries", async (req, res): Promise<void> => {
     }
   }
 
-  const rows = await db
-    .select()
-    .from(timeEntriesTable)
-    .where(
-      and(
-        eq(timeEntriesTable.userId, targetUserId),
-        gte(timeEntriesTable.startAt, from),
-        lt(timeEntriesTable.startAt, to),
+  // Pull both ticket time entries and operational-task time entries
+  // for the target user inside the requested window. They share the
+  // same hydrated shape (`source` discriminates) so the timesheet UI
+  // can render them in one merged, time-sorted list without
+  // additional round-trips.
+  const [ticketRows, opTaskRows] = await Promise.all([
+    db
+      .select()
+      .from(timeEntriesTable)
+      .where(
+        and(
+          eq(timeEntriesTable.userId, targetUserId),
+          gte(timeEntriesTable.startAt, from),
+          lt(timeEntriesTable.startAt, to),
+        ),
       ),
-    )
-    .orderBy(desc(timeEntriesTable.startAt));
-  res.json(await hydrate(rows));
+    db
+      .select()
+      .from(operationalTaskTimeEntriesTable)
+      .where(
+        and(
+          eq(operationalTaskTimeEntriesTable.userId, targetUserId),
+          gte(operationalTaskTimeEntriesTable.startAt, from),
+          lt(operationalTaskTimeEntriesTable.startAt, to),
+        ),
+      ),
+  ]);
+  const [ticketEntries, opTaskEntries] = await Promise.all([
+    hydrate(ticketRows),
+    hydrateOpTaskEntries(opTaskRows),
+  ]);
+  const merged = [...ticketEntries, ...opTaskEntries].sort((a, b) =>
+    a.startAt < b.startAt ? 1 : a.startAt > b.startAt ? -1 : 0,
+  );
+  res.json(merged);
 });
 
 // ────────────────────────────────────────────────────────────────────

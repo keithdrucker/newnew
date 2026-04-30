@@ -37,6 +37,7 @@ import type {
   CreateInitiativeInput,
   CreateKbArticleInput,
   CreateOperationalTaskInput,
+  CreateOperationalTaskTimeEntryInput,
   CreatePersonInput,
   CreateProjectCommentInput,
   CreateProjectInput,
@@ -73,6 +74,8 @@ import type {
   ListVendorsParams,
   ListWorkflowsParams,
   OperationalTask,
+  OperationalTaskActivity,
+  OperationalTaskTimeEntry,
   Person,
   ProjectComment,
   ProjectDetail,
@@ -101,6 +104,7 @@ import type {
   UpdateKbArticleInput,
   UpdateMePreferencesInput,
   UpdateOperationalTaskInput,
+  UpdateOperationalTaskTimeEntryInput,
   UpdatePersonInput,
   UpdateProjectInput,
   UpdateRiskRuleInput,
@@ -9331,4 +9335,473 @@ export const useCompleteOperationalTask = <
   TContext
 > => {
   return useMutation(getCompleteOperationalTaskMutationOptions(options));
+};
+
+/**
+ * @summary Activity / audit log for a task
+ */
+export const getListOperationalTaskActivityUrl = (id: number) => {
+  return `/api/operational-tasks/${id}/activity`;
+};
+
+export const listOperationalTaskActivity = async (
+  id: number,
+  options?: RequestInit,
+): Promise<OperationalTaskActivity[]> => {
+  return customFetch<OperationalTaskActivity[]>(
+    getListOperationalTaskActivityUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListOperationalTaskActivityQueryKey = (id: number) => {
+  return [`/api/operational-tasks/${id}/activity`] as const;
+};
+
+export const getListOperationalTaskActivityQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOperationalTaskActivity>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOperationalTaskActivity>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListOperationalTaskActivityQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOperationalTaskActivity>>
+  > = ({ signal }) =>
+    listOperationalTaskActivity(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOperationalTaskActivity>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOperationalTaskActivityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOperationalTaskActivity>>
+>;
+export type ListOperationalTaskActivityQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Activity / audit log for a task
+ */
+
+export function useListOperationalTaskActivity<
+  TData = Awaited<ReturnType<typeof listOperationalTaskActivity>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOperationalTaskActivity>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOperationalTaskActivityQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Time entries logged against a task
+ */
+export const getListOperationalTaskTimeEntriesUrl = (id: number) => {
+  return `/api/operational-tasks/${id}/time-entries`;
+};
+
+export const listOperationalTaskTimeEntries = async (
+  id: number,
+  options?: RequestInit,
+): Promise<OperationalTaskTimeEntry[]> => {
+  return customFetch<OperationalTaskTimeEntry[]>(
+    getListOperationalTaskTimeEntriesUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListOperationalTaskTimeEntriesQueryKey = (id: number) => {
+  return [`/api/operational-tasks/${id}/time-entries`] as const;
+};
+
+export const getListOperationalTaskTimeEntriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOperationalTaskTimeEntries>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOperationalTaskTimeEntries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListOperationalTaskTimeEntriesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOperationalTaskTimeEntries>>
+  > = ({ signal }) =>
+    listOperationalTaskTimeEntries(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOperationalTaskTimeEntries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOperationalTaskTimeEntriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOperationalTaskTimeEntries>>
+>;
+export type ListOperationalTaskTimeEntriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Time entries logged against a task
+ */
+
+export function useListOperationalTaskTimeEntries<
+  TData = Awaited<ReturnType<typeof listOperationalTaskTimeEntries>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOperationalTaskTimeEntries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOperationalTaskTimeEntriesQueryOptions(
+    id,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Log time against a task
+ */
+export const getCreateOperationalTaskTimeEntryUrl = (id: number) => {
+  return `/api/operational-tasks/${id}/time-entries`;
+};
+
+export const createOperationalTaskTimeEntry = async (
+  id: number,
+  createOperationalTaskTimeEntryInput: CreateOperationalTaskTimeEntryInput,
+  options?: RequestInit,
+): Promise<OperationalTaskTimeEntry> => {
+  return customFetch<OperationalTaskTimeEntry>(
+    getCreateOperationalTaskTimeEntryUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createOperationalTaskTimeEntryInput),
+    },
+  );
+};
+
+export const getCreateOperationalTaskTimeEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOperationalTaskTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<CreateOperationalTaskTimeEntryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createOperationalTaskTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<CreateOperationalTaskTimeEntryInput> },
+  TContext
+> => {
+  const mutationKey = ["createOperationalTaskTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createOperationalTaskTimeEntry>>,
+    { id: number; data: BodyType<CreateOperationalTaskTimeEntryInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createOperationalTaskTimeEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateOperationalTaskTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createOperationalTaskTimeEntry>>
+>;
+export type CreateOperationalTaskTimeEntryMutationBody =
+  BodyType<CreateOperationalTaskTimeEntryInput>;
+export type CreateOperationalTaskTimeEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Log time against a task
+ */
+export const useCreateOperationalTaskTimeEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOperationalTaskTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<CreateOperationalTaskTimeEntryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createOperationalTaskTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<CreateOperationalTaskTimeEntryInput> },
+  TContext
+> => {
+  return useMutation(getCreateOperationalTaskTimeEntryMutationOptions(options));
+};
+
+export const getUpdateOperationalTaskTimeEntryUrl = (
+  id: number,
+  entryId: number,
+) => {
+  return `/api/operational-tasks/${id}/time-entries/${entryId}`;
+};
+
+export const updateOperationalTaskTimeEntry = async (
+  id: number,
+  entryId: number,
+  updateOperationalTaskTimeEntryInput: UpdateOperationalTaskTimeEntryInput,
+  options?: RequestInit,
+): Promise<OperationalTaskTimeEntry> => {
+  return customFetch<OperationalTaskTimeEntry>(
+    getUpdateOperationalTaskTimeEntryUrl(id, entryId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateOperationalTaskTimeEntryInput),
+    },
+  );
+};
+
+export const getUpdateOperationalTaskTimeEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOperationalTaskTimeEntry>>,
+    TError,
+    {
+      id: number;
+      entryId: number;
+      data: BodyType<UpdateOperationalTaskTimeEntryInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOperationalTaskTimeEntry>>,
+  TError,
+  {
+    id: number;
+    entryId: number;
+    data: BodyType<UpdateOperationalTaskTimeEntryInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateOperationalTaskTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOperationalTaskTimeEntry>>,
+    {
+      id: number;
+      entryId: number;
+      data: BodyType<UpdateOperationalTaskTimeEntryInput>;
+    }
+  > = (props) => {
+    const { id, entryId, data } = props ?? {};
+
+    return updateOperationalTaskTimeEntry(id, entryId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOperationalTaskTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOperationalTaskTimeEntry>>
+>;
+export type UpdateOperationalTaskTimeEntryMutationBody =
+  BodyType<UpdateOperationalTaskTimeEntryInput>;
+export type UpdateOperationalTaskTimeEntryMutationError = ErrorType<unknown>;
+
+export const useUpdateOperationalTaskTimeEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOperationalTaskTimeEntry>>,
+    TError,
+    {
+      id: number;
+      entryId: number;
+      data: BodyType<UpdateOperationalTaskTimeEntryInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOperationalTaskTimeEntry>>,
+  TError,
+  {
+    id: number;
+    entryId: number;
+    data: BodyType<UpdateOperationalTaskTimeEntryInput>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateOperationalTaskTimeEntryMutationOptions(options));
+};
+
+export const getDeleteOperationalTaskTimeEntryUrl = (
+  id: number,
+  entryId: number,
+) => {
+  return `/api/operational-tasks/${id}/time-entries/${entryId}`;
+};
+
+export const deleteOperationalTaskTimeEntry = async (
+  id: number,
+  entryId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteOperationalTaskTimeEntryUrl(id, entryId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteOperationalTaskTimeEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOperationalTaskTimeEntry>>,
+    TError,
+    { id: number; entryId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteOperationalTaskTimeEntry>>,
+  TError,
+  { id: number; entryId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteOperationalTaskTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteOperationalTaskTimeEntry>>,
+    { id: number; entryId: number }
+  > = (props) => {
+    const { id, entryId } = props ?? {};
+
+    return deleteOperationalTaskTimeEntry(id, entryId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteOperationalTaskTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteOperationalTaskTimeEntry>>
+>;
+
+export type DeleteOperationalTaskTimeEntryMutationError = ErrorType<unknown>;
+
+export const useDeleteOperationalTaskTimeEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOperationalTaskTimeEntry>>,
+    TError,
+    { id: number; entryId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteOperationalTaskTimeEntry>>,
+  TError,
+  { id: number; entryId: number },
+  TContext
+> => {
+  return useMutation(getDeleteOperationalTaskTimeEntryMutationOptions(options));
 };

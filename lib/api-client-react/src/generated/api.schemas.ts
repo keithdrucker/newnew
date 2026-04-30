@@ -179,6 +179,20 @@ export const OperationalTaskStatus = {
   scheduled: "scheduled",
   in_progress: "in_progress",
   completed: "completed",
+  closed: "closed",
+} as const;
+
+export type OperationalTaskControlCategory =
+  (typeof OperationalTaskControlCategory)[keyof typeof OperationalTaskControlCategory];
+
+export const OperationalTaskControlCategory = {
+  security: "security",
+  access_management: "access_management",
+  backup_recovery: "backup_recovery",
+  change_management: "change_management",
+  monitoring: "monitoring",
+  compliance: "compliance",
+  operations: "operations",
 } as const;
 
 export type OperationalTaskFrequency =
@@ -208,6 +222,65 @@ export interface OperationalTaskChecklistItem {
    * @nullable
    */
   dueDate?: string | null;
+  /**
+   * ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.
+
+   * @nullable
+   */
+  completedAt?: string | null;
+}
+
+/**
+ * Per-action payload. Shape varies by `action`.
+ */
+export type OperationalTaskActivityDetails = { [key: string]: unknown };
+
+/**
+ * Immutable audit log entry for an Operational Task. Created by the server in response to status changes, owner reassignment, completion, closure, checklist toggles, and time entry CRUD. Read-only — the API offers no PATCH/DELETE.
+
+ */
+export interface OperationalTaskActivity {
+  id: number;
+  taskId: number;
+  /** @nullable */
+  userId?: number | null;
+  /**
+   * "System" actions (e.g. lazy auto-close after 24h) leave `userId` null and the UI renders them with a "System" label.
+
+   * @nullable
+   */
+  userName?: string | null;
+  action: string;
+  /** Per-action payload. Shape varies by `action`. */
+  details?: OperationalTaskActivityDetails;
+  createdAt: string;
+}
+
+export interface OperationalTaskTimeEntry {
+  id: number;
+  taskId: number;
+  taskName: string;
+  departmentId: number;
+  departmentName: string;
+  userId: number;
+  userName: string;
+  startAt: string;
+  endAt: string;
+  durationMinutes: number;
+  note: string;
+  createdAt: string;
+}
+
+export interface CreateOperationalTaskTimeEntryInput {
+  startAt: string;
+  endAt: string;
+  note: string;
+}
+
+export interface UpdateOperationalTaskTimeEntryInput {
+  startAt?: string;
+  endAt?: string;
+  note?: string;
 }
 
 export interface OperationalTask {
@@ -226,6 +299,12 @@ export interface OperationalTask {
   ownerName?: string | null;
   status: OperationalTaskStatus;
   isOverdue: boolean;
+  /**
+   * Optional ITIL-style tag (e.g. `security`, `backup_recovery`). The UI offers a fixed picker but the API accepts any string for forward compatibility.
+
+   * @nullable
+   */
+  controlCategory?: string | null;
   checklist: OperationalTaskChecklistItem[];
   /** @nullable */
   seriesId?: number | null;
@@ -249,6 +328,8 @@ export interface CreateOperationalTaskInput {
   nextDueDate: string;
   /** @nullable */
   ownerId?: number | null;
+  /** @nullable */
+  controlCategory?: string | null;
   checklist?: OperationalTaskChecklistItem[];
 }
 
@@ -268,6 +349,8 @@ export interface UpdateOperationalTaskInput {
   nextDueDate?: string;
   /** @nullable */
   ownerId?: number | null;
+  /** @nullable */
+  controlCategory?: string | null;
   status?: UpdateOperationalTaskInputStatus;
   checklist?: OperationalTaskChecklistItem[];
 }
@@ -1214,11 +1297,34 @@ export interface AddTicketCommentInput {
   kind?: AddTicketCommentInputKind;
 }
 
+export type TimeEntrySource =
+  (typeof TimeEntrySource)[keyof typeof TimeEntrySource];
+
+export const TimeEntrySource = {
+  ticket: "ticket",
+  operational_task: "operational_task",
+} as const;
+
+/**
+ * A unified time entry returned by `GET /time-entries`. The
+`source` discriminator distinguishes ticket work from
+operational-task work; the corresponding fields are populated
+for the matching source and null for the other.
+
+ */
 export interface TimeEntry {
   id: number;
-  ticketId: number;
-  ticketKey: string;
-  ticketTitle: string;
+  source: TimeEntrySource;
+  /** @nullable */
+  ticketId?: number | null;
+  /** @nullable */
+  ticketKey?: string | null;
+  /** @nullable */
+  ticketTitle?: string | null;
+  /** @nullable */
+  taskId?: number | null;
+  /** @nullable */
+  taskName?: string | null;
   departmentId: number;
   departmentName: string;
   userId: number;
@@ -2816,6 +2922,11 @@ export type ListOperationalTasksParams = {
   type?: OperationalTaskType;
   dueWindow?: ListOperationalTasksDueWindow;
   search?: string;
+  /**
+ * When true, include rows whose status is `closed`. Default is false: closed tasks are hidden so the working list stays focused on active work. (`completed` rows are always returned and can be filtered out via the `status` param.)
+
+ */
+  includeClosed?: boolean;
 };
 
 export type ListOperationalTasksDueWindow =

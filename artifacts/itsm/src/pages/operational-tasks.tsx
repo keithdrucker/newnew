@@ -14,10 +14,12 @@ import {
   Filter as FilterIcon,
   FileDown,
   ListChecks,
+  Lock,
   Plus,
   RefreshCw,
   Search,
   Star,
+  Timer,
   Trash2,
   X,
 } from "lucide-react";
@@ -31,10 +33,21 @@ import {
   useDeleteOperationalTask,
   useCompleteOperationalTask,
   useUpdateMePreferences,
+  useListOperationalTaskActivity,
+  useListOperationalTaskTimeEntries,
+  useCreateOperationalTaskTimeEntry,
+  useDeleteOperationalTaskTimeEntry,
   getGetSessionQueryKey,
   getListOperationalTasksQueryKey,
+  getListOperationalTaskActivityQueryKey,
+  getListOperationalTaskTimeEntriesQueryKey,
 } from "@workspace/api-client-react";
-import type { OperationalTask } from "@workspace/api-client-react";
+import type {
+  OperationalTask,
+  OperationalTaskActivity,
+  OperationalTaskTimeEntry,
+} from "@workspace/api-client-react";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,7 +114,27 @@ const STATUS_OPTIONS = [
   { value: "scheduled", label: "Scheduled" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
+  { value: "closed", label: "Closed" },
 ] as const;
+
+// Optional control taxonomy. The values match the OpenAPI enum so
+// the dropdown round-trips with no client/server translation. Kept
+// here so the labels live with the rest of the page's vocabulary.
+const CONTROL_CATEGORY_OPTIONS = [
+  { value: "security", label: "Security" },
+  { value: "access_management", label: "Access Management" },
+  { value: "backup_recovery", label: "Backup & Recovery" },
+  { value: "change_management", label: "Change Management" },
+  { value: "monitoring", label: "Monitoring" },
+  { value: "compliance", label: "Compliance" },
+  { value: "operations", label: "Operations" },
+] as const;
+function controlCategoryLabel(value: string | null | undefined) {
+  if (!value) return "—";
+  return (
+    CONTROL_CATEGORY_OPTIONS.find((o) => o.value === value)?.label ?? value
+  );
+}
 
 const DUE_WINDOW_OPTIONS = [
   { value: "all", label: "Any time" },
@@ -135,6 +168,7 @@ type ColumnKey =
   | "nextDueDate"
   | "ownerName"
   | "status"
+  | "controlCategory"
   | "description"
   | "completedAt"
   | "createdAt";
@@ -186,9 +220,15 @@ const COLUMN_DEFS: Record<ColumnKey, ColumnDef> = {
     label: "Status",
     className: "w-[130px]",
     text: (t) =>
-      t.isOverdue && t.status !== "completed"
+      t.isOverdue && t.status !== "completed" && t.status !== "closed"
         ? "Overdue"
         : statusLabel(t.status),
+  },
+  controlCategory: {
+    key: "controlCategory",
+    label: "Control Category",
+    className: "w-[170px]",
+    text: (t) => controlCategoryLabel(t.controlCategory),
   },
   description: {
     key: "description",
@@ -218,6 +258,7 @@ const ALL_COLUMN_KEYS: ColumnKey[] = [
   "nextDueDate",
   "ownerName",
   "status",
+  "controlCategory",
   "description",
   "completedAt",
   "createdAt",
@@ -249,6 +290,14 @@ function renderCell(key: ColumnKey, t: OperationalTask) {
       );
     case "status":
       return <StatusBadge status={t.status} isOverdue={t.isOverdue} />;
+    case "controlCategory":
+      return t.controlCategory ? (
+        <Badge variant="outline" className="font-normal">
+          {controlCategoryLabel(t.controlCategory)}
+        </Badge>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
     case "completedAt":
       return t.completedAt ? formatDate(t.completedAt.slice(0, 10)) : "—";
     case "createdAt":
@@ -317,7 +366,7 @@ function StatusBadge({
   status: string;
   isOverdue: boolean;
 }) {
-  if (isOverdue && status !== "completed") {
+  if (isOverdue && status !== "completed" && status !== "closed") {
     return (
       <Badge
         variant="destructive"
@@ -326,6 +375,17 @@ function StatusBadge({
       >
         <AlertCircle className="h-3 w-3" />
         Overdue
+      </Badge>
+    );
+  }
+  if (status === "closed") {
+    return (
+      <Badge
+        variant="outline"
+        className="gap-1 border-muted-foreground/30 text-muted-foreground"
+        data-testid="badge-status-closed"
+      >
+        <Lock className="h-3 w-3" /> Closed
       </Badge>
     );
   }
@@ -411,6 +471,11 @@ export default function OperationalTasks() {
     useState<FilterCategoryKey | null>("status");
   const [optionSearch, setOptionSearch] = useState("");
 
+  // "Show closed" toggle. Mirrors the Tickets page UX — closed tasks
+  // are hidden by default to keep the operational view actionable; a
+  // single toggle in the header pulls them back in.
+  const [showClosed, setShowClosed] = useState(false);
+
   // ---- Visible columns (persisted per-user via localStorage) -------
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(() => {
     if (typeof window === "undefined") return DEFAULT_VISIBLE_COLUMNS;
@@ -459,8 +524,9 @@ export default function OperationalTasks() {
     if (filters.dueWindow !== "all")
       p.dueWindow = filters.dueWindow as never;
     if (filters.search.trim()) p.search = filters.search.trim();
+    if (showClosed) p.includeClosed = true;
     return p;
-  }, [activeDept, filters]);
+  }, [activeDept, filters, showClosed]);
 
   const { data: tasks, isLoading: tasksLoading, refetch } =
     useListOperationalTasks(queryParams);
@@ -944,6 +1010,27 @@ export default function OperationalTasks() {
 
         <div className="flex-1" />
 
+        {/* Show closed toggle — closed tasks (auto-promoted from
+            completed one_time tasks after 24h) are hidden by default.
+            Mirrors the Tickets page convention. */}
+        <div
+          className="flex items-center gap-2 h-9 px-2 rounded border border-input"
+          data-testid="show-closed-toggle"
+        >
+          <Switch
+            id="show-closed"
+            checked={showClosed}
+            onCheckedChange={setShowClosed}
+            data-testid="switch-show-closed"
+          />
+          <Label
+            htmlFor="show-closed"
+            className="text-sm font-medium cursor-pointer"
+          >
+            Show closed
+          </Label>
+        </div>
+
         {/* Export PDF — exports the rows currently on screen (after
             filters and search) using the user's chosen visible columns
             and order. Disabled when there is nothing to export. */}
@@ -1264,6 +1351,7 @@ function CreateTaskDialog({
   const [frequency, setFrequency] = useState<string>("monthly");
   const [nextDueDate, setNextDueDate] = useState<string>(todayYmd());
   const [ownerId, setOwnerId] = useState<string>("none");
+  const [controlCategory, setControlCategory] = useState<string>("none");
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
@@ -1286,6 +1374,8 @@ function CreateTaskDialog({
           frequency: type === "recurring" ? (frequency as never) : null,
           nextDueDate,
           ownerId: ownerId === "none" ? null : Number(ownerId),
+          controlCategory:
+            controlCategory === "none" ? null : (controlCategory as never),
         },
       });
       onCreated();
@@ -1390,6 +1480,29 @@ function CreateTaskDialog({
               </Select>
             </div>
           </div>
+          <div className="space-y-1">
+            <Label>Control Category (optional)</Label>
+            <Select
+              value={controlCategory}
+              onValueChange={setControlCategory}
+            >
+              <SelectTrigger data-testid="select-new-task-control-category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {CONTROL_CATEGORY_OPTIONS.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Tag this task to a control area (security, backups, change
+              management, etc.) to make audit reporting easier.
+            </p>
+          </div>
           {error && (
             <p className="text-sm text-destructive" data-testid="text-create-error">
               {error}
@@ -1438,10 +1551,21 @@ function TaskDetailDialog({
   const [error, setError] = useState<string | null>(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
 
+  // Time entries + activity log are loaded alongside the task.
+  // The hooks already gate on `!!id` internally, so we don't need to
+  // pass any options — taskId is always > 0 when this dialog renders.
+  const { data: timeEntries, refetch: refetchTimeEntries } =
+    useListOperationalTaskTimeEntries(taskId);
+  const { data: activity, refetch: refetchActivity } =
+    useListOperationalTaskActivity(taskId);
+
+  const createTimeEntry = useCreateOperationalTaskTimeEntry();
+  const deleteTimeEntry = useDeleteOperationalTaskTimeEntry();
+
   if (!task) {
     return (
       <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-3xl">
           <p className="text-sm text-muted-foreground py-8 text-center">
             Loading…
           </p>
@@ -1450,7 +1574,17 @@ function TaskDetailDialog({
     );
   }
 
+  // ---- Lock model -------------------------------------------------
+  // `closed` is the new terminal state — once a task is closed the
+  // entire dialog is read-only (no edits, no checklist toggles, no
+  // time logging, no deletion). `completed` is a softer state: most
+  // metadata (name, description, type, freq, control category) stays
+  // editable so people can correct typos after the fact, but the
+  // due date / owner / status are pinned because they describe the
+  // completed instance.
+  const isClosed = task.status === "closed";
   const isCompleted = task.status === "completed";
+  const lockAll = isClosed; // hard read-only
 
   async function patch(patchData: Parameters<
     typeof updateTask.mutateAsync
@@ -1458,7 +1592,7 @@ function TaskDetailDialog({
     setError(null);
     try {
       await updateTask.mutateAsync({ id: taskId, data: patchData });
-      await refetch();
+      await Promise.all([refetch(), refetchActivity()]);
       onMutated();
     } catch (e) {
       setError((e as Error).message);
@@ -1535,30 +1669,121 @@ function TaskDetailDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>{task.name}</span>
-            <StatusBadge status={task.status} isOverdue={task.isOverdue} />
-          </DialogTitle>
-          <DialogDescription>{task.departmentName}</DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {/* Editable name. We keep the title visually prominent
+                  but swap to an inline input so people can rename the
+                  task in place. Closed tasks render as static text. */}
+              {lockAll ? (
+                <DialogTitle className="flex items-center gap-2">
+                  <span className="truncate">{task.name}</span>
+                </DialogTitle>
+              ) : (
+                <Input
+                  defaultValue={task.name}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v && v !== task.name) patch({ name: v });
+                  }}
+                  className="h-9 text-base font-semibold"
+                  data-testid="input-task-name"
+                />
+              )}
+              <DialogDescription className="mt-1 flex items-center gap-2 text-xs">
+                <span>{task.departmentName}</span>
+                <StatusBadge
+                  status={task.status}
+                  isOverdue={task.isOverdue}
+                />
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
+
+        {/* Closed banner. Once a task is closed it freezes — we make
+            the read-only nature obvious so people don't think edits
+            are silently failing. */}
+        {lockAll && (
+          <div
+            className="flex items-center gap-2 rounded border border-muted-foreground/30 bg-muted/40 p-2 text-xs text-muted-foreground"
+            data-testid="banner-task-closed"
+          >
+            <Lock className="h-3.5 w-3.5" />
+            <span>
+              This task is closed and cannot be edited. Closed tasks
+              are kept for the audit trail.
+            </span>
+          </div>
+        )}
 
         {/* Metadata grid */}
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
             <Label className="text-xs text-muted-foreground">Type</Label>
-            <p className="mt-0.5">{typeLabel(task.type)}</p>
+            {lockAll ? (
+              <p className="mt-0.5">{typeLabel(task.type)}</p>
+            ) : (
+              <Select
+                value={task.type}
+                onValueChange={(v) => {
+                  // Switching one-time → recurring needs a frequency;
+                  // default to the previous freq or "monthly" so the
+                  // server doesn't reject the edit.
+                  if (v === "recurring") {
+                    patch({
+                      type: "recurring",
+                      frequency: (task.frequency ?? "monthly") as never,
+                    });
+                  } else {
+                    patch({ type: "one_time", frequency: null });
+                  }
+                }}
+              >
+                <SelectTrigger
+                  className="h-8 mt-0.5"
+                  data-testid="select-task-type"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recurring">Recurring</SelectItem>
+                  <SelectItem value="one_time">One-time</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Frequency</Label>
-            <p className="mt-0.5">{freqLabel(task.frequency)}</p>
+            {lockAll || task.type === "one_time" ? (
+              <p className="mt-0.5">{freqLabel(task.frequency)}</p>
+            ) : (
+              <Select
+                value={task.frequency ?? "monthly"}
+                onValueChange={(v) => patch({ frequency: v as never })}
+              >
+                <SelectTrigger
+                  className="h-8 mt-0.5"
+                  data-testid="select-task-frequency"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">
               Next Due Date
             </Label>
-            {isCompleted ? (
+            {lockAll || isCompleted ? (
               <p className="mt-0.5">{formatDate(task.nextDueDate)}</p>
             ) : (
               <Input
@@ -1572,7 +1797,7 @@ function TaskDetailDialog({
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Owner</Label>
-            {isCompleted ? (
+            {lockAll || isCompleted ? (
               <p className="mt-0.5">{task.ownerName ?? "Unassigned"}</p>
             ) : (
               <Select
@@ -1598,15 +1823,56 @@ function TaskDetailDialog({
               </Select>
             )}
           </div>
-          <div className="col-span-2">
-            <Label className="text-xs text-muted-foreground">Status</Label>
-            {isCompleted ? (
+          <div>
+            <Label className="text-xs text-muted-foreground">
+              Control Category
+            </Label>
+            {lockAll ? (
               <p className="mt-0.5">
-                Completed{" "}
-                {task.completedAt
-                  ? `on ${formatDate(task.completedAt.slice(0, 10))}`
-                  : ""}{" "}
-                {task.completedByName ? `by ${task.completedByName}` : ""}
+                {controlCategoryLabel(task.controlCategory)}
+              </p>
+            ) : (
+              <Select
+                value={task.controlCategory ?? "none"}
+                onValueChange={(v) =>
+                  patch({
+                    controlCategory:
+                      v === "none" ? null : (v as never),
+                  })
+                }
+              >
+                <SelectTrigger
+                  className="h-8 mt-0.5"
+                  data-testid="select-task-control-category"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {CONTROL_CATEGORY_OPTIONS.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Status</Label>
+            {lockAll || isCompleted ? (
+              <p className="mt-0.5">
+                {isClosed
+                  ? "Closed"
+                  : `Completed${
+                      task.completedAt
+                        ? ` on ${formatDate(task.completedAt.slice(0, 10))}`
+                        : ""
+                    }${
+                      task.completedByName
+                        ? ` by ${task.completedByName}`
+                        : ""
+                    }`}
               </p>
             ) : (
               <Select
@@ -1635,7 +1901,7 @@ function TaskDetailDialog({
           <Label htmlFor="task-desc" className="text-xs text-muted-foreground">
             Description — what this task is and why it exists
           </Label>
-          {isCompleted ? (
+          {lockAll ? (
             <p
               className="text-sm whitespace-pre-wrap rounded bg-muted/30 p-2"
               data-testid="text-task-description"
@@ -1661,7 +1927,7 @@ function TaskDetailDialog({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="text-xs text-muted-foreground">Checklist</Label>
-            {!isCompleted && (
+            {!lockAll && !isCompleted && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1687,24 +1953,35 @@ function TaskDetailDialog({
                 >
                   <Checkbox
                     checked={it.done}
-                    disabled={isCompleted}
+                    disabled={lockAll || isCompleted}
                     onCheckedChange={(v) =>
                       handleToggleChecklist(i, v === true)
                     }
                     className="mt-1"
                   />
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_140px_140px] gap-2">
-                    <Input
-                      defaultValue={it.text}
-                      onBlur={(e) => {
-                        if (e.target.value !== it.text) {
-                          handleEditChecklist(i, "text", e.target.value);
-                        }
-                      }}
-                      disabled={isCompleted}
-                      className="h-8"
-                      data-testid={`input-checklist-text-${i}`}
-                    />
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        defaultValue={it.text}
+                        onBlur={(e) => {
+                          if (e.target.value !== it.text) {
+                            handleEditChecklist(i, "text", e.target.value);
+                          }
+                        }}
+                        disabled={lockAll || isCompleted}
+                        className="h-8"
+                        data-testid={`input-checklist-text-${i}`}
+                      />
+                      {it.completedAt && (
+                        <span
+                          className="text-[11px] text-emerald-700 dark:text-emerald-400"
+                          data-testid={`text-checklist-completed-${i}`}
+                        >
+                          Completed{" "}
+                          {new Date(it.completedAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
                     <Select
                       value={
                         it.assigneeId == null ? "none" : String(it.assigneeId)
@@ -1716,7 +1993,7 @@ function TaskDetailDialog({
                           v === "none" ? null : Number(v),
                         )
                       }
-                      disabled={isCompleted}
+                      disabled={lockAll || isCompleted}
                     >
                       <SelectTrigger
                         className="h-8"
@@ -1743,12 +2020,12 @@ function TaskDetailDialog({
                           e.target.value || null,
                         )
                       }
-                      disabled={isCompleted}
+                      disabled={lockAll || isCompleted}
                       className="h-8"
                       data-testid={`input-checklist-due-${i}`}
                     />
                   </div>
-                  {!isCompleted && (
+                  {!lockAll && !isCompleted && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1764,6 +2041,22 @@ function TaskDetailDialog({
           )}
         </div>
 
+        {/* Time entries — minutes spent on this task. Rolls up into
+            the user's timesheet. */}
+        <TaskTimeEntriesSection
+          taskId={taskId}
+          entries={timeEntries ?? []}
+          createTimeEntry={createTimeEntry}
+          deleteTimeEntry={deleteTimeEntry}
+          onChanged={async () => {
+            await Promise.all([refetchTimeEntries(), refetchActivity()]);
+          }}
+          locked={lockAll}
+        />
+
+        {/* Activity log — immutable audit trail of every change. */}
+        <TaskActivitySection entries={activity ?? []} />
+
         {error && (
           <p className="text-sm text-destructive" data-testid="text-detail-error">
             {error}
@@ -1772,7 +2065,7 @@ function TaskDetailDialog({
 
         <DialogFooter className="gap-2 sm:justify-between">
           <div>
-            {!isCompleted && (
+            {!lockAll && !isCompleted && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1789,7 +2082,7 @@ function TaskDetailDialog({
             <Button variant="outline" onClick={onClose}>
               Close
             </Button>
-            {!isCompleted &&
+            {!lockAll && !isCompleted &&
               (confirmComplete ? (
                 <>
                   <Button
@@ -1829,6 +2122,357 @@ function TaskDetailDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+// ---- Time entries section -----------------------------------------
+//
+// Lets people log work against a task. Each entry is a (start, end,
+// note) tuple, automatically rounded up to the nearest 15 minutes
+// server-side. Entries roll up into the Timesheets page.
+//
+// We keep this compact: a small "Log time" form on top, then a list
+// of existing entries with a per-row delete (own entries only).
+
+function TaskTimeEntriesSection({
+  taskId,
+  entries,
+  createTimeEntry,
+  deleteTimeEntry,
+  onChanged,
+  locked,
+}: {
+  taskId: number;
+  entries: OperationalTaskTimeEntry[];
+  createTimeEntry: ReturnType<typeof useCreateOperationalTaskTimeEntry>;
+  deleteTimeEntry: ReturnType<typeof useDeleteOperationalTaskTimeEntry>;
+  onChanged: () => Promise<void> | void;
+  locked: boolean;
+}) {
+  const todayStr = todayYmd();
+  // Default to "now" rounded to the previous quarter hour for the
+  // start, and "now" for the end — most people log time right after
+  // finishing a chunk of work.
+  const [startAt, setStartAt] = useState<string>(
+    `${todayStr}T${roundedNowQuarterHour()}`,
+  );
+  const [endAt, setEndAt] = useState<string>(
+    `${todayStr}T${currentTimeHHMM()}`,
+  );
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const totalMinutes = entries.reduce((sum, e) => sum + e.durationMinutes, 0);
+
+  async function handleAdd() {
+    setError(null);
+    if (!startAt || !endAt) {
+      setError("Start and end are required.");
+      return;
+    }
+    if (new Date(endAt).getTime() <= new Date(startAt).getTime()) {
+      setError("End time must be after start time.");
+      return;
+    }
+    try {
+      await createTimeEntry.mutateAsync({
+        id: taskId,
+        data: {
+          startAt: new Date(startAt).toISOString(),
+          endAt: new Date(endAt).toISOString(),
+          note: note.trim(),
+        },
+      });
+      setNote("");
+      await onChanged();
+      toast.success("Time logged.");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleDelete(entryId: number) {
+    if (!confirm("Delete this time entry?")) return;
+    try {
+      await deleteTimeEntry.mutateAsync({ id: taskId, entryId });
+      await onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="space-y-2" data-testid="section-time-entries">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground inline-flex items-center gap-1">
+          <Timer className="h-3.5 w-3.5" />
+          Time entries
+        </Label>
+        <span className="text-xs text-muted-foreground">
+          Total: <strong>{formatMinutes(totalMinutes)}</strong>
+        </span>
+      </div>
+
+      {!locked && (
+        <div className="rounded border p-2 space-y-2 bg-muted/20">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_2fr_auto] gap-2">
+            <div className="space-y-1">
+              <Label
+                htmlFor="te-start"
+                className="text-[11px] text-muted-foreground"
+              >
+                Start
+              </Label>
+              <Input
+                id="te-start"
+                type="datetime-local"
+                value={startAt}
+                onChange={(e) => setStartAt(e.target.value)}
+                className="h-8"
+                data-testid="input-time-entry-start"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor="te-end"
+                className="text-[11px] text-muted-foreground"
+              >
+                End
+              </Label>
+              <Input
+                id="te-end"
+                type="datetime-local"
+                value={endAt}
+                onChange={(e) => setEndAt(e.target.value)}
+                className="h-8"
+                data-testid="input-time-entry-end"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor="te-note"
+                className="text-[11px] text-muted-foreground"
+              >
+                Note (optional)
+              </Label>
+              <Input
+                id="te-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="What did you do?"
+                className="h-8"
+                data-testid="input-time-entry-note"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                size="sm"
+                onClick={handleAdd}
+                disabled={createTimeEntry.isPending}
+                data-testid="button-add-time-entry"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Log
+              </Button>
+            </div>
+          </div>
+          {error && (
+            <p
+              className="text-xs text-destructive"
+              data-testid="text-time-entry-error"
+            >
+              {error}
+            </p>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            Time is rounded up to the nearest 15 minutes. Entries roll
+            up into your timesheet.
+          </p>
+        </div>
+      )}
+
+      {entries.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">
+          No time entries yet.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {entries.map((e) => (
+            <div
+              key={e.id}
+              className="flex items-start justify-between gap-2 rounded border p-2 text-sm"
+              data-testid={`time-entry-${e.id}`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-medium">
+                    {formatMinutes(e.durationMinutes)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {e.userName} ·{" "}
+                    {new Date(e.startAt).toLocaleString()} →{" "}
+                    {new Date(e.endAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                {e.note && (
+                  <p className="text-xs text-muted-foreground mt-0.5 break-words">
+                    {e.note}
+                  </p>
+                )}
+              </div>
+              {!locked && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleDelete(e.id)}
+                  data-testid={`button-delete-time-entry-${e.id}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Activity log section -----------------------------------------
+//
+// Read-only audit trail. Server is the single source of truth — it
+// writes entries on every meaningful mutation (create, status changes,
+// owner reassignment, completion, closure, checklist toggles, time
+// entry CRUD, deletion). The dialog just renders them.
+
+function TaskActivitySection({
+  entries,
+}: {
+  entries: OperationalTaskActivity[];
+}) {
+  return (
+    <div className="space-y-2" data-testid="section-activity-log">
+      <Label className="text-xs text-muted-foreground">Activity log</Label>
+      {entries.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">
+          No activity yet.
+        </p>
+      ) : (
+        <div className="rounded border divide-y max-h-56 overflow-y-auto">
+          {entries.map((a) => (
+            <div
+              key={a.id}
+              className="flex items-start gap-2 px-2 py-1.5 text-xs"
+              data-testid={`activity-entry-${a.id}`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-medium">
+                    {a.userName ?? "System"}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {formatActivity(a)}
+                  </span>
+                </div>
+              </div>
+              <span className="text-muted-foreground whitespace-nowrap">
+                {new Date(a.createdAt).toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Map server-side action codes into a short human description.
+// Falls back to the raw action string so future additions still
+// render usefully without a UI change.
+function formatActivity(a: OperationalTaskActivity): string {
+  const d = (a.details ?? {}) as Record<string, unknown>;
+  switch (a.action) {
+    case "created":
+      return "created this task";
+    case "name_changed":
+      return `renamed task to "${String(d.to ?? "")}"`;
+    case "description_changed":
+      return "edited the description";
+    case "type_changed":
+      return `changed type to ${typeLabel(String(d.to ?? "") as never)}`;
+    case "frequency_changed":
+      return `changed frequency to ${freqLabel(
+        (d.to ?? null) as never,
+      )}`;
+    case "due_date_changed":
+      return `changed due date to ${formatDate(String(d.to ?? ""))}`;
+    case "owner_reassigned":
+      return d.toName
+        ? `reassigned to ${String(d.toName)}`
+        : "unassigned the owner";
+    case "status_changed":
+      return `changed status to ${statusLabel(String(d.to ?? ""))}`;
+    case "control_category_changed":
+      return `set control category to ${controlCategoryLabel(
+        (d.to ?? null) as never,
+      )}`;
+    case "checklist_item_added":
+      return `added checklist step "${String(d.text ?? "")}"`;
+    case "checklist_item_removed":
+      return `removed checklist step "${String(d.text ?? "")}"`;
+    case "checklist_item_completed":
+      return `completed checklist step "${String(d.text ?? "")}"`;
+    case "checklist_item_unchecked":
+      return `un-checked checklist step "${String(d.text ?? "")}"`;
+    case "completed":
+      return "marked the task complete";
+    case "closed":
+      return d.reason === "auto_close_after_24h"
+        ? "auto-closed after 24h"
+        : "closed the task";
+    case "deleted":
+      return "deleted the task";
+    case "time_logged":
+      return `logged ${formatMinutes(Number(d.durationMinutes ?? 0))}`;
+    case "time_edited":
+      return `edited a time entry`;
+    case "time_deleted":
+      return `deleted a time entry`;
+    default:
+      return a.action.replace(/_/g, " ");
+  }
+}
+
+// Format minutes as "Xh Ym" for tight column display.
+function formatMinutes(m: number): string {
+  if (!m) return "0m";
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h && r) return `${h}h ${r}m`;
+  if (h) return `${h}h`;
+  return `${r}m`;
+}
+
+function currentTimeHHMM(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
+// Round the current time *down* to the previous quarter hour so the
+// "Start" picker default is a sensible boundary. Server still
+// rounds the resulting duration up to the next 15-minute increment.
+function roundedNowQuarterHour(): string {
+  const d = new Date();
+  const m = Math.floor(d.getMinutes() / 15) * 15;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(m).padStart(
+    2,
+    "0",
+  )}`;
 }
 
 

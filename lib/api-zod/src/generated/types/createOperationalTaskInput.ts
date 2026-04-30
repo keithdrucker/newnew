@@ -19,5 +19,7 @@ export interface CreateOperationalTaskInput {
   nextDueDate: string;
   /** @nullable */
   ownerId?: number | null;
+  /** @nullable */
+  controlCategory?: string | null;
   checklist?: OperationalTaskChecklistItem[];
 }

@@ -19,4 +19,10 @@ export interface OperationalTaskChecklistItem {
    * @nullable
    */
   dueDate?: string | null;
+  /**
+   * ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.
+
+   * @nullable
+   */
+  completedAt?: string | null;
 }

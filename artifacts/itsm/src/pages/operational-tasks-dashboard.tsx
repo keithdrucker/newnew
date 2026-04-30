@@ -36,12 +36,14 @@ const STATUS_LABEL: Record<OperationalTaskStatus, string> = {
   scheduled: "Scheduled",
   in_progress: "In progress",
   completed: "Completed",
+  closed: "Closed",
 };
 
 const STATUS_BADGE_CLASS: Record<OperationalTaskStatus, string> = {
   scheduled: "bg-slate-100 text-slate-700",
   in_progress: "bg-sky-100 text-sky-700",
   completed: "bg-emerald-100 text-emerald-700",
+  closed: "bg-slate-200 text-slate-600",
 };
 
 const FREQUENCY_LABEL: Record<OperationalTaskFrequency, string> = {
@@ -116,6 +118,7 @@ export default function OperationalTasksDashboard() {
       scheduled: 0,
       in_progress: 0,
       completed: 0,
+      closed: 0,
     };
     let overdue = 0;
     let dueThisWeek = 0;

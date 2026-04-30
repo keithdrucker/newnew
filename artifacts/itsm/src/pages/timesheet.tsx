@@ -46,9 +46,15 @@ function formatDuration(mins: number): string {
 
 type Entry = {
   id: number;
-  ticketId: number;
-  ticketKey: string;
-  ticketTitle: string;
+  // `source` discriminates ticket work from operational-task work.
+  // Older payloads (pre-rollup) didn't include this field, so we
+  // tolerate `undefined` and treat it as "ticket" downstream.
+  source?: "ticket" | "operational_task";
+  ticketId?: number | null;
+  ticketKey?: string | null;
+  ticketTitle?: string | null;
+  taskId?: number | null;
+  taskName?: string | null;
   startAt: string;
   endAt: string;
   durationMinutes: number;
@@ -99,31 +105,58 @@ function DayBlock({
         <p className="text-xs text-muted-foreground">No time logged.</p>
       ) : (
         <ul className="space-y-2">
-          {sortedEntries.map((e) => (
-            <li key={e.id} className="text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <Link
-                  href={`/tickets/${e.ticketId}`}
-                  className="font-medium text-blue-700 hover:underline truncate"
-                >
-                  {e.ticketKey}
-                </Link>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {format(new Date(e.startAt), "h:mm a")} –{" "}
-                  {format(new Date(e.endAt), "h:mm a")} ·{" "}
-                  {formatDuration(e.durationMinutes)}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground truncate">
-                {e.ticketTitle}
-              </div>
-              {e.note && (
-                <div className="text-xs text-muted-foreground/80 mt-0.5 whitespace-pre-wrap">
-                  {e.note}
+          {sortedEntries.map((e) => {
+            // Operational-task entries link to the operational tasks
+            // page (no per-task route exists yet); ticket entries link
+            // to the ticket detail. Source label makes the origin
+            // unambiguous in the merged list.
+            const isOpTask = e.source === "operational_task";
+            const href = isOpTask
+              ? "/operational-tasks"
+              : `/tickets/${e.ticketId ?? ""}`;
+            const label = isOpTask
+              ? e.taskName ?? "Operational task"
+              : e.ticketKey ?? `#${e.ticketId ?? "?"}`;
+            const subLabel = isOpTask
+              ? "Operational task"
+              : e.ticketTitle ?? "";
+            return (
+              <li
+                key={`${e.source ?? "ticket"}-${e.id}`}
+                className="text-sm"
+                data-testid={`timesheet-entry-${e.source ?? "ticket"}-${e.id}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Link
+                      href={href}
+                      className="font-medium text-blue-700 hover:underline truncate"
+                    >
+                      {label}
+                    </Link>
+                    {isOpTask && (
+                      <span className="text-[10px] uppercase tracking-wide bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded shrink-0">
+                        Op task
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {format(new Date(e.startAt), "h:mm a")} –{" "}
+                    {format(new Date(e.endAt), "h:mm a")} ·{" "}
+                    {formatDuration(e.durationMinutes)}
+                  </span>
                 </div>
-              )}
-            </li>
-          ))}
+                <div className="text-xs text-muted-foreground truncate">
+                  {subLabel}
+                </div>
+                {e.note && (
+                  <div className="text-xs text-muted-foreground/80 mt-0.5 whitespace-pre-wrap">
+                    {e.note}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -326,7 +359,7 @@ export default function Timesheet() {
           <p className="text-sm text-muted-foreground">
             {viewingSomeoneElse
               ? "Viewing as a board manager. Only your team sees this."
-              : "Time you've logged on tickets. Visible only to you and your team."}
+              : "Time you've logged on tickets and operational tasks. Visible only to you and your team."}
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

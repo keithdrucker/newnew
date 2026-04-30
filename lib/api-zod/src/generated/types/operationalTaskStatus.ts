@@ -13,4 +13,5 @@ export const OperationalTaskStatus = {
   scheduled: "scheduled",
   in_progress: "in_progress",
   completed: "completed",
+  closed: "closed",
 } as const;

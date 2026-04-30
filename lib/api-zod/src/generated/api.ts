@@ -829,21 +829,28 @@ export const ListTicketTimeEntriesParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const ListTicketTimeEntriesResponseItem = zod.object({
-  id: zod.number(),
-  ticketId: zod.number(),
-  ticketKey: zod.string(),
-  ticketTitle: zod.string(),
-  departmentId: zod.number(),
-  departmentName: zod.string(),
-  userId: zod.number(),
-  userName: zod.string(),
-  startAt: zod.coerce.date(),
-  endAt: zod.coerce.date(),
-  durationMinutes: zod.number(),
-  note: zod.string(),
-  createdAt: zod.coerce.date(),
-});
+export const ListTicketTimeEntriesResponseItem = zod
+  .object({
+    id: zod.number(),
+    source: zod.enum(["ticket", "operational_task"]),
+    ticketId: zod.number().nullish(),
+    ticketKey: zod.string().nullish(),
+    ticketTitle: zod.string().nullish(),
+    taskId: zod.number().nullish(),
+    taskName: zod.string().nullish(),
+    departmentId: zod.number(),
+    departmentName: zod.string(),
+    userId: zod.number(),
+    userName: zod.string(),
+    startAt: zod.coerce.date(),
+    endAt: zod.coerce.date(),
+    durationMinutes: zod.number(),
+    note: zod.string(),
+    createdAt: zod.coerce.date(),
+  })
+  .describe(
+    "A unified time entry returned by `GET \/time-entries`. The\n`source` discriminator distinguishes ticket work from\noperational-task work; the corresponding fields are populated\nfor the matching source and null for the other.\n",
+  );
 export const ListTicketTimeEntriesResponse = zod.array(
   ListTicketTimeEntriesResponseItem,
 );
@@ -872,21 +879,28 @@ export const ListTimeEntriesQueryParams = zod.object({
   userId: zod.coerce.number().optional(),
 });
 
-export const ListTimeEntriesResponseItem = zod.object({
-  id: zod.number(),
-  ticketId: zod.number(),
-  ticketKey: zod.string(),
-  ticketTitle: zod.string(),
-  departmentId: zod.number(),
-  departmentName: zod.string(),
-  userId: zod.number(),
-  userName: zod.string(),
-  startAt: zod.coerce.date(),
-  endAt: zod.coerce.date(),
-  durationMinutes: zod.number(),
-  note: zod.string(),
-  createdAt: zod.coerce.date(),
-});
+export const ListTimeEntriesResponseItem = zod
+  .object({
+    id: zod.number(),
+    source: zod.enum(["ticket", "operational_task"]),
+    ticketId: zod.number().nullish(),
+    ticketKey: zod.string().nullish(),
+    ticketTitle: zod.string().nullish(),
+    taskId: zod.number().nullish(),
+    taskName: zod.string().nullish(),
+    departmentId: zod.number(),
+    departmentName: zod.string(),
+    userId: zod.number(),
+    userName: zod.string(),
+    startAt: zod.coerce.date(),
+    endAt: zod.coerce.date(),
+    durationMinutes: zod.number(),
+    note: zod.string(),
+    createdAt: zod.coerce.date(),
+  })
+  .describe(
+    "A unified time entry returned by `GET \/time-entries`. The\n`source` discriminator distinguishes ticket work from\noperational-task work; the corresponding fields are populated\nfor the matching source and null for the other.\n",
+  );
 export const ListTimeEntriesResponse = zod.array(ListTimeEntriesResponseItem);
 
 /**
@@ -921,21 +935,28 @@ export const UpdateTimeEntryBody = zod
     "Patch any subset of {startAt, endAt, note}. Server re-snaps the\ntimestamps to the nearest 15-minute boundary and re-derives\ndurationMinutes.\n",
   );
 
-export const UpdateTimeEntryResponse = zod.object({
-  id: zod.number(),
-  ticketId: zod.number(),
-  ticketKey: zod.string(),
-  ticketTitle: zod.string(),
-  departmentId: zod.number(),
-  departmentName: zod.string(),
-  userId: zod.number(),
-  userName: zod.string(),
-  startAt: zod.coerce.date(),
-  endAt: zod.coerce.date(),
-  durationMinutes: zod.number(),
-  note: zod.string(),
-  createdAt: zod.coerce.date(),
-});
+export const UpdateTimeEntryResponse = zod
+  .object({
+    id: zod.number(),
+    source: zod.enum(["ticket", "operational_task"]),
+    ticketId: zod.number().nullish(),
+    ticketKey: zod.string().nullish(),
+    ticketTitle: zod.string().nullish(),
+    taskId: zod.number().nullish(),
+    taskName: zod.string().nullish(),
+    departmentId: zod.number(),
+    departmentName: zod.string(),
+    userId: zod.number(),
+    userName: zod.string(),
+    startAt: zod.coerce.date(),
+    endAt: zod.coerce.date(),
+    durationMinutes: zod.number(),
+    note: zod.string(),
+    createdAt: zod.coerce.date(),
+  })
+  .describe(
+    "A unified time entry returned by `GET \/time-entries`. The\n`source` discriminator distinguishes ticket work from\noperational-task work; the corresponding fields are populated\nfor the matching source and null for the other.\n",
+  );
 
 /**
  * @summary Delete a time entry (owner or admin)
@@ -4878,6 +4899,12 @@ export const ListOperationalTasksQueryParams = zod.object({
   type: zod.enum(["recurring", "one_time"]).optional(),
   dueWindow: zod.enum(["today", "week", "overdue"]).optional(),
   search: zod.coerce.string().optional(),
+  includeClosed: zod.coerce
+    .boolean()
+    .optional()
+    .describe(
+      "When true, include rows whose status is `closed`. Default is false: closed tasks are hidden so the working list stays focused on active work. (`completed` rows are always returned and can be filtered out via the `status` param.)\n",
+    ),
 });
 
 export const ListOperationalTasksResponseItem = zod.object({
@@ -4905,8 +4932,14 @@ export const ListOperationalTasksResponseItem = zod.object({
   nextDueDate: zod.string().describe("YYYY-MM-DD"),
   ownerId: zod.number().nullish(),
   ownerName: zod.string().nullish(),
-  status: zod.enum(["scheduled", "in_progress", "completed"]),
+  status: zod.enum(["scheduled", "in_progress", "completed", "closed"]),
   isOverdue: zod.boolean(),
+  controlCategory: zod
+    .string()
+    .nullish()
+    .describe(
+      "Optional ITIL-style tag (e.g. `security`, `backup_recovery`). The UI offers a fixed picker but the API accepts any string for forward compatibility.\n",
+    ),
   checklist: zod.array(
     zod.object({
       id: zod.string(),
@@ -4915,6 +4948,12 @@ export const ListOperationalTasksResponseItem = zod.object({
       assigneeId: zod.number().nullish(),
       assigneeName: zod.string().nullish(),
       dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+      completedAt: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.\n",
+        ),
     }),
   ),
   seriesId: zod.number().nullish(),
@@ -4953,6 +4992,7 @@ export const CreateOperationalTaskBody = zod.object({
     .optional(),
   nextDueDate: zod.string().describe("YYYY-MM-DD"),
   ownerId: zod.number().nullish(),
+  controlCategory: zod.string().nullish(),
   checklist: zod
     .array(
       zod.object({
@@ -4962,6 +5002,12 @@ export const CreateOperationalTaskBody = zod.object({
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
         dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+        completedAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.\n",
+          ),
       }),
     )
     .optional(),
@@ -4996,8 +5042,14 @@ export const GetOperationalTaskResponse = zod.object({
   nextDueDate: zod.string().describe("YYYY-MM-DD"),
   ownerId: zod.number().nullish(),
   ownerName: zod.string().nullish(),
-  status: zod.enum(["scheduled", "in_progress", "completed"]),
+  status: zod.enum(["scheduled", "in_progress", "completed", "closed"]),
   isOverdue: zod.boolean(),
+  controlCategory: zod
+    .string()
+    .nullish()
+    .describe(
+      "Optional ITIL-style tag (e.g. `security`, `backup_recovery`). The UI offers a fixed picker but the API accepts any string for forward compatibility.\n",
+    ),
   checklist: zod.array(
     zod.object({
       id: zod.string(),
@@ -5006,6 +5058,12 @@ export const GetOperationalTaskResponse = zod.object({
       assigneeId: zod.number().nullish(),
       assigneeName: zod.string().nullish(),
       dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+      completedAt: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.\n",
+        ),
     }),
   ),
   seriesId: zod.number().nullish(),
@@ -5041,6 +5099,7 @@ export const UpdateOperationalTaskBody = zod.object({
     .optional(),
   nextDueDate: zod.string().optional(),
   ownerId: zod.number().nullish(),
+  controlCategory: zod.string().nullish(),
   status: zod.enum(["scheduled", "in_progress"]).optional(),
   checklist: zod
     .array(
@@ -5051,6 +5110,12 @@ export const UpdateOperationalTaskBody = zod.object({
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
         dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+        completedAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.\n",
+          ),
       }),
     )
     .optional(),
@@ -5081,8 +5146,14 @@ export const UpdateOperationalTaskResponse = zod.object({
   nextDueDate: zod.string().describe("YYYY-MM-DD"),
   ownerId: zod.number().nullish(),
   ownerName: zod.string().nullish(),
-  status: zod.enum(["scheduled", "in_progress", "completed"]),
+  status: zod.enum(["scheduled", "in_progress", "completed", "closed"]),
   isOverdue: zod.boolean(),
+  controlCategory: zod
+    .string()
+    .nullish()
+    .describe(
+      "Optional ITIL-style tag (e.g. `security`, `backup_recovery`). The UI offers a fixed picker but the API accepts any string for forward compatibility.\n",
+    ),
   checklist: zod.array(
     zod.object({
       id: zod.string(),
@@ -5091,6 +5162,12 @@ export const UpdateOperationalTaskResponse = zod.object({
       assigneeId: zod.number().nullish(),
       assigneeName: zod.string().nullish(),
       dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+      completedAt: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.\n",
+        ),
     }),
   ),
   seriesId: zod.number().nullish(),
@@ -5139,8 +5216,14 @@ export const CompleteOperationalTaskResponse = zod.object({
     nextDueDate: zod.string().describe("YYYY-MM-DD"),
     ownerId: zod.number().nullish(),
     ownerName: zod.string().nullish(),
-    status: zod.enum(["scheduled", "in_progress", "completed"]),
+    status: zod.enum(["scheduled", "in_progress", "completed", "closed"]),
     isOverdue: zod.boolean(),
+    controlCategory: zod
+      .string()
+      .nullish()
+      .describe(
+        "Optional ITIL-style tag (e.g. `security`, `backup_recovery`). The UI offers a fixed picker but the API accepts any string for forward compatibility.\n",
+      ),
     checklist: zod.array(
       zod.object({
         id: zod.string(),
@@ -5149,6 +5232,12 @@ export const CompleteOperationalTaskResponse = zod.object({
         assigneeId: zod.number().nullish(),
         assigneeName: zod.string().nullish(),
         dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+        completedAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.\n",
+          ),
       }),
     ),
     seriesId: zod.number().nullish(),
@@ -5185,8 +5274,14 @@ export const CompleteOperationalTaskResponse = zod.object({
         nextDueDate: zod.string().describe("YYYY-MM-DD"),
         ownerId: zod.number().nullish(),
         ownerName: zod.string().nullish(),
-        status: zod.enum(["scheduled", "in_progress", "completed"]),
+        status: zod.enum(["scheduled", "in_progress", "completed", "closed"]),
         isOverdue: zod.boolean(),
+        controlCategory: zod
+          .string()
+          .nullish()
+          .describe(
+            "Optional ITIL-style tag (e.g. `security`, `backup_recovery`). The UI offers a fixed picker but the API accepts any string for forward compatibility.\n",
+          ),
         checklist: zod.array(
           zod.object({
             id: zod.string(),
@@ -5195,6 +5290,12 @@ export const CompleteOperationalTaskResponse = zod.object({
             assigneeId: zod.number().nullish(),
             assigneeName: zod.string().nullish(),
             dueDate: zod.string().nullish().describe("YYYY-MM-DD"),
+            completedAt: zod
+              .string()
+              .nullish()
+              .describe(
+                "ISO timestamp captured the moment `done` flipped from false to true. Cleared when the item is unchecked.\n",
+              ),
           }),
         ),
         seriesId: zod.number().nullish(),
@@ -5207,4 +5308,105 @@ export const CompleteOperationalTaskResponse = zod.object({
       zod.null(),
     ])
     .optional(),
+});
+
+/**
+ * @summary Activity / audit log for a task
+ */
+export const ListOperationalTaskActivityParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListOperationalTaskActivityResponseItem = zod
+  .object({
+    id: zod.number(),
+    taskId: zod.number(),
+    userId: zod.number().nullish(),
+    userName: zod
+      .string()
+      .nullish()
+      .describe(
+        '\"System\" actions (e.g. lazy auto-close after 24h) leave `userId` null and the UI renders them with a \"System\" label.\n',
+      ),
+    action: zod.string(),
+    details: zod
+      .record(zod.string(), zod.unknown())
+      .optional()
+      .describe("Per-action payload. Shape varies by `action`."),
+    createdAt: zod.string(),
+  })
+  .describe(
+    "Immutable audit log entry for an Operational Task. Created by the server in response to status changes, owner reassignment, completion, closure, checklist toggles, and time entry CRUD. Read-only — the API offers no PATCH\/DELETE.\n",
+  );
+export const ListOperationalTaskActivityResponse = zod.array(
+  ListOperationalTaskActivityResponseItem,
+);
+
+/**
+ * @summary Time entries logged against a task
+ */
+export const ListOperationalTaskTimeEntriesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListOperationalTaskTimeEntriesResponseItem = zod.object({
+  id: zod.number(),
+  taskId: zod.number(),
+  taskName: zod.string(),
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  userId: zod.number(),
+  userName: zod.string(),
+  startAt: zod.string(),
+  endAt: zod.string(),
+  durationMinutes: zod.number(),
+  note: zod.string(),
+  createdAt: zod.string(),
+});
+export const ListOperationalTaskTimeEntriesResponse = zod.array(
+  ListOperationalTaskTimeEntriesResponseItem,
+);
+
+/**
+ * @summary Log time against a task
+ */
+export const CreateOperationalTaskTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateOperationalTaskTimeEntryBody = zod.object({
+  startAt: zod.string(),
+  endAt: zod.string(),
+  note: zod.string(),
+});
+
+export const UpdateOperationalTaskTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+  entryId: zod.coerce.number(),
+});
+
+export const UpdateOperationalTaskTimeEntryBody = zod.object({
+  startAt: zod.string().optional(),
+  endAt: zod.string().optional(),
+  note: zod.string().optional(),
+});
+
+export const UpdateOperationalTaskTimeEntryResponse = zod.object({
+  id: zod.number(),
+  taskId: zod.number(),
+  taskName: zod.string(),
+  departmentId: zod.number(),
+  departmentName: zod.string(),
+  userId: zod.number(),
+  userName: zod.string(),
+  startAt: zod.string(),
+  endAt: zod.string(),
+  durationMinutes: zod.number(),
+  note: zod.string(),
+  createdAt: zod.string(),
+});
+
+export const DeleteOperationalTaskTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+  entryId: zod.coerce.number(),
 });

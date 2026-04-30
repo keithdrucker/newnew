@@ -49,6 +49,12 @@ export type OperationalTaskChecklistItem = {
   // Optional per-item due date (YYYY-MM-DD). Stored inside the jsonb
   // so per-item dates require no migration.
   dueDate?: string | null;
+  // ISO timestamp captured the moment `done` flips from false → true.
+  // Cleared when `done` flips back to false. Stored in the jsonb so
+  // we don't need a separate audit table just for checklist ticks —
+  // the activity log already records the action; this is the per-item
+  // completion timestamp shown inline on each checklist row.
+  completedAt?: string | null;
 };
 
 export const operationalTasksTable = pgTable(
@@ -72,9 +78,20 @@ export const operationalTasksTable = pgTable(
     ownerId: integer("owner_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
-    // 'scheduled' | 'in_progress' | 'completed' — overdue is derived,
-    // never stored.
+    // 'scheduled' | 'in_progress' | 'completed' | 'closed'.
+    // Overdue is NEVER stored — it's derived as
+    // `today > nextDueDate AND status NOT IN ('completed','closed')`.
+    // 'closed' is system-applied only: a one_time task that has been
+    // completed for >24h is auto-promoted from 'completed' → 'closed'
+    // on the next read (see lazy-close logic in the route module).
+    // Closed tasks are read-only and are hidden by default in the
+    // list view (Show Closed toggle reveals them).
     status: text("status").notNull().default("scheduled"),
+    // Optional ITIL-style tag describing the control area this task
+    // supports (security, access management, backups, …). Free-form
+    // text so adding new categories doesn't require a migration; the
+    // UI picks from a fixed list of ~7 well-known categories.
+    controlCategory: text("control_category"),
     checklist: jsonb("checklist")
       .$type<OperationalTaskChecklistItem[]>()
       .notNull()

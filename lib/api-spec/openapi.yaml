@@ -2002,6 +2002,15 @@ paths:
           name: search
           required: false
           schema: { type: string }
+        - in: query
+          name: includeClosed
+          required: false
+          description: >
+            When true, include rows whose status is `closed`. Default
+            is false: closed tasks are hidden so the working list
+            stays focused on active work. (`completed` rows are always
+            returned and can be filtered out via the `status` param.)
+          schema: { type: boolean }
       responses:
         "200":
           description: Tasks
@@ -2091,6 +2100,106 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CompleteOperationalTaskResult" }
+
+  /operational-tasks/{id}/activity:
+    get:
+      operationId: listOperationalTaskActivity
+      tags: [operationalTasks]
+      summary: Activity / audit log for a task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Activity entries, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OperationalTaskActivity" }
+
+  /operational-tasks/{id}/time-entries:
+    get:
+      operationId: listOperationalTaskTimeEntries
+      tags: [operationalTasks]
+      summary: Time entries logged against a task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Time entries, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OperationalTaskTimeEntry" }
+    post:
+      operationId: createOperationalTaskTimeEntry
+      tags: [operationalTasks]
+      summary: Log time against a task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/CreateOperationalTaskTimeEntryInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperationalTaskTimeEntry" }
+
+  /operational-tasks/{id}/time-entries/{entryId}:
+    patch:
+      operationId: updateOperationalTaskTimeEntry
+      tags: [operationalTasks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: entryId
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UpdateOperationalTaskTimeEntryInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperationalTaskTimeEntry" }
+    delete:
+      operationId: deleteOperationalTaskTimeEntry
+      tags: [operationalTasks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: entryId
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
 
 components:
   schemas:
@@ -2266,8 +2375,26 @@ components:
     OperationalTaskStatus:
       type: string
       # `overdue` is intentionally NOT in the enum — it's derived at
-      # read time from `nextDueDate < today AND status != "completed"`.
-      enum: [scheduled, in_progress, completed]
+      # read time from `nextDueDate < today AND status NOT IN
+      # ("completed","closed")`.
+      # `closed` is system-applied only: a one_time task that has been
+      # `completed` for >24h is auto-promoted to `closed` lazily on
+      # the next read.
+      enum: [scheduled, in_progress, completed, closed]
+
+    OperationalTaskControlCategory:
+      type: string
+      # ITIL-style tag describing the control area this task supports.
+      # Free-form on the wire (callers may send any string the server
+      # accepts) but the UI picks from this fixed list.
+      enum:
+        - security
+        - access_management
+        - backup_recovery
+        - change_management
+        - monitoring
+        - compliance
+        - operations
 
     OperationalTaskFrequency:
       type: string
@@ -2294,7 +2421,81 @@ components:
         dueDate:
           type: ["string", "null"]
           description: YYYY-MM-DD
+        completedAt:
+          type: ["string", "null"]
+          description: >
+            ISO timestamp captured the moment `done` flipped from
+            false to true. Cleared when the item is unchecked.
       required: [id, text, done]
+
+    OperationalTaskActivity:
+      type: object
+      description: >
+        Immutable audit log entry for an Operational Task. Created by
+        the server in response to status changes, owner reassignment,
+        completion, closure, checklist toggles, and time entry CRUD.
+        Read-only — the API offers no PATCH/DELETE.
+      properties:
+        id: { type: integer }
+        taskId: { type: integer }
+        userId:
+          type: ["integer", "null"]
+        userName:
+          type: ["string", "null"]
+          description: >
+            "System" actions (e.g. lazy auto-close after 24h) leave
+            `userId` null and the UI renders them with a "System" label.
+        action: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+          description: Per-action payload. Shape varies by `action`.
+        createdAt: { type: string }
+      required: [id, taskId, action, createdAt]
+
+    OperationalTaskTimeEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        taskId: { type: integer }
+        taskName: { type: string }
+        departmentId: { type: integer }
+        departmentName: { type: string }
+        userId: { type: integer }
+        userName: { type: string }
+        startAt: { type: string }
+        endAt: { type: string }
+        durationMinutes: { type: integer }
+        note: { type: string }
+        createdAt: { type: string }
+      required:
+        - id
+        - taskId
+        - taskName
+        - departmentId
+        - departmentName
+        - userId
+        - userName
+        - startAt
+        - endAt
+        - durationMinutes
+        - note
+        - createdAt
+
+    CreateOperationalTaskTimeEntryInput:
+      type: object
+      properties:
+        startAt: { type: string }
+        endAt: { type: string }
+        note: { type: string }
+      required: [startAt, endAt, note]
+
+    UpdateOperationalTaskTimeEntryInput:
+      type: object
+      properties:
+        startAt: { type: string }
+        endAt: { type: string }
+        note: { type: string }
 
     OperationalTask:
       type: object
@@ -2318,6 +2519,12 @@ components:
         # Always returned alongside status. UI shows an "Overdue" badge
         # when this is true.
         isOverdue: { type: boolean }
+        controlCategory:
+          type: ["string", "null"]
+          description: >
+            Optional ITIL-style tag (e.g. `security`,
+            `backup_recovery`). The UI offers a fixed picker but the
+            API accepts any string for forward compatibility.
         checklist:
           type: array
           items: { $ref: "#/components/schemas/OperationalTaskChecklistItem" }
@@ -2359,6 +2566,8 @@ components:
         nextDueDate: { type: string, description: YYYY-MM-DD }
         ownerId:
           type: ["integer", "null"]
+        controlCategory:
+          type: ["string", "null"]
         checklist:
           type: array
           items: { $ref: "#/components/schemas/OperationalTaskChecklistItem" }
@@ -2377,8 +2586,12 @@ components:
         nextDueDate: { type: string }
         ownerId:
           type: ["integer", "null"]
-        # `completed` is NOT accepted here — use POST /complete to drive
-        # the recurring chain logic. Allowed values: scheduled | in_progress.
+        controlCategory:
+          type: ["string", "null"]
+        # `completed` and `closed` are NOT accepted here — completion
+        # goes through POST /complete (drives the recurring chain),
+        # and `closed` is system-applied only (after 24h on one_time).
+        # Allowed values: scheduled | in_progress.
         status:
           type: string
           enum: [scheduled, in_progress]
@@ -3097,11 +3310,26 @@ components:
 
     TimeEntry:
       type: object
+      description: |
+        A unified time entry returned by `GET /time-entries`. The
+        `source` discriminator distinguishes ticket work from
+        operational-task work; the corresponding fields are populated
+        for the matching source and null for the other.
       properties:
         id: { type: integer }
-        ticketId: { type: integer }
-        ticketKey: { type: string }
-        ticketTitle: { type: string }
+        source:
+          type: string
+          enum: [ticket, operational_task]
+        ticketId:
+          type: ["integer", "null"]
+        ticketKey:
+          type: ["string", "null"]
+        ticketTitle:
+          type: ["string", "null"]
+        taskId:
+          type: ["integer", "null"]
+        taskName:
+          type: ["string", "null"]
         departmentId: { type: integer }
         departmentName: { type: string }
         userId: { type: integer }
@@ -3113,9 +3341,7 @@ components:
         createdAt: { type: string, format: date-time }
       required:
         - id
-        - ticketId
-        - ticketKey
-        - ticketTitle
+        - source
         - departmentId
         - departmentName
         - userId
