@@ -59,6 +59,14 @@ export function TeamScopeSelector() {
   }
 
   function toggle(id: number) {
+    // In "All Teams" mode the underlying selectedIds already contains
+    // every accessible team, but the UI shows each row as unchecked.
+    // Clicking a row in that state should mean "narrow to just this
+    // team", not "remove this team from the implicit-all set".
+    if (isAll) {
+      setSelectedIds([id]);
+      return;
+    }
     if (selectedIds.includes(id)) {
       const next = selectedIds.filter((x) => x !== id);
       // Don't let the user end up with zero — that would hide every
