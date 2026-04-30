@@ -31,10 +31,10 @@ export interface TimeRangeValue {
 export const DEFAULT_TIME_RANGE: TimeRangeValue = { preset: "30" };
 
 const PRESET_LABEL: Record<TimeRangePreset, string> = {
-  "30": "Last 30 days",
-  "90": "Last quarter",
-  "365": "Last year",
-  custom: "Custom range",
+  "30": "Last 30 Days",
+  "90": "Last Quarter",
+  "365": "Last Year",
+  custom: "Custom Range",
 };
 
 // Resolve a TimeRangeValue to absolute [start, end] millisecond bounds.
