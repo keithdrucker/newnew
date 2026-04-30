@@ -102,7 +102,7 @@ const PHASES: ProjectPhase[] = [
 const PHASE_LABEL: Record<ProjectPhase, string> = {
   backlog_needs_assignment: "Backlog / Needs Assignment",
   planning: "Planning",
-  in_progress: "In Progress",
+  in_progress: "Implementation",
   on_hold: "On Hold",
   completed: "Completed",
   closed: "Closed",
@@ -1033,9 +1033,9 @@ function DetailInner({
               )}
             </Section>
 
-            {/* ---- In Progress ---- */}
+            {/* ---- Implementation ---- */}
             <Section
-              title="In Progress"
+              title="Implementation"
               defaultOpen={phase === "in_progress"}
               tone={
                 phase === "in_progress"
@@ -1252,7 +1252,7 @@ function DetailInner({
                 <Section title="Actions" defaultOpen tone="default">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[12px] text-muted-foreground">
-                      Reopening sends this project back to In Progress and
+                      Reopening sends this project back to Implementation and
                       clears the active Completed By &amp; Completed On.
                       The current values remain in the History below.
                     </p>
@@ -1322,7 +1322,7 @@ function DetailInner({
                     <p className="text-[12px] text-muted-foreground">
                       Export the closeout as a PDF report for archives or
                       stakeholder review. Reopening sends this project back
-                      to In Progress and clears the active Completed and
+                      to Implementation and clears the active Completed and
                       Closed signatures; the current values remain in the
                       History below.
                     </p>
@@ -2130,7 +2130,7 @@ function PhaseProgress({ phase }: { phase: ProjectPhase }) {
     },
     {
       key: "in_progress",
-      label: "In Progress",
+      label: "Implementation",
       state:
         phase === "in_progress"
           ? "active"

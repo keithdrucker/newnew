@@ -15,7 +15,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 const PHASE_LABEL: Record<string, string> = {
   backlog_needs_assignment: "BACKLOG",
   planning: "PLANNING",
-  in_progress: "IN PROGRESS",
+  in_progress: "IMPLEMENTATION",
   on_hold: "ON HOLD",
   completed: "COMPLETED",
   closed: "CLOSED",
@@ -411,9 +411,9 @@ export async function downloadProjectReport(
           </>
         )}
 
-        {/* ---- In Progress ---- */}
+        {/* ---- Implementation ---- */}
         <View style={styles.sectionHeader} wrap={false}>
-          <Text style={styles.sectionTitle}>In Progress · Status Update</Text>
+          <Text style={styles.sectionTitle}>Implementation · Status Update</Text>
         </View>
         {project.statusUpdate?.trim() ? (
           <Text style={styles.body}>{project.statusUpdate}</Text>

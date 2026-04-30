@@ -76,7 +76,7 @@ const PHASE_COLUMNS: { key: ProjectPhase; label: string; color: string }[] = [
     color: "#94A3B8",
   },
   { key: "planning", label: "Planning", color: "#0EA5E9" },
-  { key: "in_progress", label: "In Progress", color: "#10B981" },
+  { key: "in_progress", label: "Implementation", color: "#10B981" },
   { key: "on_hold", label: "On Hold", color: "#F59E0B" },
   { key: "completed", label: "Completed", color: "#0D9488" },
   { key: "closed", label: "Closed", color: "#64748B" },
@@ -231,7 +231,7 @@ const PHASE_CHIP_TONE: Record<ProjectPhase, string> = {
 const PHASE_CHIP_LABEL: Record<ProjectPhase, string> = {
   backlog_needs_assignment: "Backlog",
   planning: "Planning",
-  in_progress: "In Progress",
+  in_progress: "Implementation",
   on_hold: "On Hold",
   completed: "Completed",
   closed: "Closed",
@@ -625,7 +625,7 @@ export default function ProjectsPage() {
             </DropdownMenu>
           </h1>
           <p className="text-[13px] text-muted-foreground mt-1">
-            Move projects through Backlog → Planning → In Progress →
+            Move projects through Backlog → Planning → Implementation →
             Completed. Click a card to assign owners, manage the
             checklist, and post status updates.
           </p>

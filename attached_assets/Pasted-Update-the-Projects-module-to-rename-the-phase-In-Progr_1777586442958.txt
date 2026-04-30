@@ -1,0 +1,60 @@
+Update the Projects module to rename the phase "In Progress" to "Implementation" everywhere it appears.
+
+Scope:
+- Only apply changes within the Projects feature (do not modify Tickets or other modules).
+- This is a label change, not a logic change (unless explicitly required for consistency).
+
+Make the following updates:
+
+1. UI / Frontend
+- Replace all visible text "In Progress" with "Implementation"
+- Update:
+  - Column headers on the project board
+  - Status badges / labels on project cards
+  - Dropdowns or status selectors
+  - Filters and search options
+  - Default view labels
+  - Any tooltips or helper text
+
+2. Backend / Data Model
+- If "In Progress" is stored as a status value:
+  - Rename it to "Implementation" in a safe way
+  - Ensure backward compatibility (migrate existing records)
+- If enums/constants exist:
+  - Update the enum from IN_PROGRESS → IMPLEMENTATION (or map accordingly)
+- Do NOT break existing data
+
+3. Database Migration
+- Update all existing project records:
+  - Change status = "In Progress" → "Implementation"
+- Ensure no data loss
+- Add migration script if needed
+
+4. API Layer
+- Update any API responses that return "In Progress"
+- Ensure APIs now return "Implementation"
+- Maintain compatibility if frontend expects updated value
+
+5. Filters & Logic
+- Ensure filtering by status still works correctly
+- Ensure counts (e.g., "6 In Progress") now show "6 Implementation"
+- Validate board grouping still works
+
+6. Notifications / Automation
+- Update any logic that triggers based on "In Progress"
+- Ensure it now uses "Implementation"
+
+7. QA / Validation
+- Verify:
+  - Projects display correctly under "Implementation"
+  - No broken filters or missing data
+  - Existing projects previously in "In Progress" appear in "Implementation"
+
+Important:
+- Do NOT modify other statuses (Backlog, Planning, On Hold, Completed)
+- Do NOT introduce regressions in ticketing or other modules
+- Keep naming consistent across the entire Projects experience
+
+Return:
+- Summary of all files changed
+- Any migration steps performed
