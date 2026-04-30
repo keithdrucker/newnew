@@ -3,21 +3,19 @@ import type { ReactNode } from "react";
 import {
   useListTickets,
   useGetSession,
-  useListDepartments,
   useListAgents,
   useListPeople,
   useListTicketViews,
   useCreateTicketView,
   useUpdateTicketView,
   useDeleteTicketView,
-  useUpdateMePreferences,
   useUpdateTicket,
   useListRiskRules,
   getListTicketViewsQueryKey,
-  getGetSessionQueryKey,
   getListTicketsQueryKey,
 } from "@workspace/api-client-react";
-import { Link, useRoute, useLocation } from "wouter";
+import { Link } from "wouter";
+import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import {
   Table,
   TableBody,
@@ -296,13 +294,14 @@ function rangeToAfter(range: DateRange): string | undefined {
 export default function Tickets() {
   const { data: session } = useGetSession();
   const queryClient = useQueryClient();
-  const [, params] = useRoute("/tickets/dept/:slug");
-  const [, setLocation] = useLocation();
-  const deptSlug = params?.slug ?? null;
-
-  const { data: departments } = useListDepartments({ scope: "accessible" });
-  const dept = deptSlug
-    ? (departments?.find((d) => d.slug === deptSlug) ?? null)
+  const scope = useTeamScope();
+  const accessible = scope.accessible;
+  // Single source of truth for the active dept context: only meaningful
+  // when the user has narrowed scope to exactly one team. In every
+  // other state (all/multi/loading/no-access) there is no single
+  // "active dept" and consumers should treat it as null.
+  const activeDept = scope.single
+    ? (accessible.find((d) => d.id === scope.singleId) ?? null)
     : null;
 
   const { data: agents } = useListAgents();
@@ -339,43 +338,6 @@ export default function Tickets() {
     return result;
   }
   const deleteView = useDeleteTicketView();
-  const updatePreferences = useUpdateMePreferences();
-
-  // If the user lands on the bare /tickets page (e.g. via direct URL or page
-  // refresh) and has a default ticket board configured, redirect to that
-  // board. The "All Tickets" sidebar link and the dropdown's "All" option
-  // navigate with `?all=1`, which is an explicit signal to skip the
-  // redirect and show every department.
-  const explicitlyAllTickets =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("all") === "1";
-  useEffect(() => {
-    if (deptSlug) return;
-    if (explicitlyAllTickets) return;
-    if (!session || !departments) return;
-    const slug = session.defaultTicketBoard;
-    if (!slug) return;
-    if (departments.some((d) => d.slug === slug)) {
-      setLocation(`/tickets/dept/${slug}`, { replace: true });
-    }
-  }, [deptSlug, explicitlyAllTickets, session, departments, setLocation]);
-
-  async function handleChangeBoard(value: string) {
-    if (value === "all") {
-      setLocation("/tickets?all=1");
-    } else {
-      setLocation(`/tickets/dept/${value}`);
-    }
-  }
-  async function handleSetDefaultBoard(value: string) {
-    const next = value === "all" ? null : value;
-    await updatePreferences.mutateAsync({
-      data: { defaultTicketBoard: next },
-    });
-    await queryClient.invalidateQueries({
-      queryKey: getGetSessionQueryKey(),
-    });
-  }
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   // Snapshot of the status filter taken right before the user enters
@@ -437,8 +399,7 @@ export default function Tickets() {
   );
   const [optionSearch, setOptionSearch] = useState("");
 
-  // Board / Views menus
-  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
+  // Views menu
   const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
   const [createTicketOpen, setCreateTicketOpen] = useState(false);
 
@@ -448,23 +409,26 @@ export default function Tickets() {
     setActiveViewId(null);
   };
 
-  // Auto-apply the user's default view once on first load (only when no
-  // department-scoped route is active — that scoping wins).
+  // Auto-apply the user's default view once on first load.
   useEffect(() => {
-    if (defaultApplied || !views || dept) return;
+    if (defaultApplied || !views) return;
     const def = views.find((v) => v.isDefault);
     if (def) {
       applyView(def.id);
     }
     setDefaultApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [views, defaultApplied, dept]);
+  }, [views, defaultApplied]);
 
-  // Clear selection on department change — the working set is a totally
-  // different scope and we don't want to carry ids across.
+  // Clear selection whenever the global team scope changes — the working
+  // set is a different slice and we don't want to carry hidden ids
+  // across into bulk actions.
+  const scopeKey = scope.isAll
+    ? "all"
+    : scope.selectedIds.slice().sort((a, b) => a - b).join(",");
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [dept?.id]);
+  }, [scopeKey]);
 
   function applyView(viewId: number) {
     const v = views?.find((x) => x.id === viewId);
@@ -563,7 +527,13 @@ export default function Tickets() {
   }
 
   const { data: tickets, isLoading } = useListTickets({
-    departmentId: dept?.id,
+    // When the user has narrowed scope to a single team we ask the
+    // server to limit the page to that team — it's a strict subset of
+    // what they're allowed to see, so the round-trip is smaller. For
+    // "All" or multi-team scope we omit the param (the server enforces
+    // the user's max accessible set) and narrow client-side via
+    // filterByTeamScope so a multi-team subset still works.
+    departmentId: scope.single ? (scope.singleId ?? undefined) : undefined,
     q: filters.search || undefined,
     // Multi-select: empty array means "no status filter" (let server return
     // every status). Otherwise pass the array; orval generates a repeated
@@ -620,17 +590,31 @@ export default function Tickets() {
   });
 
   // Separate small query that always counts closed tickets in the current
-  // department, regardless of the active filter set. Powers the badge on
-  // the "Show closed" toggle so users can see how many closed tickets
-  // they're hiding.
+  // scope, regardless of the active filter set. Powers the badge on the
+  // "Show closed" toggle so users can see how many closed tickets they're
+  // hiding. Server-narrow when single, client-narrow otherwise.
   const { data: closedTickets } = useListTickets({
-    departmentId: dept?.id,
+    departmentId: scope.single ? (scope.singleId ?? undefined) : undefined,
     status: ["closed"],
   });
-  const closedCount = closedTickets?.length ?? 0;
+  const closedCount = useMemo(
+    () => filterByTeamScope(closedTickets ?? [], scope).length,
+    [closedTickets, scope],
+  );
+
+  // Apply the team scope filter before sort/page-level filters. The
+  // server already enforces the user's max accessible set; this trims
+  // the list further when the user has narrowed scope (multi-select)
+  // without "All Teams" selected. Single-team scope is already narrowed
+  // server-side via the departmentId query param, so this is a no-op
+  // there.
+  const scopedTickets = useMemo(
+    () => filterByTeamScope(tickets ?? [], scope),
+    [tickets, scope],
+  );
 
   const sortedTickets = useMemo(() => {
-    const list = [...(tickets ?? [])];
+    const list = [...scopedTickets];
     const dir = sort.dir === "asc" ? 1 : -1;
     const SLA_RANK: Record<string, number> = { breached: 2, on_track: 1 };
     list.sort((a, b) => {
@@ -949,7 +933,7 @@ export default function Tickets() {
         filters.updatedRange === "all"
           ? null
           : (filters.updatedRange as never),
-      departmentId: dept?.id ?? null,
+      departmentId: activeDept?.id ?? null,
       // Sort + visible columns are part of "what the screen looks like
       // right now" — capture them so saved views restore exactly.
       sort: { field: sort.field as never, dir: sort.dir },
@@ -990,79 +974,37 @@ export default function Tickets() {
     });
   }
 
-  const boardLabel = dept ? dept.name : "All Tickets";
+  // Scope label rules per the global team-scope spec:
+  //   loading → "Loading…"
+  //   no accessible teams → "No teams"
+  //   isAll && >1 accessible → "All Teams"
+  //   single → that team's name
+  //   else (subset of >1) → "{N} teams"
+  const scopeLabel = (() => {
+    if (scope.loading) return "Loading…";
+    if (accessible.length === 0) return "No teams";
+    if (scope.isAll && accessible.length > 1) return "All Teams";
+    if (scope.single) {
+      return activeDept?.name ?? "1 team";
+    }
+    return `${scope.selectedIds.length} teams`;
+  })();
   const viewLabel = activeView ? activeView.name : "Default view";
-  const currentBoardIsDefault =
-    (session?.defaultTicketBoard ?? null) === (deptSlug ?? null);
 
   return (
     <div className="space-y-4 h-full flex flex-col">
       {/* Header: Board > View dropdown */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="flex items-center gap-1 text-xl font-semibold tracking-tight m-0">
-          {/* Board picker */}
-          <DropdownMenu open={boardMenuOpen} onOpenChange={setBoardMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-muted/60 -ml-1"
-                data-testid="button-board-picker"
-              >
-                <span>{boardLabel}</span>
-                <ChevronDown className="h-4 w-4 opacity-60" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                Boards
-              </DropdownMenuLabel>
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setBoardMenuOpen(false);
-                  handleChangeBoard("all");
-                }}
-                className="flex items-center justify-between"
-                data-testid="board-option-all"
-              >
-                <span>All Tickets</span>
-                {!deptSlug && <Check className="h-4 w-4 text-emerald-500" />}
-              </DropdownMenuItem>
-              {(departments ?? []).map((d) => (
-                <DropdownMenuItem
-                  key={d.id}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setBoardMenuOpen(false);
-                    handleChangeBoard(d.slug);
-                  }}
-                  className="flex items-center justify-between"
-                  data-testid={`board-option-${d.slug}`}
-                >
-                  <span>{d.name}</span>
-                  {deptSlug === d.slug && (
-                    <Check className="h-4 w-4 text-emerald-500" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  handleSetDefaultBoard(deptSlug ?? "all");
-                }}
-                disabled={currentBoardIsDefault}
-                data-testid="button-set-default-board"
-              >
-                <Star className="h-3.5 w-3.5 mr-2 text-amber-500" />
-                {currentBoardIsDefault
-                  ? `${boardLabel} is your default board`
-                  : `Set ${boardLabel} as default board`}
-              </DropdownMenuItem>
-              <div className="px-2 pb-2 pt-1 text-[11px] text-muted-foreground">
-                Opening Tickets from the sidebar lands here.
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Static scope label — driven by the global team-scope
+              context (sidebar selector). The page no longer renders
+              its own board picker. */}
+          <span
+            className="px-1 py-0.5 -ml-1"
+            data-testid="text-scope-label"
+          >
+            {scopeLabel}
+          </span>
 
           <ChevronRight className="h-4 w-4 opacity-50" />
 
@@ -1245,6 +1187,7 @@ export default function Tickets() {
 
           <Button
             onClick={() => setCreateTicketOpen(true)}
+            disabled={scope.loading || scope.accessible.length === 0}
             data-testid="button-create-ticket"
           >
             <Plus className="h-4 w-4 mr-1.5" />
@@ -1256,12 +1199,12 @@ export default function Tickets() {
       <CreateTicketDialog
         open={createTicketOpen}
         onOpenChange={setCreateTicketOpen}
-        defaultDepartmentSlug={deptSlug ?? null}
+        defaultDepartmentSlug={activeDept?.slug ?? null}
       />
 
-      {dept?.description && (
+      {activeDept?.description && (
         <p className="text-sm text-muted-foreground -mt-2">
-          {dept.description}
+          {activeDept.description}
         </p>
       )}
 

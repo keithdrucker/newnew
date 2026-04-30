@@ -1,26 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, Redirect, useLocation, useRoute } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListInitiatives,
   useCreateInitiative,
   useUpdateInitiative,
-  useListDepartments,
   useListAgents,
   useGetSession,
   useListBoardViews,
   useCreateBoardView,
   useUpdateBoardView,
   useDeleteBoardView,
-  useUpdateMePreferences,
   getListBoardViewsQueryKey,
-  getGetSessionQueryKey,
   type Initiative,
   type InitiativeStatus,
   type InitiativeAuditEvent,
   getListInitiativesQueryKey,
   getGetInitiativeQueryKey,
 } from "@workspace/api-client-react";
+import { useTeamScope, filterByTeamScope, type TeamScope } from "@/lib/team-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -73,6 +71,7 @@ import {
   Plus,
   Star,
   Trash2,
+  Users,
   XCircle,
   PauseCircle,
   Undo2,
@@ -258,26 +257,22 @@ export default function InitiativesPage() {
   const { data, isLoading } = useListInitiatives();
   const initiatives = (data ?? []) as Initiative[];
   const { data: agents } = useListAgents({});
-  const { data: departments } = useListDepartments({ scope: "accessible" });
-  const [, deptParams] = useRoute("/initiatives/dept/:slug");
+  const scope = useTeamScope();
   const [, setLocation] = useLocation();
-  const deptSlug = deptParams?.slug ?? null;
   const activeDept = useMemo(
     () =>
-      deptSlug && Array.isArray(departments)
-        ? departments.find((d) => d.slug === deptSlug) ?? null
+      scope.single
+        ? scope.accessible.find((d) => d.id === scope.singleId) ?? null
         : null,
-    [departments, deptSlug],
+    [scope.single, scope.singleId, scope.accessible],
   );
 
-  // Saved views + default-team picker — mirrors the Tickets page.
-  // Scoped to "initiative" so each section has its own list and its
-  // own per-section default.
+  // Saved views — mirrors the Tickets page. Scoped to "initiative" so
+  // each section has its own list and its own per-section default.
   const { data: views } = useListBoardViews({ scope: "initiative" });
   const createView = useCreateBoardView();
   const updateView = useUpdateBoardView();
   const deleteView = useDeleteBoardView();
-  const updatePreferences = useUpdateMePreferences();
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -291,7 +286,6 @@ export default function InitiativesPage() {
   // Saved-view UI state
   const [activeViewId, setActiveViewId] = useState<number | null>(null);
   const [defaultApplied, setDefaultApplied] = useState(false);
-  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
   const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
@@ -305,61 +299,23 @@ export default function InitiativesPage() {
     [filters, sortKey],
   );
 
-  // ---------- Default team / saved view orchestration ----------
+  // ---------- Saved view orchestration ----------
 
-  // If the user lands on bare /initiatives and has a default team set,
-  // redirect to /initiatives/dept/:slug. The "All Initiatives" dropdown
-  // option navigates with `?all=1`, signalling "explicit all" so we
-  // don't bounce them right back.
-  const explicitlyAll =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("all") === "1";
+  // Auto-apply the user's default saved view once on first load.
   useEffect(() => {
-    if (deptSlug) return;
-    if (explicitlyAll) return;
-    if (!session || !departments) return;
-    const slug = session.defaultInitiativeBoard;
-    if (!slug) return;
-    if (departments.some((d) => d.slug === slug)) {
-      setLocation(`/initiatives/dept/${slug}`, { replace: true });
-    }
-  }, [deptSlug, explicitlyAll, session, departments, setLocation]);
-
-  // Auto-apply the user's default saved view once on first load — only
-  // when no department-scoped route is active (route scoping wins).
-  useEffect(() => {
-    if (defaultApplied || !views || activeDept) return;
+    if (defaultApplied || !views) return;
     const def = views.find((v) => v.isDefault);
     if (def) {
       applyView(def.id);
     }
     setDefaultApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [views, defaultApplied, activeDept]);
-
-  async function handleChangeBoard(value: string) {
-    setBoardMenuOpen(false);
-    if (value === "all") {
-      setLocation("/initiatives?all=1");
-    } else {
-      setLocation(`/initiatives/dept/${value}`);
-    }
-  }
-
-  async function handleSetDefaultBoard(value: string) {
-    const next = value === "all" ? null : value;
-    await updatePreferences.mutateAsync({
-      data: { defaultInitiativeBoard: next },
-    });
-    await queryClient.invalidateQueries({
-      queryKey: getGetSessionQueryKey(),
-    });
-  }
+  }, [views, defaultApplied]);
 
   // Persisted shape of a saved view. Mirrors what the page actually
-  // controls — search, filters, sort key, and the team route. The
-  // generic BoardViewConfig schema accepts any extra keys, so this is
-  // a safe superset of what other sections will store.
+  // controls — search, filters, and sort key. The generic
+  // BoardViewConfig schema accepts any extra keys, so this is a safe
+  // superset of what other sections will store.
   type InitiativeViewConfig = {
     search?: string | null;
     riskLevel?: string | null;
@@ -369,7 +325,6 @@ export default function InitiativesPage() {
     effort?: string | null;
     assigneeId?: string | null;
     sort?: { field: string; dir: "asc" | "desc" } | null;
-    departmentId?: number | null;
   };
 
   function buildConfigFromFilters(): InitiativeViewConfig {
@@ -388,7 +343,6 @@ export default function InitiativesPage() {
               field: "anticipatedApprovalDate",
               dir: sortKey === "due_asc" ? "asc" : "desc",
             },
-      departmentId: activeDept?.id ?? null,
     };
   }
 
@@ -413,18 +367,6 @@ export default function InitiativesPage() {
       setSortKey(c.sort.dir === "asc" ? "due_asc" : "due_desc");
     } else {
       setSortKey("default");
-    }
-    // If the view captured a department scope and we're not already on
-    // that route, navigate to it. Falling back to "all" mirrors the
-    // tickets behaviour of leaving you on the current route when the
-    // saved dept is no longer accessible.
-    if (c.departmentId != null && departments) {
-      const target = departments.find((d) => d.id === c.departmentId);
-      if (target && deptSlug !== target.slug) {
-        setLocation(`/initiatives/dept/${target.slug}`);
-      }
-    } else if (c.departmentId == null && deptSlug) {
-      setLocation("/initiatives?all=1");
     }
     setActiveViewId(viewId);
   }
@@ -484,21 +426,29 @@ export default function InitiativesPage() {
     setActiveViewId(null);
   }
 
-  const boardLabel = activeDept ? activeDept.name : "All Initiatives";
+  const boardLabel = (() => {
+    if (scope.loading) return "Loading…";
+    if (scope.accessible.length === 0) return "No teams";
+    if (scope.isAll && scope.accessible.length > 1) return "All Teams";
+    if (scope.single) {
+      const dept = scope.accessible.find((d) => d.id === scope.singleId);
+      return dept?.name ?? "1 team";
+    }
+    return `${scope.selectedIds.length} teams`;
+  })();
   const viewLabel = activeView ? activeView.name : "Default view";
-  const currentBoardIsDefault =
-    (session?.defaultInitiativeBoard ?? null) === (deptSlug ?? null);
+
+  // Apply global team-scope filter before the page's own filters.
+  // Initiatives with a null departmentId are cross-team and always
+  // pass through.
+  const visibleInitiatives = useMemo(
+    () => filterByTeamScope(initiatives, scope),
+    [initiatives, scope],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = initiatives.filter((i) => {
-      // Team-scoped view: hide everything if the slug didn't resolve to
-      // an accessible department (404-like behavior); otherwise only
-      // include initiatives that belong to that team's department.
-      if (deptSlug) {
-        if (!activeDept) return false;
-        if (i.departmentId !== activeDept.id) return false;
-      }
+    let list = visibleInitiatives.filter((i) => {
       if (q) {
         const hay = [
           i.title,
@@ -552,7 +502,7 @@ export default function InitiativesPage() {
       });
     }
     return list;
-  }, [initiatives, search, filters, sortKey, deptSlug, activeDept]);
+  }, [visibleInitiatives, search, filters, sortKey]);
 
   const grouped = useMemo(() => {
     const m = new Map<InitiativeStatus, Initiative[]>();
@@ -601,72 +551,14 @@ export default function InitiativesPage() {
                 ·
               </span>
 
-              {/* Board (team) picker — mirrors Tickets */}
-              <DropdownMenu
-                open={boardMenuOpen}
-                onOpenChange={setBoardMenuOpen}
+              {/* Static team-scope label — driven by the global selector */}
+              <span
+                className="inline-flex items-center gap-1.5 px-1.5 py-0.5 text-2xl font-semibold"
+                data-testid="text-scope-label"
               >
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 text-2xl font-semibold"
-                    data-testid="button-initiative-board-picker"
-                  >
-                    <span>{boardLabel}</span>
-                    <ChevronDown className="h-4 w-4 opacity-60" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Teams
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleChangeBoard("all");
-                    }}
-                    className="flex items-center justify-between"
-                    data-testid="initiative-board-option-all"
-                  >
-                    <span>All Initiatives</span>
-                    {!deptSlug && (
-                      <Check className="h-4 w-4 text-emerald-500" />
-                    )}
-                  </DropdownMenuItem>
-                  {(departments ?? []).map((d) => (
-                    <DropdownMenuItem
-                      key={d.id}
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        handleChangeBoard(d.slug);
-                      }}
-                      className="flex items-center justify-between"
-                      data-testid={`initiative-board-option-${d.slug}`}
-                    >
-                      <span>{d.name}</span>
-                      {deptSlug === d.slug && (
-                        <Check className="h-4 w-4 text-emerald-500" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleSetDefaultBoard(deptSlug ?? "all");
-                    }}
-                    disabled={currentBoardIsDefault}
-                    data-testid="button-set-default-initiative-board"
-                  >
-                    <Star className="h-3.5 w-3.5 mr-2 text-amber-500" />
-                    {currentBoardIsDefault
-                      ? `${boardLabel} is your default team`
-                      : `Set ${boardLabel} as default team`}
-                  </DropdownMenuItem>
-                  <div className="px-2 pb-2 pt-1 text-[11px] text-muted-foreground">
-                    Opening Initiatives from the sidebar lands here.
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                <Users className="h-4 w-4 opacity-60" />
+                <span>{boardLabel}</span>
+              </span>
 
               <ChevronRight className="h-4 w-4 opacity-50 mx-0.5" />
 
@@ -800,6 +692,7 @@ export default function InitiativesPage() {
         </div>
         <Button
           onClick={() => setCreateOpen(true)}
+          disabled={scope.loading || scope.accessible.length === 0}
           data-testid="button-new-initiative"
         >
           <Plus className="h-4 w-4 mr-1.5" />
@@ -1052,7 +945,7 @@ export default function InitiativesPage() {
       <CreateDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        defaultDepartmentId={activeDept?.id ?? null}
+        scope={scope}
       />
       {selected && (
         <DetailDialog
@@ -1245,11 +1138,11 @@ function InitiativeCard({
 function CreateDialog({
   open,
   onOpenChange,
-  defaultDepartmentId,
+  scope,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  defaultDepartmentId: number | null;
+  scope: TeamScope;
 }) {
   const qc = useQueryClient();
   const create = useCreateInitiative({
@@ -1262,20 +1155,33 @@ function CreateDialog({
       onError: (e: Error) => toast.error(e.message),
     },
   });
-  const { data: depts } = useListDepartments();
+
+  // Available team options come from the global scope. When the user
+  // has narrowed scope, the create form mirrors that narrowing so the
+  // result is guaranteed to be visible afterwards.
+  const teamOptions = useMemo(() => {
+    if (scope.isAll) return scope.accessible;
+    const set = new Set(scope.selectedIds);
+    return scope.accessible.filter((d) => set.has(d.id));
+  }, [scope.isAll, scope.accessible, scope.selectedIds]);
+
+  const single = scope.single;
+  const singleDept = single
+    ? scope.accessible.find((d) => d.id === scope.singleId) ?? null
+    : null;
 
   const [title, setTitle] = useState("");
   const [problemOpportunity, setProblemOpportunity] = useState("");
   const [expectedBenefit, setExpectedBenefit] = useState("");
   const [impactScope, setImpactScope] = useState("");
-  const [departmentId, setDepartmentId] = useState<string>(
-    defaultDepartmentId != null ? String(defaultDepartmentId) : "none",
-  );
+  // "none" → cross-team initiative (null departmentId). Allowed in
+  // multi-team mode only — single-team mode pins to the active team.
+  const [departmentId, setDepartmentId] = useState<string>("none");
   const [additionalNotes, setAdditionalNotes] = useState("");
 
-  // Reset on close, and re-seed the team selector with the active board's
-  // department whenever the dialog (re)opens — so opening "New initiative"
-  // from the IT board pre-selects IT, from HR pre-selects HR, etc.
+  // Reset on close, and re-seed the team selector whenever the dialog
+  // (re)opens. In single-team mode we lock to that team; otherwise we
+  // start unselected and require an explicit pick.
   useEffect(() => {
     if (!open) {
       setTitle("");
@@ -1284,19 +1190,33 @@ function CreateDialog({
       setImpactScope("");
       setAdditionalNotes("");
     }
-    setDepartmentId(
-      defaultDepartmentId != null ? String(defaultDepartmentId) : "none",
-    );
-  }, [open, defaultDepartmentId]);
+    if (single && scope.singleId != null) {
+      setDepartmentId(String(scope.singleId));
+    } else {
+      setDepartmentId("");
+    }
+  }, [open, single, scope.singleId]);
+
+  const teamValid = single
+    ? scope.singleId != null
+    : departmentId !== "" &&
+      (departmentId === "none" ||
+        teamOptions.some((d) => String(d.id) === departmentId));
 
   const canSubmit =
     title.trim().length > 0 &&
     problemOpportunity.trim().length > 0 &&
     expectedBenefit.trim().length > 0 &&
-    impactScope.length > 0;
+    impactScope.length > 0 &&
+    teamValid;
 
   const submit = () => {
     if (!canSubmit) return;
+    const resolvedDeptId = single
+      ? scope.singleId
+      : departmentId === "none"
+        ? null
+        : Number.parseInt(departmentId, 10);
     create.mutate({
       data: {
         title: title.trim(),
@@ -1304,8 +1224,7 @@ function CreateDialog({
         expectedBenefit: expectedBenefit.trim(),
         impactScope,
         additionalNotes: additionalNotes.trim(),
-        departmentId:
-          departmentId === "none" ? null : Number.parseInt(departmentId, 10),
+        departmentId: resolvedDeptId,
       },
     });
   };
@@ -1361,21 +1280,31 @@ function CreateDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Team">
-            <Select value={departmentId} onValueChange={setDepartmentId}>
-              <SelectTrigger data-testid="select-create-department">
-                <SelectValue placeholder="None" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {(depts ?? []).map((d) => (
-                  <SelectItem key={d.id} value={String(d.id)}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          {single ? (
+            <div
+              className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-[12px] text-muted-foreground"
+              data-testid="chip-create-owning-team"
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>Owning team: {singleDept?.name ?? "—"}</span>
+            </div>
+          ) : (
+            <Field label="Team" required>
+              <Select value={departmentId} onValueChange={setDepartmentId}>
+                <SelectTrigger data-testid="select-create-department">
+                  <SelectValue placeholder="Choose a team…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No specific team / cross-team</SelectItem>
+                  {teamOptions.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
           <Field label="Additional Notes">
             <Textarea
               rows={2}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Redirect, useLocation, useRoute } from "wouter";
+import { Redirect } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,6 @@ import {
   ArrowUp,
   Calendar as CalendarIcon,
   Check,
-  ChevronDown,
   ChevronRight,
   Columns3,
   Filter as FilterIcon,
@@ -18,26 +17,22 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Star,
   Timer,
   Trash2,
   X,
 } from "lucide-react";
 import {
   useGetSession,
-  useListDepartments,
   useListAgents,
   useListOperationalTasks,
   useCreateOperationalTask,
   useUpdateOperationalTask,
   useDeleteOperationalTask,
   useCompleteOperationalTask,
-  useUpdateMePreferences,
   useListOperationalTaskActivity,
   useListOperationalTaskTimeEntries,
   useCreateOperationalTaskTimeEntry,
   useDeleteOperationalTaskTimeEntry,
-  getGetSessionQueryKey,
   getListOperationalTasksQueryKey,
   getListOperationalTaskActivityQueryKey,
   getListOperationalTaskTimeEntriesQueryKey,
@@ -47,15 +42,8 @@ import type {
   OperationalTaskActivity,
   OperationalTaskTimeEntry,
 } from "@workspace/api-client-react";
+import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import { Switch } from "@/components/ui/switch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
@@ -485,35 +473,19 @@ function StatusBadge({
 export default function OperationalTasks() {
   const { data: session, isLoading: sessionLoading } = useGetSession();
   const queryClient = useQueryClient();
-  const { data: departments } = useListDepartments({ scope: "accessible" });
-  const [, deptParams] = useRoute("/operational-tasks/dept/:slug");
-  const [, setLocation] = useLocation();
-  const deptSlug = deptParams?.slug ?? null;
+  const scope = useTeamScope();
+  // The page no longer derives team context from the URL :slug — the
+  // global team-scope context (sidebar selector) is the single source
+  // of truth. `activeDept` is only meaningful when the user has
+  // narrowed scope to exactly one team; otherwise it stays null and
+  // the create dialog shows a team picker.
   const activeDept = useMemo(
     () =>
-      deptSlug && Array.isArray(departments)
-        ? departments.find((d) => d.slug === deptSlug) ?? null
+      scope.single
+        ? scope.accessible.find((d) => d.id === scope.singleId) ?? null
         : null,
-    [departments, deptSlug],
+    [scope.single, scope.singleId, scope.accessible],
   );
-
-  const updatePreferences = useUpdateMePreferences();
-  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
-
-  // Default-board redirect (matches Tickets/Initiatives/Projects pattern).
-  const explicitlyAll =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("all") === "1";
-  useEffect(() => {
-    if (deptSlug) return;
-    if (explicitlyAll) return;
-    if (!session || !departments) return;
-    const slug = session.defaultOperationalTaskBoard;
-    if (!slug) return;
-    if (departments.some((d) => d.slug === slug)) {
-      setLocation(`/operational-tasks/dept/${slug}`, { replace: true });
-    }
-  }, [deptSlug, explicitlyAll, session, departments, setLocation]);
 
   // ---- Filters -------------------------------------------------------
   // One-shape Filters object mirrors the Tickets toolbar so the
@@ -599,7 +571,15 @@ export default function OperationalTasks() {
   // selection are no-ops here because queryParams already pushed them
   // to the server.
   const visibleTasks = useMemo<OperationalTask[]>(() => {
-    let list = (tasks ?? []) as OperationalTask[];
+    // Apply the global team-scope filter first so the page's own
+    // filters always operate against the user's currently active set
+    // of teams. The server already enforces the user's max accessible
+    // teams; this narrows further when the sidebar selection is a
+    // strict subset.
+    let list = filterByTeamScope(
+      (tasks ?? []) as OperationalTask[],
+      scope,
+    );
     if (filters.status.length > 1) {
       const set = new Set(filters.status);
       list = list.filter((t) => set.has(t.status));
@@ -613,7 +593,7 @@ export default function OperationalTasks() {
       );
     }
     return list;
-  }, [tasks, filters.status, filters.controlCategory]);
+  }, [tasks, scope, filters.status, filters.controlCategory]);
 
   // Owner picker — load agents for whichever department is active
   // (fall back to global list when "All Operational Tasks").
@@ -645,28 +625,21 @@ export default function OperationalTasks() {
     return <Redirect to="/" />;
   }
 
-  async function handleChangeBoard(value: string) {
-    setBoardMenuOpen(false);
-    if (value === "all") {
-      setLocation("/operational-tasks?all=1");
-    } else {
-      setLocation(`/operational-tasks/dept/${value}`);
+  // Header label that mirrors the global team-scope selector in the
+  // sidebar. The page no longer renders its own picker — this is a
+  // read-only echo so the user can see the active scope at a glance.
+  const boardLabel = (() => {
+    if (scope.loading) return "Loading…";
+    if (scope.accessible.length === 0) return "No teams";
+    if (scope.isAll && scope.accessible.length > 1) return "All Teams";
+    if (scope.single) {
+      return (
+        scope.accessible.find((d) => d.id === scope.singleId)?.name ??
+        "1 team"
+      );
     }
-  }
-
-  async function handleSetDefaultBoard(value: string) {
-    const next = value === "all" ? null : value;
-    await updatePreferences.mutateAsync({
-      data: { defaultOperationalTaskBoard: next },
-    });
-    await queryClient.invalidateQueries({
-      queryKey: getGetSessionQueryKey(),
-    });
-  }
-
-  const boardLabel = activeDept ? activeDept.name : "All Operational Tasks";
-  const currentBoardIsDefault =
-    (session.defaultOperationalTaskBoard ?? null) === (deptSlug ?? null);
+    return `${scope.selectedIds.length} teams`;
+  })();
 
   // Active filter chips: one chip per non-default filter. The chip
   // strip lives below the toolbar and lets the user clear filters one
@@ -809,68 +782,12 @@ export default function OperationalTasks() {
             <span className="text-muted-foreground font-normal mx-1.5">
               ·
             </span>
-            <DropdownMenu
-              open={boardMenuOpen}
-              onOpenChange={setBoardMenuOpen}
+            <span
+              className="px-1.5 py-0.5 text-[22px] font-semibold"
+              data-testid="text-scope-label"
             >
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 text-[22px] font-semibold"
-                  data-testid="button-operational-board-picker"
-                >
-                  <span>{boardLabel}</span>
-                  <ChevronDown className="h-4 w-4 opacity-60" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64">
-                <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  Teams
-                </DropdownMenuLabel>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    handleChangeBoard("all");
-                  }}
-                  className="flex items-center justify-between"
-                  data-testid="operational-board-option-all"
-                >
-                  <span>All Operational Tasks</span>
-                  {!deptSlug && (
-                    <Check className="h-4 w-4 text-emerald-500" />
-                  )}
-                </DropdownMenuItem>
-                {(departments ?? []).map((d) => (
-                  <DropdownMenuItem
-                    key={d.id}
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleChangeBoard(d.slug);
-                    }}
-                    className="flex items-center justify-between"
-                    data-testid={`operational-board-option-${d.slug}`}
-                  >
-                    <span>{d.name}</span>
-                    {deptSlug === d.slug && (
-                      <Check className="h-4 w-4 text-emerald-500" />
-                    )}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    handleSetDefaultBoard(deptSlug ?? "all");
-                  }}
-                  disabled={currentBoardIsDefault}
-                  data-testid="button-set-default-operational-board"
-                >
-                  <Star className="h-3.5 w-3.5 mr-2 text-amber-500" />
-                  {currentBoardIsDefault
-                    ? `${boardLabel} is your default team`
-                    : `Set ${boardLabel} as default team`}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {boardLabel}
+            </span>
           </h1>
           <p className="mt-1 text-sm text-muted-foreground max-w-xl">
             {activeDept
@@ -890,11 +807,11 @@ export default function OperationalTasks() {
           <Button
             size="sm"
             onClick={() => setCreateOpen(true)}
-            disabled={!activeDept}
+            disabled={scope.loading || scope.accessible.length === 0}
             title={
-              activeDept
-                ? "Create operational task"
-                : "Pick a team first to create a task"
+              scope.accessible.length === 0
+                ? "You don't have access to any teams"
+                : "Create operational task"
             }
             data-testid="button-new-operational-task"
           >
@@ -1387,9 +1304,9 @@ export default function OperationalTasks() {
         </Table>
       </div>
 
-      {createOpen && activeDept && (
+      {createOpen && scope.accessible.length > 0 && (
         <CreateTaskDialog
-          departmentId={activeDept.id}
+          scope={scope}
           agents={agents ?? []}
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
@@ -1418,18 +1335,28 @@ export default function OperationalTasks() {
 // ---- Create dialog ------------------------------------------------
 
 function CreateTaskDialog({
-  departmentId,
+  scope,
   agents,
   onClose,
   onCreated,
   createTask,
 }: {
-  departmentId: number;
+  scope: ReturnType<typeof useTeamScope>;
   agents: Array<{ id: number; name: string }>;
   onClose: () => void;
   onCreated: () => void;
   createTask: ReturnType<typeof useCreateOperationalTask>;
 }) {
+  // Operational tasks have a non-nullable departmentId. When scope is
+  // narrowed to a single team we auto-bind to it and hide the picker;
+  // otherwise the user must explicitly choose which team owns the new
+  // task from their currently-active scope.
+  const teamOptions = useMemo(() => {
+    if (scope.isAll) return scope.accessible;
+    const set = new Set(scope.selectedIds);
+    return scope.accessible.filter((d) => set.has(d.id));
+  }, [scope.isAll, scope.selectedIds, scope.accessible]);
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<"recurring" | "one_time">("recurring");
@@ -1437,7 +1364,14 @@ function CreateTaskDialog({
   const [nextDueDate, setNextDueDate] = useState<string>(todayYmd());
   const [ownerId, setOwnerId] = useState<string>("none");
   const [controlCategory, setControlCategory] = useState<string>("none");
+  const [departmentId, setDepartmentId] = useState<string>(() =>
+    scope.single && scope.singleId != null ? String(scope.singleId) : "",
+  );
   const [error, setError] = useState<string | null>(null);
+
+  const owningTeam = scope.single
+    ? scope.accessible.find((d) => d.id === scope.singleId) ?? null
+    : null;
 
   async function handleSubmit() {
     setError(null);
@@ -1449,10 +1383,19 @@ function CreateTaskDialog({
       setError("Next due date is required");
       return;
     }
+    const resolvedDeptId = scope.single
+      ? scope.singleId
+      : departmentId
+        ? Number(departmentId)
+        : null;
+    if (resolvedDeptId == null) {
+      setError("Team is required");
+      return;
+    }
     try {
       await createTask.mutateAsync({
         data: {
-          departmentId,
+          departmentId: resolvedDeptId,
           name: name.trim(),
           description: description.trim(),
           type,
@@ -1480,6 +1423,37 @@ function CreateTaskDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {scope.single && owningTeam ? (
+            <div
+              className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs"
+              data-testid="chip-owning-team"
+            >
+              <span className="text-muted-foreground">Owning team:</span>
+              <span className="font-medium">{owningTeam.name}</span>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <Label htmlFor="op-task-team">Team</Label>
+              <Select
+                value={departmentId}
+                onValueChange={(v) => setDepartmentId(v)}
+              >
+                <SelectTrigger
+                  id="op-task-team"
+                  data-testid="select-new-task-team"
+                >
+                  <SelectValue placeholder="Select a team" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teamOptions.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1">
             <Label htmlFor="op-task-name">Name</Label>
             <Input

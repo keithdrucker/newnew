@@ -3,7 +3,6 @@ import {
   useGetDashboardTimeseries,
   useGetBreachedTickets,
   useGetSession,
-  useListDepartments,
   useListAgents,
   getListAgentsQueryKey,
 } from "@workspace/api-client-react";
@@ -47,6 +46,7 @@ import { Badge } from "@/components/ui/badge";
 import ProjectsDashboard from "@/pages/projects-dashboard";
 import InitiativesDashboard from "@/pages/initiatives-dashboard";
 import OperationalTasksDashboard from "@/pages/operational-tasks-dashboard";
+import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 
 function fmtDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "—";
@@ -155,19 +155,21 @@ export default function Dashboard() {
 }
 
 function TicketsDashboardContent() {
-  const { data: session } = useGetSession();
+  const scope = useTeamScope();
   const [rangeDays, setRangeDays] = useState<"30" | "180" | "365">("30");
-  const [departmentId, setDepartmentId] = useState<string>("all");
   const [assigneeId, setAssigneeId] = useState<string>("all");
 
-  const { data: departments } = useListDepartments({ scope: "accessible" });
-
-  const queryDeptId = departmentId === "all" ? undefined : Number(departmentId);
+  // When a single team is selected globally we pass it through to the
+  // API for an exact server-side filter. For multi-team / "All Teams"
+  // we omit the parameter so the API returns the user's full
+  // accessible set, and we narrow client-side via filterByTeamScope.
+  const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
   const queryRangeDays = Number(rangeDays) as 30 | 180 | 365;
   const queryAssigneeId = assigneeId === "all" ? undefined : Number(assigneeId);
 
-  // Agents shown in the picker are scoped to the selected department.
-  // When "All Departments" is selected, the picker is hidden.
+  // The assignee picker is only meaningful when we've narrowed to a
+  // single team — otherwise the agent list spans many teams and
+  // becomes noisy.
   const agentsParams = queryDeptId != null ? { departmentId: queryDeptId } : {};
   const { data: agents } = useListAgents(agentsParams, {
     query: {
@@ -176,11 +178,12 @@ function TicketsDashboardContent() {
     },
   });
 
-  // Reset the agent filter whenever the department changes so we don't keep
-  // a stale assignee that isn't in the new department's agent list.
+  // Reset the agent filter whenever the active team changes so we
+  // don't keep a stale assignee that isn't in the new team's agent
+  // list.
   useEffect(() => {
     setAssigneeId("all");
-  }, [departmentId]);
+  }, [scope.singleId]);
 
   const { data: overview, isLoading: isOverviewLoading } =
     useGetDashboardOverview({
@@ -209,43 +212,40 @@ function TicketsDashboardContent() {
     );
   }, [timeseries]);
 
-  const lockedDept = session?.role === "agent";
+  // Breached tickets carry departmentId per row, so when scope is
+  // multi/All and the API returned the full accessible set we narrow
+  // it to the actively selected teams here.
+  const breachedScoped = useMemo(() => {
+    if (!breached) return [];
+    if (scope.single || scope.isAll) return breached;
+    return filterByTeamScope(breached, scope);
+  }, [breached, scope]);
+
+  const scopeLabel = useMemo(() => {
+    if (scope.isAll) return "All Teams";
+    if (scope.single) {
+      const dept = scope.accessible.find((d) => d.id === scope.singleId);
+      return dept?.name ?? "1 team";
+    }
+    return `${scope.selectedIds.length} teams`;
+  }, [scope]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Service desk performance for{" "}
-            {lockedDept
-              ? session?.departmentName
-              : departmentId === "all"
-                ? "all departments"
-                : (departments?.find((d) => d.id === Number(departmentId))?.name ??
-                  "selected department")}
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Workspace Dashboard
+          </h1>
+          <p
+            className="text-sm text-muted-foreground mt-1"
+            data-testid="text-scope-label"
+          >
+            {scopeLabel}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {!lockedDept && (
-            <Select value={departmentId} onValueChange={setDepartmentId}>
-              <SelectTrigger
-                className="w-[200px]"
-                data-testid="select-department"
-              >
-                <SelectValue placeholder="All Departments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                {departments?.map((d) => (
-                  <SelectItem key={d.id} value={String(d.id)}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {queryDeptId != null && (
+          {scope.single && (
             <Select value={assigneeId} onValueChange={setAssigneeId}>
               <SelectTrigger
                 className="w-[200px]"
@@ -263,7 +263,7 @@ function TicketsDashboardContent() {
                   ))
                 ) : (
                   <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    No agents in this department
+                    No agents in this team
                   </div>
                 )}
               </SelectContent>
@@ -462,9 +462,9 @@ function TicketsDashboardContent() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {breached && breached.length > 0 ? (
+              {breachedScoped.length > 0 ? (
                 <div className="divide-y">
-                  {breached.slice(0, 6).map((t) => (
+                  {breachedScoped.slice(0, 6).map((t) => (
                     <Link
                       key={t.id}
                       href={`/tickets/${t.id}`}

@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   useCreateTicket,
   useListAgents,
-  useListDepartments,
   useGetSession,
   getListTicketsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { useTeamScope } from "@/lib/team-scope";
 
 import {
   Dialog,
@@ -51,22 +51,40 @@ export function CreateTicketDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: session } = useGetSession();
-  const { data: departments } = useListDepartments();
+  const scope = useTeamScope();
   const { data: agents } = useListAgents();
   const createTicket = useCreateTicket();
 
-  const departmentOptions = departments ?? [];
+  // Departments shown in the picker are constrained to the active
+  // global team scope: an agent who unticked a team in the sidebar
+  // shouldn't be able to file a ticket into it from this dialog.
+  const departmentOptions = useMemo(() => {
+    if (scope.isAll) return scope.accessible;
+    const allowed = new Set(scope.selectedIds);
+    return scope.accessible.filter((d) => allowed.has(d.id));
+  }, [scope.accessible, scope.isAll, scope.selectedIds]);
 
   const defaultDeptId = useMemo(() => {
+    // When the user has narrowed the workspace to a single team, the
+    // create flow auto-locks to that team and the field is hidden.
+    if (scope.single && scope.singleId != null) return scope.singleId;
     if (defaultDepartmentSlug) {
       const match = departmentOptions.find(
         (d) => d.slug === defaultDepartmentSlug,
       );
       if (match) return match.id;
     }
-    if (session?.departmentId) return session.departmentId;
+    if (session?.departmentId && departmentOptions.some((d) => d.id === session.departmentId)) {
+      return session.departmentId;
+    }
     return departmentOptions[0]?.id ?? 0;
-  }, [defaultDepartmentSlug, departmentOptions, session?.departmentId]);
+  }, [
+    defaultDepartmentSlug,
+    departmentOptions,
+    session?.departmentId,
+    scope.single,
+    scope.singleId,
+  ]);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -261,21 +279,34 @@ export function CreateTicketDialog({
 
             <div className="space-y-2">
               <Label>Department</Label>
-              <Select
-                value={String(departmentId || "")}
-                onValueChange={(v) => setDepartmentId(Number(v))}
-              >
-                <SelectTrigger data-testid="select-create-ticket-department">
-                  <SelectValue placeholder="Select a department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departmentOptions.map((d) => (
-                    <SelectItem key={d.id} value={String(d.id)}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {scope.single ? (
+                <div
+                  className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/40 text-sm text-muted-foreground"
+                  data-testid="chip-create-ticket-locked-team"
+                >
+                  {departmentOptions.find((d) => d.id === departmentId)?.name ??
+                    "—"}
+                  <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                    Locked by team selector
+                  </span>
+                </div>
+              ) : (
+                <Select
+                  value={String(departmentId || "")}
+                  onValueChange={(v) => setDepartmentId(Number(v))}
+                >
+                  <SelectTrigger data-testid="select-create-ticket-department">
+                    <SelectValue placeholder="Select a department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departmentOptions.map((d) => (
+                      <SelectItem key={d.id} value={String(d.id)}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="space-y-2">

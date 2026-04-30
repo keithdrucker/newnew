@@ -1,21 +1,18 @@
 import { useEffect, useState, useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListProjects,
-  useListDepartments,
   useListAgents,
   useGetSession,
   useListBoardViews,
   useCreateBoardView,
   useUpdateBoardView,
   useDeleteBoardView,
-  useUpdateMePreferences,
   getListBoardViewsQueryKey,
-  getGetSessionQueryKey,
   type ProjectSummary,
   type ProjectPhase,
 } from "@workspace/api-client-react";
+import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +53,6 @@ import {
   CalendarDays,
   Check,
   CheckSquare,
-  ChevronDown,
   ChevronRight,
   ChevronsUpDown,
   KanbanSquare,
@@ -255,78 +251,57 @@ export default function ProjectsPage() {
   const [sortKey, setSortKey] = useState<ProjectSortKey>("default");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const [, deptRouteMatch] = useRoute("/projects/dept/:slug");
-  const [, setLocation] = useLocation();
-  const deptSlug = deptRouteMatch?.slug ?? null;
-  const { data: departments } = useListDepartments({ scope: "accessible" });
+  const scope = useTeamScope();
   const { data: agents } = useListAgents({});
   const activeDept = useMemo(
-    () => departments?.find((d) => d.slug === deptSlug) ?? null,
-    [departments, deptSlug],
+    () =>
+      scope.single
+        ? scope.accessible.find((d) => d.id === scope.singleId) ?? null
+        : null,
+    [scope.single, scope.singleId, scope.accessible],
   );
 
-  // Saved views + default-team picker — mirrors the Tickets page,
-  // scoped to "project".
+  const scopeLabel = useMemo(() => {
+    if (scope.loading) return "Loading…";
+    if (scope.accessible.length === 0) return "No teams";
+    if (scope.isAll && scope.accessible.length > 1) return "All Teams";
+    if (scope.single) {
+      const dept = scope.accessible.find((d) => d.id === scope.singleId);
+      return dept?.name ?? "1 team";
+    }
+    return `${scope.selectedIds.length} teams`;
+  }, [
+    scope.loading,
+    scope.accessible,
+    scope.isAll,
+    scope.single,
+    scope.singleId,
+    scope.selectedIds,
+  ]);
+
+  // Saved views — scoped to "project".
   const { data: views } = useListBoardViews({ scope: "project" });
   const createView = useCreateBoardView();
   const updateView = useUpdateBoardView();
   const deleteView = useDeleteBoardView();
-  const updatePreferences = useUpdateMePreferences();
 
   const [activeViewId, setActiveViewId] = useState<number | null>(null);
   const [defaultApplied, setDefaultApplied] = useState(false);
-  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
   const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveAsDefault, setSaveAsDefault] = useState(false);
 
-  // Bare /projects → /projects/dept/:slug if a default team is set.
-  // `?all=1` is the explicit-all signal, same convention as Tickets.
-  const explicitlyAll =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("all") === "1";
+  // Auto-apply the user's default saved view once on first load.
   useEffect(() => {
-    if (deptSlug) return;
-    if (explicitlyAll) return;
-    if (!session || !departments) return;
-    const slug = session.defaultProjectBoard;
-    if (!slug) return;
-    if (departments.some((d) => d.slug === slug)) {
-      setLocation(`/projects/dept/${slug}`, { replace: true });
-    }
-  }, [deptSlug, explicitlyAll, session, departments, setLocation]);
-
-  // Auto-apply the user's default saved view once on first load — only
-  // when no department-scoped route is active (route scoping wins).
-  useEffect(() => {
-    if (defaultApplied || !views || activeDept) return;
+    if (defaultApplied || !views) return;
     const def = views.find((v) => v.isDefault);
     if (def) {
       applyView(def.id);
     }
     setDefaultApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [views, defaultApplied, activeDept]);
-
-  async function handleChangeBoard(value: string) {
-    setBoardMenuOpen(false);
-    if (value === "all") {
-      setLocation("/projects?all=1");
-    } else {
-      setLocation(`/projects/dept/${value}`);
-    }
-  }
-
-  async function handleSetDefaultBoard(value: string) {
-    const next = value === "all" ? null : value;
-    await updatePreferences.mutateAsync({
-      data: { defaultProjectBoard: next },
-    });
-    await queryClient.invalidateQueries({
-      queryKey: getGetSessionQueryKey(),
-    });
-  }
+  }, [views, defaultApplied]);
 
   type ProjectViewConfig = {
     search?: string | null;
@@ -377,14 +352,6 @@ export default function ProjectsPage() {
       setSortKey(c.sort.dir === "asc" ? "due_asc" : "due_desc");
     } else {
       setSortKey("default");
-    }
-    if (c.departmentId != null && departments) {
-      const target = departments.find((d) => d.id === c.departmentId);
-      if (target && deptSlug !== target.slug) {
-        setLocation(`/projects/dept/${target.slug}`);
-      }
-    } else if (c.departmentId == null && deptSlug) {
-      setLocation("/projects?all=1");
     }
     setActiveViewId(viewId);
   }
@@ -445,8 +412,8 @@ export default function ProjectsPage() {
   const filtered = useMemo(() => {
     if (!projects) return [];
     const q = search.trim().toLowerCase();
-    let list = projects.filter((p) => {
-      if (activeDept && p.departmentId !== activeDept.id) return false;
+    const scoped = filterByTeamScope(projects, scope);
+    let list = scoped.filter((p) => {
       if (q) {
         const hay = [
           p.name,
@@ -503,7 +470,7 @@ export default function ProjectsPage() {
       });
     }
     return list;
-  }, [projects, activeDept, filters, sortKey, search]);
+  }, [projects, scope, filters, sortKey, search]);
 
   const byPhase = useMemo(() => {
     const map: Record<ProjectPhase, ProjectSummary[]> = {
@@ -534,75 +501,12 @@ export default function ProjectsPage() {
           <h1 className="flex items-center gap-1 text-[26px] font-display font-semibold tracking-tight m-0">
             <span>Projects</span>
             <span className="text-muted-foreground font-normal mx-1.5">·</span>
-            <DropdownMenu
-              open={boardMenuOpen}
-              onOpenChange={setBoardMenuOpen}
+            <span
+              className="px-1.5 py-0.5 text-[26px] font-display font-semibold"
+              data-testid="text-scope-label"
             >
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 text-[26px] font-display font-semibold"
-                  data-testid="button-project-board-picker"
-                >
-                  <span>{activeDept ? activeDept.name : "All Projects"}</span>
-                  <ChevronDown className="h-4 w-4 opacity-60" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64">
-                <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  Teams
-                </DropdownMenuLabel>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    handleChangeBoard("all");
-                  }}
-                  className="flex items-center justify-between"
-                  data-testid="project-board-option-all"
-                >
-                  <span>All Projects</span>
-                  {!deptSlug && (
-                    <Check className="h-4 w-4 text-emerald-500" />
-                  )}
-                </DropdownMenuItem>
-                {(departments ?? []).map((d) => (
-                  <DropdownMenuItem
-                    key={d.id}
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleChangeBoard(d.slug);
-                    }}
-                    className="flex items-center justify-between"
-                    data-testid={`project-board-option-${d.slug}`}
-                  >
-                    <span>{d.name}</span>
-                    {deptSlug === d.slug && (
-                      <Check className="h-4 w-4 text-emerald-500" />
-                    )}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    handleSetDefaultBoard(deptSlug ?? "all");
-                  }}
-                  disabled={
-                    (session?.defaultProjectBoard ?? null) ===
-                    (deptSlug ?? null)
-                  }
-                  data-testid="button-set-default-project-board"
-                >
-                  <Star className="h-3.5 w-3.5 mr-2 text-amber-500" />
-                  {(session?.defaultProjectBoard ?? null) ===
-                  (deptSlug ?? null)
-                    ? `${activeDept ? activeDept.name : "All Projects"} is your default team`
-                    : `Set ${activeDept ? activeDept.name : "All Projects"} as default team`}
-                </DropdownMenuItem>
-                <div className="px-2 pb-2 pt-1 text-[11px] text-muted-foreground">
-                  Opening Projects from the sidebar lands here.
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {scopeLabel}
+            </span>
 
             <ChevronRight className="h-4 w-4 opacity-50 mx-0.5" />
 
@@ -731,6 +635,7 @@ export default function ProjectsPage() {
             variant="outline"
             data-testid="button-import-project"
             onClick={() => setCreateOpen(true)}
+            disabled={scope.loading || scope.accessible.length === 0}
             title="Backfill an existing in-flight project"
           >
             <Upload className="h-4 w-4 mr-1.5" /> Import project

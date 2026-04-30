@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { TeamScopeProvider } from "@/lib/team-scope";
 import { AppLayout } from "@/components/layout/app-layout";
 import NotFound from "@/pages/not-found";
 
@@ -29,6 +30,7 @@ import {
 import Timesheet from "@/pages/timesheet";
 import OperationalTasks from "@/pages/operational-tasks";
 import Initiatives from "@/pages/initiatives";
+import ExecutiveDashboard from "@/pages/executive-dashboard";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +60,7 @@ function Router() {
         <Route path="/operational-tasks" component={OperationalTasks} />
         <Route path="/initiatives/dept/:slug" component={Initiatives} />
         <Route path="/initiatives" component={Initiatives} />
+        <Route path="/executive-dashboard" component={ExecutiveDashboard} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />
         <Route path="/settings/risk-rules" component={SettingsRiskRules} />
@@ -77,9 +80,11 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <SessionProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
+            <TeamScopeProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+            </TeamScopeProvider>
           </SessionProvider>
           <Toaster />
         </TooltipProvider>
