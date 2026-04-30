@@ -45,6 +45,8 @@ import {
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import ProjectsDashboard from "@/pages/projects-dashboard";
+import InitiativesDashboard from "@/pages/initiatives-dashboard";
+import OperationalTasksDashboard from "@/pages/operational-tasks-dashboard";
 
 function fmtDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "—";
@@ -54,46 +56,100 @@ function fmtDuration(seconds: number): string {
   return `${Math.round(h / 24)}d`;
 }
 
+type DashboardView =
+  | "tickets"
+  | "projects"
+  | "initiatives"
+  | "operational_tasks";
+
+const DASHBOARD_VIEW_KEY = "itsm.dashboard.view";
+
+const DASHBOARD_VIEW_LABEL: Record<DashboardView, string> = {
+  tickets: "Tickets",
+  projects: "Projects",
+  initiatives: "Initiatives",
+  operational_tasks: "Operational Tasks",
+};
+
+function isDashboardView(v: string): v is DashboardView {
+  return (
+    v === "tickets" ||
+    v === "projects" ||
+    v === "initiatives" ||
+    v === "operational_tasks"
+  );
+}
+
 export default function Dashboard() {
   const { data: session } = useGetSession();
-  const showProjects = session?.role !== "end_user";
-  const [view, setView] = useState<"tickets" | "projects">("tickets");
+  // End-users only see Tickets — Projects, Initiatives and Operational
+  // Tasks are agent/admin surfaces. Until the session resolves, treat
+  // the user as restricted so we don't briefly render an agent-only
+  // view (and fire its API calls) for someone who isn't entitled.
+  const showAgentViews = session !== undefined && session.role !== "end_user";
 
-  // If the role changes (e.g. switching session) and projects are no longer
-  // visible, snap back to the tickets view so we don't render a hidden state.
+  // Persist the active view across reloads so a user landing back on
+  // the dashboard sees what they were last looking at.
+  const [view, setView] = useState<DashboardView>(() => {
+    if (typeof window === "undefined") return "tickets";
+    const raw = window.localStorage.getItem(DASHBOARD_VIEW_KEY);
+    return raw && isDashboardView(raw) ? raw : "tickets";
+  });
+
+  // If the role changes (e.g. switching session) and the agent-only
+  // views are no longer visible, snap back to the tickets view so we
+  // don't render a hidden state.
   useEffect(() => {
-    if (!showProjects && view === "projects") {
+    if (!showAgentViews && view !== "tickets") {
       setView("tickets");
     }
-  }, [showProjects, view]);
+  }, [showAgentViews, view]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(DASHBOARD_VIEW_KEY, view);
+  }, [view]);
 
   return (
     <div className="space-y-6" data-testid="dashboard-page">
       <div className="flex items-center">
         <Select
           value={view}
-          onValueChange={(v) => setView(v as "tickets" | "projects")}
+          onValueChange={(v) => {
+            if (isDashboardView(v)) setView(v);
+          }}
         >
           <SelectTrigger
-            className="w-[180px]"
+            className="w-[200px]"
             data-testid="select-dashboard-view"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="tickets">Tickets</SelectItem>
-            {showProjects && (
-              <SelectItem value="projects">Projects</SelectItem>
+            <SelectItem value="tickets">
+              {DASHBOARD_VIEW_LABEL.tickets}
+            </SelectItem>
+            {showAgentViews && (
+              <>
+                <SelectItem value="projects">
+                  {DASHBOARD_VIEW_LABEL.projects}
+                </SelectItem>
+                <SelectItem value="initiatives">
+                  {DASHBOARD_VIEW_LABEL.initiatives}
+                </SelectItem>
+                <SelectItem value="operational_tasks">
+                  {DASHBOARD_VIEW_LABEL.operational_tasks}
+                </SelectItem>
+              </>
             )}
           </SelectContent>
         </Select>
       </div>
 
-      {view === "tickets" ? (
-        <TicketsDashboardContent />
-      ) : (
-        <ProjectsDashboard />
-      )}
+      {view === "tickets" && <TicketsDashboardContent />}
+      {view === "projects" && <ProjectsDashboard />}
+      {view === "initiatives" && <InitiativesDashboard />}
+      {view === "operational_tasks" && <OperationalTasksDashboard />}
     </div>
   );
 }
