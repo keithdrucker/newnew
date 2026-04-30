@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Redirect, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -43,6 +43,11 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  UnsavedChangesDialog,
+  useBeforeUnloadGuard,
+} from "@/components/unsaved-changes-dialog";
+import { useIsDirty } from "@/lib/use-dirty-tracking";
 import {
   Collapsible,
   CollapsibleContent,
@@ -1408,9 +1413,19 @@ function DetailDialog({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  // Holds the most recent rendered `current` snapshot so the
+  // mutation onSuccess (which fires for every save path, including
+  // saveTriage / saveReview / decide / move-back / reopen, not just
+  // saveAndClose) can promote the just-persisted values into
+  // savedSnapshot. Without this, the dirty calculation flickers true
+  // for the few hundred ms between mutation success and the row
+  // refetch landing — long enough that an immediate close attempt
+  // would falsely prompt "Unsaved changes."
+  const currentRef = useRef<typeof baseline | null>(null);
   const update = useUpdateInitiative({
     mutation: {
       onSuccess: () => {
+        if (currentRef.current) setSavedSnapshot(currentRef.current);
         qc.invalidateQueries({ queryKey: getListInitiativesQueryKey() });
         qc.invalidateQueries({
           queryKey: getGetInitiativeQueryKey(row.id),
@@ -1524,6 +1539,132 @@ function DetailDialog({
     validationStatus,
     impactedTeams,
   });
+
+  // ---- Unsaved-changes protection -----------------------------------
+  // We snapshot the row's current values into the same shape as the
+  // local form state and compare on every render. Any divergence —
+  // a field edit, description change, decision-rationale typing, or
+  // checklist tick — flips `isDirty` to true and arms the close
+  // interceptor below. Identical to the reset performed in the
+  // useEffect on row change, so a freshly-loaded dialog reads as
+  // clean and a freshly-saved dialog returns to clean once the row
+  // refetch lands.
+  const baseline = useMemo(
+    () => ({
+      category: row.category,
+      initialPriority: row.initialPriority,
+      initialEffort: row.initialEffort,
+      businessAlignment: row.businessAlignment,
+      investigationDecision: row.investigationDecision,
+      backlogNotes: row.backlogNotes,
+      reviewStartDate: row.reviewStartDate ?? "",
+      anticipatedApprovalDate: row.anticipatedApprovalDate ?? "",
+      benefits: row.benefits,
+      tradeoffs: row.tradeoffs || row.prosCons,
+      businessValueLevel: row.businessValueLevel,
+      businessValueSummary: row.businessValueSummary || row.expectedBenefit,
+      costLevel: row.costLevel,
+      estimatedCost: row.estimatedCost || row.roughCost,
+      riskLevel: row.riskLevel,
+      riskNotes: row.riskNotes,
+      validationStatus: row.validationStatus,
+      impactedTeams: row.impactedTeams,
+      finalDecision: row.finalDecision,
+      decisionReason: row.decisionReason,
+      revisitDate: row.revisitDate ?? "",
+      // Transition rationale is reset to "" on every row change in
+      // the form-state useEffect above. Including it here means a
+      // typed-but-unsubmitted "Move back / Reopen" reason also
+      // counts as dirty and prompts before discarding.
+      transitionReason: "",
+    }),
+    [row],
+  );
+  const current = {
+    category,
+    initialPriority,
+    initialEffort,
+    businessAlignment,
+    investigationDecision,
+    backlogNotes,
+    reviewStartDate,
+    anticipatedApprovalDate,
+    benefits,
+    tradeoffs,
+    businessValueLevel,
+    businessValueSummary,
+    costLevel,
+    estimatedCost,
+    riskLevel,
+    riskNotes,
+    validationStatus,
+    impactedTeams,
+    finalDecision,
+    decisionReason,
+    revisitDate,
+    transitionReason,
+  };
+  // Compare against either the row baseline OR the values we most
+  // recently persisted. The "saved" comparison closes the post-save
+  // race window: after a successful PATCH the server invalidation
+  // triggers a refetch, but until that refetch lands the row prop
+  // still holds stale values — without this we would briefly report
+  // dirty=true and prompt the user even though they just saved.
+  const [savedSnapshot, setSavedSnapshot] =
+    useState<typeof baseline | null>(null);
+  useEffect(() => {
+    setSavedSnapshot(null);
+  }, [row.id]);
+  const dirtyVsBaseline = useIsDirty(current, baseline);
+  const dirtyVsSaved = useIsDirty(current, savedSnapshot ?? baseline);
+  const isDirty = dirtyVsBaseline && dirtyVsSaved;
+  useBeforeUnloadGuard(isDirty);
+  // Keep the ref synced every render so the shared mutation
+  // onSuccess (declared above) can read the freshest snapshot.
+  currentRef.current = current;
+  // Open state of the "You have unsaved changes" prompt that
+  // intercepts close vectors (Esc, overlay click, X button, footer
+  // Close button) when there are staged edits.
+  const [unsavedPromptOpen, setUnsavedPromptOpen] = useState(false);
+  const [savingAndClosing, setSavingAndClosing] = useState(false);
+
+  // Single entry point for "the user wants out". Honors dirty state
+  // and routes to the prompt instead of dropping edits silently.
+  const requestClose = () => {
+    if (isDirty) setUnsavedPromptOpen(true);
+    else onClose();
+  };
+
+  // "Save & Close" persists the staged edits *without* changing
+  // status (so it never accidentally promotes the initiative to a
+  // new lane), then closes the editor. Status transitions remain
+  // gated behind their dedicated buttons.
+  const saveAndClose = async () => {
+    setSavingAndClosing(true);
+    try {
+      await update.mutateAsync({
+        id: row.id,
+        data: {
+          ...fieldPatch(),
+          finalDecision,
+          decisionReason,
+          revisitDate: revisitDate || null,
+        },
+      });
+      // Commit the post-save snapshot before closing so dirty
+      // collapses to false immediately even though the row refetch
+      // hasn't landed yet.
+      setSavedSnapshot(current);
+      toast.success("Changes saved.");
+      setUnsavedPromptOpen(false);
+      onClose();
+    } catch {
+      // Toast is already raised by the mutation's onError handler.
+      // Leave the prompt open so the user can retry or discard.
+    } finally {
+      setSavingAndClosing(false);
+    }
+  };
 
   const saveTriage = () => {
     update.mutate(
@@ -1653,7 +1794,7 @@ function DetailDialog({
 
   return (
     <>
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && requestClose()}>
       <DialogContent
         className="sm:max-w-3xl max-h-[90vh] overflow-y-auto"
         data-testid="dialog-initiative-detail"
@@ -2031,7 +2172,7 @@ function DetailDialog({
         </div>
 
         <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2">
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={requestClose}>
             Close
           </Button>
           <div className="flex flex-wrap gap-2 justify-end">
@@ -2169,6 +2310,20 @@ function DetailDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Unsaved-changes prompt — armed by `requestClose()` whenever the
+        user tries to exit the editor while local edits diverge from
+        the row. */}
+    <UnsavedChangesDialog
+      open={unsavedPromptOpen}
+      isSaving={savingAndClosing}
+      onCancel={() => setUnsavedPromptOpen(false)}
+      onSave={saveAndClose}
+      onDiscard={() => {
+        setUnsavedPromptOpen(false);
+        onClose();
+      }}
+    />
     </>
   );
 }

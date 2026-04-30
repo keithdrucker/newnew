@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   useCreateProject,
   useUpdateProject,
@@ -50,6 +50,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import {
+  UnsavedChangesDialog,
+  useBeforeUnloadGuard,
+} from "@/components/unsaved-changes-dialog";
+import { useIsDirty } from "@/lib/use-dirty-tracking";
 import {
   AlertCircle,
   Building2,
@@ -402,9 +407,20 @@ function DetailInner({
     }
   };
 
+  // Holds the freshest rendered `current` snapshot. The mutation's
+  // shared onSuccess handler reads it to promote just-persisted
+  // values into savedSnapshot for every save path (saveBasics,
+  // saveCloseout, saveAndClose), which collapses dirty to false
+  // immediately after success and prevents a flicker prompt if the
+  // user closes before the row refetch lands.
+  const currentRef = useRef<typeof baseline | null>(null);
   const update = useUpdateProject({
     mutation: {
-      onSuccess: invalidate,
+      onSuccess: () => {
+        if (currentRef.current)
+          setSavedSnapshot(currentRef.current);
+        invalidate();
+      },
       onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
     },
   });
@@ -456,6 +472,128 @@ function DetailInner({
     setCompletionSummary(row.completionSummary);
     setKeyTakeaway(row.keyTakeaway);
   }, [row.id, row]);
+
+  // ---- Unsaved-changes protection ---------------------------------
+  // Snapshot of the row in the same shape as the local form state so
+  // we can detect any in-flight edit (basics, planning notes, status
+  // update, completion summary, key takeaway) and prompt before
+  // dropping it. The closeout fields are part of the same dialog
+  // even when the project is in the planning phase, so they're
+  // covered too.
+  const baseline = useMemo(
+    () => ({
+      departmentId: row.departmentId ?? null,
+      ownerId: row.ownerId ?? null,
+      assignedTeam: row.assignedTeam,
+      priority: row.priority,
+      startDate: row.startDate ?? "",
+      endDate: row.endDate ?? "",
+      planningNotes: row.planningNotes,
+      statusUpdate: row.statusUpdate,
+      completionSummary: row.completionSummary,
+      keyTakeaway: row.keyTakeaway,
+    }),
+    [row],
+  );
+  const current = {
+    departmentId,
+    ownerId,
+    assignedTeam,
+    priority,
+    startDate,
+    endDate,
+    planningNotes,
+    statusUpdate,
+    completionSummary,
+    keyTakeaway,
+  };
+  // Compare current local state against either the row's baseline
+  // OR the values we most recently persisted. The "saved" comparison
+  // closes the post-save race window: after a successful PATCH the
+  // server invalidation triggers a refetch, but until that refetch
+  // lands the row prop still holds stale values — without this we
+  // would briefly report dirty=true and prompt the user even though
+  // they just saved.
+  const [savedSnapshot, setSavedSnapshot] =
+    useState<typeof baseline | null>(null);
+  useEffect(() => {
+    setSavedSnapshot(null);
+  }, [row.id]);
+  const dirtyVsBaseline = useIsDirty(current, baseline);
+  const dirtyVsSaved = useIsDirty(current, savedSnapshot ?? baseline);
+  const fieldDirty = dirtyVsBaseline && dirtyVsSaved;
+  // Sync the ref every render so the shared mutation onSuccess
+  // (declared above) can read the latest snapshot regardless of
+  // which save path triggered it.
+  currentRef.current = current as typeof baseline;
+
+  // The checklist editor lives in its own component, so we let it
+  // forward an "I have an unsubmitted draft" signal up here. The
+  // dialog is dirty when *either* the basics fields diverge or a
+  // checklist draft is in flight.
+  const [checklistHasDraft, setChecklistHasDraft] = useState(false);
+  const checklistFlushRef = useRef<ChecklistFlush | null>(null);
+
+  const isDirty = fieldDirty || checklistHasDraft;
+  useBeforeUnloadGuard(isDirty);
+  const [unsavedPromptOpen, setUnsavedPromptOpen] = useState(false);
+  const [savingAndClosing, setSavingAndClosing] = useState(false);
+
+  // Single entry point for "the user wants out" — Esc, overlay
+  // click, X close button, and the footer Close button all route
+  // here so the prompt fires consistently across vectors.
+  const requestClose = () => {
+    if (isDirty) setUnsavedPromptOpen(true);
+    else onClose();
+  };
+
+  // "Save & Close" persists basics + closeout fields in a single
+  // PATCH and also commits any unsubmitted checklist new-item draft
+  // (so the spec rule "do not auto-discard" holds). Phase remains
+  // untouched — the dedicated phase-change modal handles transitions,
+  // so this never accidentally moves the project to a new lane.
+  const saveAndClose = async () => {
+    setSavingAndClosing(true);
+    try {
+      // Flush any in-flight new checklist item first so its add
+      // happens before we close. In-place row edits aren't auto-
+      // committed (their per-row Save button is still the source of
+      // truth) — the user gets the prompt for those and can choose
+      // Cancel to go back and save them manually.
+      if (checklistFlushRef.current) {
+        await checklistFlushRef.current();
+      }
+      await update.mutateAsync({
+        id: row.id,
+        data: {
+          departmentId,
+          ownerId,
+          assignedTeam,
+          priority: priority as "low" | "medium" | "high" | "urgent",
+          startDate: startDate || null,
+          endDate: endDate || null,
+          planningNotes,
+          statusUpdate,
+          completionSummary,
+          keyTakeaway,
+        },
+      });
+      // Commit the post-save snapshot before closing so dirty
+      // collapses to false immediately even though the row refetch
+      // hasn't landed yet. Cast through the baseline type so the
+      // wider local `priority: string` slots into the typed row's
+      // narrower TaskPriority enum without TS narrowing complaints.
+      setSavedSnapshot(current as typeof baseline);
+      toast({ title: "Changes saved." });
+      setUnsavedPromptOpen(false);
+      onClose();
+    } catch {
+      // Mutation onError already raises a toast; leave the prompt
+      // open so the user can retry or discard.
+    } finally {
+      setSavingAndClosing(false);
+    }
+  };
 
   const saveBasics = async (msg: string) => {
     await update.mutateAsync({
@@ -568,7 +706,7 @@ function DetailInner({
 
   return (
     <>
-      <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <Dialog open onOpenChange={(o) => !o && requestClose()}>
         <DialogContent
           className="sm:max-w-3xl max-h-[90vh] overflow-y-auto"
           data-testid="dialog-project-detail"
@@ -844,6 +982,8 @@ function DetailInner({
                 projectId={row.id}
                 items={row.checklist}
                 defaultAssigneeId={row.ownerId ?? null}
+                onDraftChange={setChecklistHasDraft}
+                flushRef={checklistFlushRef}
               />
               {phase === "planning" && (
                 <div className="flex justify-between gap-2 pt-1">
@@ -942,6 +1082,8 @@ function DetailInner({
                   items={row.checklist}
                   readOnly={phase !== "in_progress"}
                   defaultAssigneeId={row.ownerId ?? null}
+                  onDraftChange={setChecklistHasDraft}
+                  flushRef={checklistFlushRef}
                 />
               )}
               {phase === "in_progress" && (
@@ -1268,7 +1410,7 @@ function DetailInner({
             </Button>
             <Button
               variant="outline"
-              onClick={onClose}
+              onClick={requestClose}
               data-testid="button-close-detail"
             >
               Close
@@ -1276,6 +1418,20 @@ function DetailInner({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unsaved-changes prompt — armed by `requestClose()` whenever
+          the user tries to exit while local edits diverge from the
+          row. */}
+      <UnsavedChangesDialog
+        open={unsavedPromptOpen}
+        isSaving={savingAndClosing}
+        onCancel={() => setUnsavedPromptOpen(false)}
+        onSave={saveAndClose}
+        onDiscard={() => {
+          setUnsavedPromptOpen(false);
+          onClose();
+        }}
+      />
 
       {pendingPhase && (
         <PhaseChangeDialog
@@ -1476,16 +1632,27 @@ function PhaseChangeDialog({
 
 // ----- Checklist editor ----------------------------------------------------
 
+type ChecklistFlush = () => Promise<void>;
+
 function ChecklistEditor({
   projectId,
   items,
   readOnly,
   defaultAssigneeId,
+  onDraftChange,
+  flushRef,
 }: {
   projectId: number;
   items: ChecklistItem[];
   readOnly?: boolean;
   defaultAssigneeId?: number | null;
+  // Lets the parent know whether there is an unsubmitted draft (new
+  // checklist item being typed, or an in-place edit in progress) so
+  // the parent can include the editor in its dirty-state check.
+  onDraftChange?: (hasDraft: boolean) => void;
+  // Lets the parent commit a pending new-item draft as part of its
+  // own "Save & Close" flow without lifting all editor state up.
+  flushRef?: React.MutableRefObject<ChecklistFlush | null>;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -1552,6 +1719,58 @@ function ChecklistEditor({
       },
     );
   };
+
+  // ----- Dirty / draft signaling for the parent dialog -----
+  // A draft exists if the user has typed a new item, picked a due
+  // date for one, or is editing an existing row in-place. The parent
+  // uses this to decide whether to prompt before closing.
+  const hasDraft =
+    newText.trim().length > 0 ||
+    newDueDate.length > 0 ||
+    editingId !== null;
+  useEffect(() => {
+    onDraftChange?.(hasDraft);
+  }, [hasDraft, onDraftChange]);
+  // Always reset the parent's "has draft" signal when the editor
+  // unmounts so a stale `true` doesn't keep the dialog locked.
+  useEffect(() => {
+    return () => onDraftChange?.(false);
+  }, [onDraftChange]);
+
+  // Expose an imperative flush so the parent's "Save & Close" can
+  // commit a typed-but-unsubmitted new item alongside its own save,
+  // matching the spec rule "do not auto-discard". In-place row edits
+  // are not auto-flushed because the user-confirmation step there is
+  // the per-row Save button — committing them silently would change
+  // text the user might still be typing.
+  useEffect(() => {
+    if (!flushRef) return;
+    flushRef.current = async () => {
+      if (!newText.trim()) return;
+      await add.mutateAsync({
+        id: projectId,
+        data: {
+          text: newText.trim(),
+          assigneeId: newAssigneeId,
+          dueDate: newDueDate ? newDueDate : null,
+        },
+      });
+      setNewText("");
+      setNewAssigneeId(defaultAssigneeId ?? null);
+      setNewDueDate("");
+    };
+    return () => {
+      if (flushRef.current) flushRef.current = null;
+    };
+  }, [
+    flushRef,
+    newText,
+    newDueDate,
+    newAssigneeId,
+    add,
+    projectId,
+    defaultAssigneeId,
+  ]);
 
   const onDrop = (targetId: string) => {
     if (!dragId || dragId === targetId) {

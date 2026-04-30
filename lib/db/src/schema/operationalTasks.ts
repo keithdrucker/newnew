@@ -139,7 +139,13 @@ export type OperationalTaskType = "recurring" | "one_time";
 export type OperationalTaskStatus =
   | "scheduled"
   | "in_progress"
-  | "completed";
+  | "completed"
+  // System-applied terminal state. A one_time task that has been
+  // `completed` for >24h is auto-promoted to `closed` on the next
+  // read. Closed tasks are read-only and hidden by default in the
+  // list view (Show Closed toggle reveals them). Never reachable
+  // through user-driven status transitions.
+  | "closed";
 export type OperationalTaskFrequency =
   | "daily"
   | "weekly"
