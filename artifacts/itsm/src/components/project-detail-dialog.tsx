@@ -840,7 +840,11 @@ function DetailInner({
                   data-testid="textarea-planning-notes"
                 />
               </Field>
-              <ChecklistEditor projectId={row.id} items={row.checklist} />
+              <ChecklistEditor
+                projectId={row.id}
+                items={row.checklist}
+                defaultAssigneeId={row.ownerId ?? null}
+              />
               {phase === "planning" && (
                 <div className="flex justify-between gap-2 pt-1">
                   <div className="flex gap-2">
@@ -937,6 +941,7 @@ function DetailInner({
                   projectId={row.id}
                   items={row.checklist}
                   readOnly={phase !== "in_progress"}
+                  defaultAssigneeId={row.ownerId ?? null}
                 />
               )}
               {phase === "in_progress" && (
@@ -1475,10 +1480,12 @@ function ChecklistEditor({
   projectId,
   items,
   readOnly,
+  defaultAssigneeId,
 }: {
   projectId: number;
   items: ChecklistItem[];
   readOnly?: boolean;
+  defaultAssigneeId?: number | null;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -1510,8 +1517,17 @@ function ChecklistEditor({
   );
 
   const [newText, setNewText] = useState("");
-  const [newAssigneeId, setNewAssigneeId] = useState<number | null>(null);
+  const [newAssigneeId, setNewAssigneeId] = useState<number | null>(
+    defaultAssigneeId ?? null,
+  );
   const [newDueDate, setNewDueDate] = useState<string>("");
+
+  // Keep the new-item assignee in sync if the project owner changes while
+  // the dialog is open. Only updates the *new-item* picker default; existing
+  // checklist rows are not touched.
+  useEffect(() => {
+    setNewAssigneeId(defaultAssigneeId ?? null);
+  }, [defaultAssigneeId]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
@@ -1530,7 +1546,7 @@ function ChecklistEditor({
       {
         onSuccess: () => {
           setNewText("");
-          setNewAssigneeId(null);
+          setNewAssigneeId(defaultAssigneeId ?? null);
           setNewDueDate("");
         },
       },
