@@ -22,4 +22,22 @@ export interface Session {
    * @nullable
    */
   defaultTicketBoard?: string | null;
+  /**
+   * Slug of the user's preferred default team for the Initiatives section. `null` means All Initiatives.
+
+   * @nullable
+   */
+  defaultInitiativeBoard?: string | null;
+  /**
+   * Slug of the user's preferred default team for the Projects section. `null` means All Projects.
+
+   * @nullable
+   */
+  defaultProjectBoard?: string | null;
+  /**
+   * Slug of the user's preferred default team for the Operational Tasks section. `null` means All Operational Tasks.
+
+   * @nullable
+   */
+  defaultOperationalTaskBoard?: string | null;
 }

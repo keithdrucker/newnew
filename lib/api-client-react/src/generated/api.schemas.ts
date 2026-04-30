@@ -32,6 +32,24 @@ export interface Session {
    * @nullable
    */
   defaultTicketBoard?: string | null;
+  /**
+   * Slug of the user's preferred default team for the Initiatives section. `null` means All Initiatives.
+
+   * @nullable
+   */
+  defaultInitiativeBoard?: string | null;
+  /**
+   * Slug of the user's preferred default team for the Projects section. `null` means All Projects.
+
+   * @nullable
+   */
+  defaultProjectBoard?: string | null;
+  /**
+   * Slug of the user's preferred default team for the Operational Tasks section. `null` means All Operational Tasks.
+
+   * @nullable
+   */
+  defaultOperationalTaskBoard?: string | null;
 }
 
 export interface UpdateMePreferencesInput {
@@ -41,6 +59,12 @@ export interface UpdateMePreferencesInput {
    * @nullable
    */
   defaultTicketBoard?: string | null;
+  /** @nullable */
+  defaultInitiativeBoard?: string | null;
+  /** @nullable */
+  defaultProjectBoard?: string | null;
+  /** @nullable */
+  defaultOperationalTaskBoard?: string | null;
 }
 
 export interface SwitchSessionInput {
@@ -739,6 +763,59 @@ export interface CreateTicketViewInput {
 export interface UpdateTicketViewInput {
   name?: string;
   config?: TicketViewConfig;
+  isDefault?: boolean;
+}
+
+export type BoardViewScope =
+  (typeof BoardViewScope)[keyof typeof BoardViewScope];
+
+export const BoardViewScope = {
+  initiative: "initiative",
+  project: "project",
+  operational_task: "operational_task",
+} as const;
+
+export type BoardViewConfigSort = null | {
+  field: string;
+  dir: "asc" | "desc";
+};
+
+/**
+ * Persisted shape of a saved view for the team-scoped sections. The shape is intentionally permissive — every field is optional and additional properties are allowed — so each section's page can stash whatever filter/sort/column state it needs without a breaking schema change. The page layer is responsible for defaulting and validating.
+
+ */
+export interface BoardViewConfig {
+  /** @nullable */
+  search?: string | null;
+  /** @nullable */
+  departmentId?: number | null;
+  sort?: BoardViewConfigSort;
+  /** @nullable */
+  columns?: string[] | null;
+  [key: string]: unknown;
+}
+
+export interface BoardView {
+  id: number;
+  userId: number;
+  scope: BoardViewScope;
+  name: string;
+  isDefault: boolean;
+  config: BoardViewConfig;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateBoardViewInput {
+  scope: BoardViewScope;
+  name: string;
+  config: BoardViewConfig;
+  isDefault?: boolean;
+}
+
+export interface UpdateBoardViewInput {
+  name?: string;
+  config?: BoardViewConfig;
   isDefault?: boolean;
 }
 
@@ -2381,6 +2458,10 @@ export type ListTimeEntriesParams = {
   from: string;
   to: string;
   userId?: number;
+};
+
+export type ListBoardViewsParams = {
+  scope: BoardViewScope;
 };
 
 export type ListPeopleParams = {

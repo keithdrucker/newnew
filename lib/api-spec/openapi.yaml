@@ -32,6 +32,8 @@ tags:
     description: Lightweight decision records — should we even do this work?
   - name: workflows
     description: Admin-managed workflow definitions and approval runs
+  - name: board-views
+    description: User-saved views for the team-scoped sections (Initiatives, Projects, Operational Tasks)
 paths:
   /healthz:
     get:
@@ -656,6 +658,73 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TicketComment" }
+
+  /board-views:
+    get:
+      operationId: listBoardViews
+      tags: [board-views]
+      summary: List the current user's saved views for a section
+      parameters:
+        - in: query
+          name: scope
+          required: true
+          schema: { $ref: "#/components/schemas/BoardViewScope" }
+      responses:
+        "200":
+          description: Saved views
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BoardView" }
+    post:
+      operationId: createBoardView
+      tags: [board-views]
+      summary: Create a saved view for a section (Initiatives / Projects / Operational Tasks)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBoardViewInput" }
+      responses:
+        "201":
+          description: Created view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoardView" }
+
+  /board-views/{id}:
+    patch:
+      operationId: updateBoardView
+      tags: [board-views]
+      summary: Rename, update filters, or set/unset default on a saved view
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBoardViewInput" }
+      responses:
+        "200":
+          description: Updated view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoardView" }
+    delete:
+      operationId: deleteBoardView
+      tags: [board-views]
+      summary: Delete a saved view
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
 
   /ticket-views:
     get:
@@ -1925,6 +1994,21 @@ components:
             Slug of the user's preferred default ticket board. `null` means
             All Tickets. When the user opens `/tickets`, the UI auto-loads
             this board.
+        defaultInitiativeBoard:
+          type: ["string", "null"]
+          description: >
+            Slug of the user's preferred default team for the Initiatives
+            section. `null` means All Initiatives.
+        defaultProjectBoard:
+          type: ["string", "null"]
+          description: >
+            Slug of the user's preferred default team for the Projects
+            section. `null` means All Projects.
+        defaultOperationalTaskBoard:
+          type: ["string", "null"]
+          description: >
+            Slug of the user's preferred default team for the Operational
+            Tasks section. `null` means All Operational Tasks.
       required: [userId, name, email, role]
 
     UpdateMePreferencesInput:
@@ -1935,6 +2019,12 @@ components:
           description: >
             Slug of the department to use as the user's default ticket
             board. Pass `null` to reset to All Tickets.
+        defaultInitiativeBoard:
+          type: ["string", "null"]
+        defaultProjectBoard:
+          type: ["string", "null"]
+        defaultOperationalTaskBoard:
+          type: ["string", "null"]
 
     SwitchSessionInput:
       type: object
@@ -2479,6 +2569,70 @@ components:
       properties:
         name: { type: string }
         config: { $ref: "#/components/schemas/TicketViewConfig" }
+        isDefault: { type: boolean }
+
+    BoardViewScope:
+      type: string
+      enum: [initiative, project, operational_task]
+
+    BoardViewConfig:
+      type: object
+      description: >
+        Persisted shape of a saved view for the team-scoped sections.
+        The shape is intentionally permissive — every field is optional
+        and additional properties are allowed — so each section's page
+        can stash whatever filter/sort/column state it needs without a
+        breaking schema change. The page layer is responsible for
+        defaulting and validating.
+      additionalProperties: true
+      properties:
+        search:
+          type: ["string", "null"]
+        departmentId:
+          type: ["integer", "null"]
+        sort:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                field: { type: string }
+                dir: { type: string, enum: [asc, desc] }
+              required: [field, dir]
+        columns:
+          type: ["array", "null"]
+          items: { type: string }
+
+    BoardView:
+      type: object
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        scope: { $ref: "#/components/schemas/BoardViewScope" }
+        name: { type: string }
+        isDefault: { type: boolean }
+        config: { $ref: "#/components/schemas/BoardViewConfig" }
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, userId, scope, name, isDefault, config, createdAt, updatedAt]
+
+    CreateBoardViewInput:
+      type: object
+      properties:
+        scope: { $ref: "#/components/schemas/BoardViewScope" }
+        name: { type: string }
+        config: { $ref: "#/components/schemas/BoardViewConfig" }
+        isDefault: { type: boolean }
+      required: [scope, name, config]
+
+    UpdateBoardViewInput:
+      type: object
+      properties:
+        name: { type: string }
+        config: { $ref: "#/components/schemas/BoardViewConfig" }
         isDefault: { type: boolean }
 
     Application:

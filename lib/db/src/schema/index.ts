@@ -7,6 +7,7 @@ export * from "./assets";
 export * from "./sessionState";
 export * from "./boardMembers";
 export * from "./ticketViews";
+export * from "./boardViews";
 export * from "./applications";
 export * from "./vendors";
 export * from "./projects";

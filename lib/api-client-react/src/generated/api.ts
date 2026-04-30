@@ -24,11 +24,13 @@ import type {
   Application,
   Asset,
   BoardMember,
+  BoardView,
   CancelWorkflowRunInput,
   ChangeProjectPhaseInput,
   CreateAgentInput,
   CreateApplicationInput,
   CreateAssetInput,
+  CreateBoardViewInput,
   CreateDepartmentBucketInput,
   CreateDepartmentInput,
   CreateInitiativeInput,
@@ -57,6 +59,7 @@ import type {
   ListAgentsParams,
   ListApplicationsParams,
   ListAssetsParams,
+  ListBoardViewsParams,
   ListDepartmentsParams,
   ListInitiativesParams,
   ListKbArticlesParams,
@@ -85,6 +88,7 @@ import type {
   UpdateApplicationInput,
   UpdateAssetInput,
   UpdateBoardMemberInput,
+  UpdateBoardViewInput,
   UpdateChecklistItemInput,
   UpdateDepartmentBucketInput,
   UpdateDepartmentInput,
@@ -2783,6 +2787,357 @@ export const useAddTicketComment = <
   TContext
 > => {
   return useMutation(getAddTicketCommentMutationOptions(options));
+};
+
+/**
+ * @summary List the current user's saved views for a section
+ */
+export const getListBoardViewsUrl = (params: ListBoardViewsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/board-views?${stringifiedParams}`
+    : `/api/board-views`;
+};
+
+export const listBoardViews = async (
+  params: ListBoardViewsParams,
+  options?: RequestInit,
+): Promise<BoardView[]> => {
+  return customFetch<BoardView[]>(getListBoardViewsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBoardViewsQueryKey = (params?: ListBoardViewsParams) => {
+  return [`/api/board-views`, ...(params ? [params] : [])] as const;
+};
+
+export const getListBoardViewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBoardViews>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListBoardViewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBoardViews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBoardViewsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listBoardViews>>> = ({
+    signal,
+  }) => listBoardViews(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBoardViews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBoardViewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBoardViews>>
+>;
+export type ListBoardViewsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List the current user's saved views for a section
+ */
+
+export function useListBoardViews<
+  TData = Awaited<ReturnType<typeof listBoardViews>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListBoardViewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBoardViews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBoardViewsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a saved view for a section (Initiatives / Projects / Operational Tasks)
+ */
+export const getCreateBoardViewUrl = () => {
+  return `/api/board-views`;
+};
+
+export const createBoardView = async (
+  createBoardViewInput: CreateBoardViewInput,
+  options?: RequestInit,
+): Promise<BoardView> => {
+  return customFetch<BoardView>(getCreateBoardViewUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createBoardViewInput),
+  });
+};
+
+export const getCreateBoardViewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBoardView>>,
+    TError,
+    { data: BodyType<CreateBoardViewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createBoardView>>,
+  TError,
+  { data: BodyType<CreateBoardViewInput> },
+  TContext
+> => {
+  const mutationKey = ["createBoardView"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createBoardView>>,
+    { data: BodyType<CreateBoardViewInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createBoardView(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateBoardViewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createBoardView>>
+>;
+export type CreateBoardViewMutationBody = BodyType<CreateBoardViewInput>;
+export type CreateBoardViewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a saved view for a section (Initiatives / Projects / Operational Tasks)
+ */
+export const useCreateBoardView = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBoardView>>,
+    TError,
+    { data: BodyType<CreateBoardViewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createBoardView>>,
+  TError,
+  { data: BodyType<CreateBoardViewInput> },
+  TContext
+> => {
+  return useMutation(getCreateBoardViewMutationOptions(options));
+};
+
+/**
+ * @summary Rename, update filters, or set/unset default on a saved view
+ */
+export const getUpdateBoardViewUrl = (id: number) => {
+  return `/api/board-views/${id}`;
+};
+
+export const updateBoardView = async (
+  id: number,
+  updateBoardViewInput: UpdateBoardViewInput,
+  options?: RequestInit,
+): Promise<BoardView> => {
+  return customFetch<BoardView>(getUpdateBoardViewUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateBoardViewInput),
+  });
+};
+
+export const getUpdateBoardViewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBoardView>>,
+    TError,
+    { id: number; data: BodyType<UpdateBoardViewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateBoardView>>,
+  TError,
+  { id: number; data: BodyType<UpdateBoardViewInput> },
+  TContext
+> => {
+  const mutationKey = ["updateBoardView"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateBoardView>>,
+    { id: number; data: BodyType<UpdateBoardViewInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateBoardView(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateBoardViewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateBoardView>>
+>;
+export type UpdateBoardViewMutationBody = BodyType<UpdateBoardViewInput>;
+export type UpdateBoardViewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Rename, update filters, or set/unset default on a saved view
+ */
+export const useUpdateBoardView = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBoardView>>,
+    TError,
+    { id: number; data: BodyType<UpdateBoardViewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateBoardView>>,
+  TError,
+  { id: number; data: BodyType<UpdateBoardViewInput> },
+  TContext
+> => {
+  return useMutation(getUpdateBoardViewMutationOptions(options));
+};
+
+/**
+ * @summary Delete a saved view
+ */
+export const getDeleteBoardViewUrl = (id: number) => {
+  return `/api/board-views/${id}`;
+};
+
+export const deleteBoardView = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteBoardViewUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteBoardViewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBoardView>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteBoardView>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteBoardView"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteBoardView>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteBoardView(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteBoardViewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteBoardView>>
+>;
+
+export type DeleteBoardViewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a saved view
+ */
+export const useDeleteBoardView = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBoardView>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteBoardView>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteBoardViewMutationOptions(options));
 };
 
 /**

@@ -30,6 +30,24 @@ export const GetSessionResponse = zod.object({
     .describe(
       "Slug of the user's preferred default ticket board. `null` means All Tickets. When the user opens `\/tickets`, the UI auto-loads this board.\n",
     ),
+  defaultInitiativeBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Initiatives section. `null` means All Initiatives.\n",
+    ),
+  defaultProjectBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Projects section. `null` means All Projects.\n",
+    ),
+  defaultOperationalTaskBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Operational Tasks section. `null` means All Operational Tasks.\n",
+    ),
 });
 
 /**
@@ -52,6 +70,24 @@ export const SwitchSessionResponse = zod.object({
     .describe(
       "Slug of the user's preferred default ticket board. `null` means All Tickets. When the user opens `\/tickets`, the UI auto-loads this board.\n",
     ),
+  defaultInitiativeBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Initiatives section. `null` means All Initiatives.\n",
+    ),
+  defaultProjectBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Projects section. `null` means All Projects.\n",
+    ),
+  defaultOperationalTaskBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Operational Tasks section. `null` means All Operational Tasks.\n",
+    ),
 });
 
 /**
@@ -64,6 +100,9 @@ export const UpdateMePreferencesBody = zod.object({
     .describe(
       "Slug of the department to use as the user's default ticket board. Pass `null` to reset to All Tickets.\n",
     ),
+  defaultInitiativeBoard: zod.string().nullish(),
+  defaultProjectBoard: zod.string().nullish(),
+  defaultOperationalTaskBoard: zod.string().nullish(),
 });
 
 export const UpdateMePreferencesResponse = zod.object({
@@ -78,6 +117,24 @@ export const UpdateMePreferencesResponse = zod.object({
     .nullish()
     .describe(
       "Slug of the user's preferred default ticket board. `null` means All Tickets. When the user opens `\/tickets`, the UI auto-loads this board.\n",
+    ),
+  defaultInitiativeBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Initiatives section. `null` means All Initiatives.\n",
+    ),
+  defaultProjectBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Projects section. `null` means All Projects.\n",
+    ),
+  defaultOperationalTaskBoard: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slug of the user's preferred default team for the Operational Tasks section. `null` means All Operational Tasks.\n",
     ),
 });
 
@@ -808,6 +865,135 @@ export const AddTicketCommentParams = zod.object({
 export const AddTicketCommentBody = zod.object({
   body: zod.string(),
   kind: zod.enum(["reply", "internal_note"]).optional(),
+});
+
+/**
+ * @summary List the current user's saved views for a section
+ */
+export const ListBoardViewsQueryParams = zod.object({
+  scope: zod.enum(["initiative", "project", "operational_task"]),
+});
+
+export const ListBoardViewsResponseItem = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  scope: zod.enum(["initiative", "project", "operational_task"]),
+  name: zod.string(),
+  isDefault: zod.boolean(),
+  config: zod
+    .object({
+      search: zod.string().nullish(),
+      departmentId: zod.number().nullish(),
+      sort: zod
+        .union([
+          zod.null(),
+          zod.object({
+            field: zod.string(),
+            dir: zod.enum(["asc", "desc"]),
+          }),
+        ])
+        .optional(),
+      columns: zod.array(zod.string()).nullish(),
+    })
+    .describe(
+      "Persisted shape of a saved view for the team-scoped sections. The shape is intentionally permissive — every field is optional and additional properties are allowed — so each section's page can stash whatever filter\/sort\/column state it needs without a breaking schema change. The page layer is responsible for defaulting and validating.\n",
+    ),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListBoardViewsResponse = zod.array(ListBoardViewsResponseItem);
+
+/**
+ * @summary Create a saved view for a section (Initiatives / Projects / Operational Tasks)
+ */
+export const CreateBoardViewBody = zod.object({
+  scope: zod.enum(["initiative", "project", "operational_task"]),
+  name: zod.string(),
+  config: zod
+    .object({
+      search: zod.string().nullish(),
+      departmentId: zod.number().nullish(),
+      sort: zod
+        .union([
+          zod.null(),
+          zod.object({
+            field: zod.string(),
+            dir: zod.enum(["asc", "desc"]),
+          }),
+        ])
+        .optional(),
+      columns: zod.array(zod.string()).nullish(),
+    })
+    .describe(
+      "Persisted shape of a saved view for the team-scoped sections. The shape is intentionally permissive — every field is optional and additional properties are allowed — so each section's page can stash whatever filter\/sort\/column state it needs without a breaking schema change. The page layer is responsible for defaulting and validating.\n",
+    ),
+  isDefault: zod.boolean().optional(),
+});
+
+/**
+ * @summary Rename, update filters, or set/unset default on a saved view
+ */
+export const UpdateBoardViewParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateBoardViewBody = zod.object({
+  name: zod.string().optional(),
+  config: zod
+    .object({
+      search: zod.string().nullish(),
+      departmentId: zod.number().nullish(),
+      sort: zod
+        .union([
+          zod.null(),
+          zod.object({
+            field: zod.string(),
+            dir: zod.enum(["asc", "desc"]),
+          }),
+        ])
+        .optional(),
+      columns: zod.array(zod.string()).nullish(),
+    })
+    .optional()
+    .describe(
+      "Persisted shape of a saved view for the team-scoped sections. The shape is intentionally permissive — every field is optional and additional properties are allowed — so each section's page can stash whatever filter\/sort\/column state it needs without a breaking schema change. The page layer is responsible for defaulting and validating.\n",
+    ),
+  isDefault: zod.boolean().optional(),
+});
+
+export const UpdateBoardViewResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  scope: zod.enum(["initiative", "project", "operational_task"]),
+  name: zod.string(),
+  isDefault: zod.boolean(),
+  config: zod
+    .object({
+      search: zod.string().nullish(),
+      departmentId: zod.number().nullish(),
+      sort: zod
+        .union([
+          zod.null(),
+          zod.object({
+            field: zod.string(),
+            dir: zod.enum(["asc", "desc"]),
+          }),
+        ])
+        .optional(),
+      columns: zod.array(zod.string()).nullish(),
+    })
+    .describe(
+      "Persisted shape of a saved view for the team-scoped sections. The shape is intentionally permissive — every field is optional and additional properties are allowed — so each section's page can stash whatever filter\/sort\/column state it needs without a breaking schema change. The page layer is responsible for defaulting and validating.\n",
+    ),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a saved view
+ */
+export const DeleteBoardViewParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**

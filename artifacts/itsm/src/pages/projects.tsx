@@ -1,10 +1,18 @@
-import { useState, useMemo } from "react";
-import { useRoute } from "wouter";
+import { useEffect, useState, useMemo } from "react";
+import { useLocation, useRoute } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useListProjects,
   useListDepartments,
   useListAgents,
   useGetSession,
+  useListBoardViews,
+  useCreateBoardView,
+  useUpdateBoardView,
+  useDeleteBoardView,
+  useUpdateMePreferences,
+  getListBoardViewsQueryKey,
+  getGetSessionQueryKey,
   type ProjectSummary,
   type ProjectPhase,
 } from "@workspace/api-client-react";
@@ -26,14 +34,36 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ProjectImportDialog,
   ProjectDetailDialog,
 } from "@/components/project-detail-dialog";
 import {
   CalendarDays,
+  Check,
   CheckSquare,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
   KanbanSquare,
   Pause,
+  Plus,
+  Star,
+  Trash2,
   Upload,
   Search,
   Filter as FilterIcon,
@@ -214,6 +244,7 @@ const PHASE_CHIP_LABEL: Record<ProjectPhase, string> = {
 
 export default function ProjectsPage() {
   const { data: session } = useGetSession();
+  const queryClient = useQueryClient();
   const canCreate = session?.role === "admin" || session?.role === "agent";
   const [createOpen, setCreateOpen] = useState(false);
   const [openProjectId, setOpenProjectId] = useState<number | null>(null);
@@ -225,13 +256,177 @@ export default function ProjectsPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [, deptRouteMatch] = useRoute("/projects/dept/:slug");
-  const deptSlug = deptRouteMatch?.slug;
+  const [, setLocation] = useLocation();
+  const deptSlug = deptRouteMatch?.slug ?? null;
   const { data: departments } = useListDepartments({ scope: "accessible" });
   const { data: agents } = useListAgents({});
   const activeDept = useMemo(
-    () => departments?.find((d) => d.slug === deptSlug),
+    () => departments?.find((d) => d.slug === deptSlug) ?? null,
     [departments, deptSlug],
   );
+
+  // Saved views + default-team picker — mirrors the Tickets page,
+  // scoped to "project".
+  const { data: views } = useListBoardViews({ scope: "project" });
+  const createView = useCreateBoardView();
+  const updateView = useUpdateBoardView();
+  const deleteView = useDeleteBoardView();
+  const updatePreferences = useUpdateMePreferences();
+
+  const [activeViewId, setActiveViewId] = useState<number | null>(null);
+  const [defaultApplied, setDefaultApplied] = useState(false);
+  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
+  const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
+
+  // Bare /projects → /projects/dept/:slug if a default team is set.
+  // `?all=1` is the explicit-all signal, same convention as Tickets.
+  const explicitlyAll =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("all") === "1";
+  useEffect(() => {
+    if (deptSlug) return;
+    if (explicitlyAll) return;
+    if (!session || !departments) return;
+    const slug = session.defaultProjectBoard;
+    if (!slug) return;
+    if (departments.some((d) => d.slug === slug)) {
+      setLocation(`/projects/dept/${slug}`, { replace: true });
+    }
+  }, [deptSlug, explicitlyAll, session, departments, setLocation]);
+
+  // Auto-apply the user's default saved view once on first load — only
+  // when no department-scoped route is active (route scoping wins).
+  useEffect(() => {
+    if (defaultApplied || !views || activeDept) return;
+    const def = views.find((v) => v.isDefault);
+    if (def) {
+      applyView(def.id);
+    }
+    setDefaultApplied(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [views, defaultApplied, activeDept]);
+
+  async function handleChangeBoard(value: string) {
+    setBoardMenuOpen(false);
+    if (value === "all") {
+      setLocation("/projects?all=1");
+    } else {
+      setLocation(`/projects/dept/${value}`);
+    }
+  }
+
+  async function handleSetDefaultBoard(value: string) {
+    const next = value === "all" ? null : value;
+    await updatePreferences.mutateAsync({
+      data: { defaultProjectBoard: next },
+    });
+    await queryClient.invalidateQueries({
+      queryKey: getGetSessionQueryKey(),
+    });
+  }
+
+  type ProjectViewConfig = {
+    search?: string | null;
+    priority?: string | null;
+    ownerId?: string | null;
+    riskLevel?: string | null;
+    category?: string | null;
+    alignment?: string | null;
+    effort?: string | null;
+    sort?: { field: string; dir: "asc" | "desc" } | null;
+    departmentId?: number | null;
+  };
+
+  function buildConfigFromFilters(): ProjectViewConfig {
+    return {
+      search: search ? search : null,
+      priority: filters.priority === "all" ? null : filters.priority,
+      ownerId: filters.ownerId === "all" ? null : filters.ownerId,
+      riskLevel: filters.riskLevel === "all" ? null : filters.riskLevel,
+      category: filters.category === "all" ? null : filters.category,
+      alignment: filters.alignment === "all" ? null : filters.alignment,
+      effort: filters.effort === "all" ? null : filters.effort,
+      sort:
+        sortKey === "default"
+          ? null
+          : {
+              field: "endDate",
+              dir: sortKey === "due_asc" ? "asc" : "desc",
+            },
+      departmentId: activeDept?.id ?? null,
+    };
+  }
+
+  function applyView(viewId: number) {
+    const v = views?.find((x) => x.id === viewId);
+    if (!v) return;
+    const c = (v.config ?? {}) as ProjectViewConfig;
+    setSearch(typeof c.search === "string" ? c.search : "");
+    setFilters({
+      priority: c.priority ?? "all",
+      ownerId: c.ownerId ?? "all",
+      riskLevel: c.riskLevel ?? "all",
+      category: c.category ?? "all",
+      alignment: c.alignment ?? "all",
+      effort: c.effort ?? "all",
+    });
+    if (c.sort && (c.sort.dir === "asc" || c.sort.dir === "desc")) {
+      setSortKey(c.sort.dir === "asc" ? "due_asc" : "due_desc");
+    } else {
+      setSortKey("default");
+    }
+    if (c.departmentId != null && departments) {
+      const target = departments.find((d) => d.id === c.departmentId);
+      if (target && deptSlug !== target.slug) {
+        setLocation(`/projects/dept/${target.slug}`);
+      }
+    } else if (c.departmentId == null && deptSlug) {
+      setLocation("/projects?all=1");
+    }
+    setActiveViewId(viewId);
+  }
+
+  const activeView = useMemo(
+    () => (activeViewId ? views?.find((v) => v.id === activeViewId) : null) ?? null,
+    [views, activeViewId],
+  );
+
+  async function handleSaveView() {
+    if (!saveName.trim()) return;
+    const created = await createView.mutateAsync({
+      data: {
+        scope: "project",
+        name: saveName.trim(),
+        config: buildConfigFromFilters() as unknown as Record<string, unknown>,
+        isDefault: saveAsDefault,
+      },
+    });
+    await queryClient.invalidateQueries({
+      queryKey: getListBoardViewsQueryKey({ scope: "project" }),
+    });
+    setActiveViewId(created.id);
+    setSaveName("");
+    setSaveAsDefault(false);
+    setSaveOpen(false);
+  }
+
+  async function handleSetDefaultView(viewId: number, value: boolean) {
+    await updateView.mutateAsync({ id: viewId, data: { isDefault: value } });
+    await queryClient.invalidateQueries({
+      queryKey: getListBoardViewsQueryKey({ scope: "project" }),
+    });
+  }
+
+  async function handleDeleteView(viewId: number) {
+    await deleteView.mutateAsync({ id: viewId });
+    if (activeViewId === viewId) setActiveViewId(null);
+    await queryClient.invalidateQueries({
+      queryKey: getListBoardViewsQueryKey({ scope: "project" }),
+    });
+  }
 
   // We always render the same fixed 6-column phase board; if a department
   // is selected via URL we just narrow the result set to that dept.
@@ -336,8 +531,194 @@ export default function ProjectsPage() {
     <div className="p-8 max-w-[1800px] mx-auto" data-testid="projects-page">
       <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
         <div>
-          <h1 className="text-[26px] font-display font-semibold tracking-tight">
-            {activeDept ? `${activeDept.name} projects` : "Projects"}
+          <h1 className="flex items-center gap-1 text-[26px] font-display font-semibold tracking-tight m-0">
+            <span>Projects</span>
+            <span className="text-muted-foreground font-normal mx-1.5">·</span>
+            <DropdownMenu
+              open={boardMenuOpen}
+              onOpenChange={setBoardMenuOpen}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 text-[26px] font-display font-semibold"
+                  data-testid="button-project-board-picker"
+                >
+                  <span>{activeDept ? activeDept.name : "All Projects"}</span>
+                  <ChevronDown className="h-4 w-4 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Teams
+                </DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    handleChangeBoard("all");
+                  }}
+                  className="flex items-center justify-between"
+                  data-testid="project-board-option-all"
+                >
+                  <span>All Projects</span>
+                  {!deptSlug && (
+                    <Check className="h-4 w-4 text-emerald-500" />
+                  )}
+                </DropdownMenuItem>
+                {(departments ?? []).map((d) => (
+                  <DropdownMenuItem
+                    key={d.id}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleChangeBoard(d.slug);
+                    }}
+                    className="flex items-center justify-between"
+                    data-testid={`project-board-option-${d.slug}`}
+                  >
+                    <span>{d.name}</span>
+                    {deptSlug === d.slug && (
+                      <Check className="h-4 w-4 text-emerald-500" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    handleSetDefaultBoard(deptSlug ?? "all");
+                  }}
+                  disabled={
+                    (session?.defaultProjectBoard ?? null) ===
+                    (deptSlug ?? null)
+                  }
+                  data-testid="button-set-default-project-board"
+                >
+                  <Star className="h-3.5 w-3.5 mr-2 text-amber-500" />
+                  {(session?.defaultProjectBoard ?? null) ===
+                  (deptSlug ?? null)
+                    ? `${activeDept ? activeDept.name : "All Projects"} is your default team`
+                    : `Set ${activeDept ? activeDept.name : "All Projects"} as default team`}
+                </DropdownMenuItem>
+                <div className="px-2 pb-2 pt-1 text-[11px] text-muted-foreground">
+                  Opening Projects from the sidebar lands here.
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <ChevronRight className="h-4 w-4 opacity-50 mx-0.5" />
+
+            <DropdownMenu
+              open={viewsMenuOpen}
+              onOpenChange={setViewsMenuOpen}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 text-[26px] font-display font-semibold"
+                  data-testid="button-project-views"
+                >
+                  <span>
+                    {activeView ? activeView.name : "Default view"}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Views
+                </DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setViewsMenuOpen(false);
+                    setActiveViewId(null);
+                    setSearch("");
+                    setFilters(DEFAULT_PROJECT_FILTERS);
+                    setSortKey("default");
+                  }}
+                  className="flex items-center justify-between"
+                  data-testid="project-view-option-default"
+                >
+                  <span>Default view</span>
+                  {!activeView && (
+                    <Check className="h-4 w-4 text-emerald-500" />
+                  )}
+                </DropdownMenuItem>
+                {(views ?? []).map((v) => (
+                  <DropdownMenuItem
+                    key={v.id}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setViewsMenuOpen(false);
+                      applyView(v.id);
+                    }}
+                    className="flex items-center justify-between gap-2"
+                    data-testid={`project-menu-view-${v.id}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="truncate">{v.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {v.isDefault && (
+                        <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                      )}
+                      {activeViewId === v.id && (
+                        <Check className="h-4 w-4 text-emerald-500" />
+                      )}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setViewsMenuOpen(false);
+                    setSaveName(
+                      activeView ? `${activeView.name} (copy)` : "My view",
+                    );
+                    setSaveAsDefault(false);
+                    setSaveOpen(true);
+                  }}
+                  disabled={
+                    activeFilterCount === 0 &&
+                    search.trim().length === 0 &&
+                    !activeView
+                  }
+                  data-testid="project-menu-save-view"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-2" />
+                  Save current view
+                </DropdownMenuItem>
+                {activeView && (
+                  <>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        handleSetDefaultView(
+                          activeView.id,
+                          !activeView.isDefault,
+                        );
+                      }}
+                      data-testid="project-menu-toggle-default"
+                    >
+                      <Star className="h-3.5 w-3.5 mr-2" />
+                      {activeView.isDefault
+                        ? "Unset as default view"
+                        : "Set as default view"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        handleDeleteView(activeView.id);
+                      }}
+                      className="text-red-600 focus:text-red-700"
+                      data-testid="project-menu-delete-view"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                      Delete this view
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </h1>
           <p className="text-[13px] text-muted-foreground mt-1">
             Move projects through Backlog → Planning → In Progress →
@@ -652,6 +1033,52 @@ export default function ProjectsPage() {
           onClose={() => setOpenProjectId(null)}
         />
       )}
+
+      {/* Save view dialog */}
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save current filters as a view</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="project-view-name">View name</Label>
+              <Input
+                id="project-view-name"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="e.g. My in-flight projects"
+                data-testid="input-project-view-name"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={saveAsDefault}
+                onChange={(e) => setSaveAsDefault(e.target.checked)}
+                className="h-4 w-4"
+                data-testid="checkbox-project-save-default"
+              />
+              Make this my default view
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Saves your search, filters, and the current team scope.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveView}
+              disabled={!saveName.trim() || createView.isPending}
+              data-testid="button-confirm-save-project-view"
+            >
+              {createView.isPending ? "Saving…" : "Save view"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -13,4 +13,10 @@ export interface UpdateMePreferencesInput {
    * @nullable
    */
   defaultTicketBoard?: string | null;
+  /** @nullable */
+  defaultInitiativeBoard?: string | null;
+  /** @nullable */
+  defaultProjectBoard?: string | null;
+  /** @nullable */
+  defaultOperationalTaskBoard?: string | null;
 }
