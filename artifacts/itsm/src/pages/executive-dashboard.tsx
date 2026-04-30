@@ -293,9 +293,12 @@ export default function ExecutiveDashboard() {
             All teams
           </Badge>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Cross-team portfolio view. Independent of the workspace team
-          selector — always shows the full organization.
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="text-dashboard-description"
+        >
+          High-level view of workload, risk, and delivery across support,
+          operations, and projects.
         </p>
       </header>
 

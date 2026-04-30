@@ -670,6 +670,13 @@ function TicketsDashboardContent() {
           </h1>
           <p
             className="text-sm text-muted-foreground mt-1"
+            data-testid="text-dashboard-description"
+          >
+            Track response times, resolution efficiency, and SLA performance
+            across your support team.
+          </p>
+          <p
+            className="text-xs text-muted-foreground mt-1"
             data-testid="text-scope-label"
           >
             {scopeLabel}

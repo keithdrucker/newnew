@@ -175,6 +175,13 @@ export default function InitiativesDashboard() {
           </h1>
           <p
             className="text-sm text-muted-foreground mt-1"
+            data-testid="text-dashboard-description"
+          >
+            Review, prioritize, and approve proposed initiatives before
+            execution.
+          </p>
+          <p
+            className="text-xs text-muted-foreground mt-1"
             data-testid="text-scope-label"
           >
             {scopeLabel} · {filters.rangeLabel}

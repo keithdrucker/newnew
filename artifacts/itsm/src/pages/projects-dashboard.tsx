@@ -192,6 +192,12 @@ export default function ProjectsDashboard() {
           </h1>
           <p
             className="text-sm text-muted-foreground mt-1"
+            data-testid="text-dashboard-description"
+          >
+            Track planning, implementation, and progress of active projects.
+          </p>
+          <p
+            className="text-xs text-muted-foreground mt-1"
             data-testid="text-scope-label"
           >
             {scopeLabel} · {filters.rangeLabel}

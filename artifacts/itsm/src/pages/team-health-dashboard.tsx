@@ -296,6 +296,13 @@ export default function TeamHealthDashboard() {
           </h1>
           <p
             className="text-sm text-muted-foreground mt-1"
+            data-testid="text-dashboard-description"
+          >
+            High-level view of workload, risk, and delivery across support,
+            operations, and projects.
+          </p>
+          <p
+            className="text-xs text-muted-foreground mt-1"
             data-testid="text-scope-label"
           >
             {scopeLabel} · {filters.rangeLabel}

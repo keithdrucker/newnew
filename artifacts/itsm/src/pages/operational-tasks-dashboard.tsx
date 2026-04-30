@@ -212,6 +212,13 @@ export default function OperationalTasksDashboard() {
           </h1>
           <p
             className="text-sm text-muted-foreground mt-1"
+            data-testid="text-dashboard-description"
+          >
+            Monitor recurring work, task completion, and day-to-day operational
+            activity.
+          </p>
+          <p
+            className="text-xs text-muted-foreground mt-1"
             data-testid="text-scope-label"
           >
             {scopeLabel} · {filters.rangeLabel}
