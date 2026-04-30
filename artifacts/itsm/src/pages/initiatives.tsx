@@ -580,6 +580,9 @@ function DetailDialog({
   );
   // Reopen / move-back reason
   const [transitionReason, setTransitionReason] = useState("");
+  // Open state of the "Move back to Backlog" confirmation dialog,
+  // launched by clicking the Backlog chip in the phase progress bar.
+  const [moveBackOpen, setMoveBackOpen] = useState(false);
 
   // Sync when picking a different row.
   useEffect(() => {
@@ -680,7 +683,7 @@ function DetailDialog({
     );
   };
 
-  const moveBackToBacklog = () => {
+  const moveBackToBacklog = (onAfterSuccess?: () => void) => {
     if (transitionReason.trim().length === 0) {
       toast.error("Reason is required to move back to Backlog.");
       return;
@@ -698,6 +701,7 @@ function DetailDialog({
         onSuccess: () => {
           toast.success("Moved back to Backlog.");
           setTransitionReason("");
+          onAfterSuccess?.();
         },
       },
     );
@@ -756,6 +760,7 @@ function DetailDialog({
   };
 
   return (
+    <>
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className="sm:max-w-3xl max-h-[90vh] overflow-y-auto"
@@ -785,13 +790,26 @@ function DetailDialog({
                 · {new Date(row.createdAt).toLocaleDateString()}
               </span>
             </div>
-            <PhaseProgress status={status} />
+            <PhaseProgress
+              status={status}
+              onStageClick={(key) => {
+                if (key === "backlog" && status === "under_review") {
+                  setTransitionReason("");
+                  setMoveBackOpen(true);
+                }
+              }}
+            />
           </div>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          {/* Intake summary (always visible) */}
-          <Section title="Intake" defaultOpen>
+          {/* Intake summary (always visible) — muted once we're past the
+              Backlog phase since it's read-only reference data. */}
+          <Section
+            title="Intake"
+            defaultOpen
+            tone={status === "backlog" ? "default" : "done"}
+          >
             <ReadField
               label="Problem / Opportunity"
               value={row.problemOpportunity || row.description}
@@ -822,6 +840,15 @@ function DetailDialog({
           <Section
             title="Backlog Triage"
             defaultOpen={status === "backlog"}
+            tone={
+              status === "backlog"
+                ? "active"
+                : status === "under_review" ||
+                    status === "approved" ||
+                    status === "rejected_deferred"
+                  ? "done"
+                  : "default"
+            }
             badge={
               row.backlogReviewedAt ? (
                 <Badge
@@ -858,6 +885,13 @@ function DetailDialog({
           <Section
             title="Under Review — Analysis"
             defaultOpen={status === "under_review"}
+            tone={
+              status === "under_review"
+                ? "active"
+                : status === "approved" || status === "rejected_deferred"
+                  ? "done"
+                  : "default"
+            }
           >
             {status === "under_review" ? (
               <UnderReviewEditor
@@ -897,6 +931,7 @@ function DetailDialog({
                 status === "under_review" &&
                 ((row.workflowRuns ?? []).length > 0)
               }
+              tone={status === "under_review" ? "active" : "done"}
               badge={
                 (row.workflowRuns ?? []).length > 0 ? (
                   <Badge
@@ -922,6 +957,7 @@ function DetailDialog({
             <Section
               title="Final Decision"
               defaultOpen={status === "under_review"}
+              tone={status === "under_review" ? "active" : "done"}
             >
               {status === "under_review" ? (
                 <FinalDecisionEditor
@@ -1000,25 +1036,15 @@ function DetailDialog({
             </div>
           )}
 
-          {/* Move-back / reopen reason input — shown when relevant */}
-          {(status === "under_review" ||
-            status === "approved" ||
+          {/* Reopen reason input — only for terminal lanes. The
+              "Move back to Backlog" flow for Under Review is handled
+              by clicking the Backlog chip in the phase progress bar
+              above, which opens the confirm dialog at the bottom of
+              this component. */}
+          {(status === "approved" ||
             status === "rejected_deferred") && (
-            <Section
-              title={
-                status === "under_review"
-                  ? "Move Back"
-                  : "Reopen"
-              }
-              defaultOpen={false}
-            >
-              <Field
-                label={
-                  status === "under_review"
-                    ? "Why is this being moved back to Backlog?"
-                    : "Why are we reopening this?"
-                }
-              >
+            <Section title="Reopen" defaultOpen={false}>
+              <Field label="Why are we reopening this?">
                 <Textarea
                   rows={2}
                   value={transitionReason}
@@ -1027,18 +1053,6 @@ function DetailDialog({
                 />
               </Field>
               <div className="flex flex-wrap gap-2">
-                {status === "under_review" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={moveBackToBacklog}
-                    disabled={update.isPending}
-                    data-testid="button-move-back-backlog"
-                  >
-                    <Undo2 className="h-4 w-4 mr-1.5" />
-                    Move back to Backlog
-                  </Button>
-                )}
                 {status === "approved" && (
                   <Button
                     variant="outline"
@@ -1174,12 +1188,86 @@ function DetailDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Confirmation dialog launched by clicking the Backlog chip while
+        an initiative is Under Review. Captures the rationale before
+        invoking the existing moveBackToBacklog mutation. */}
+    <Dialog
+      open={moveBackOpen}
+      onOpenChange={(o) => {
+        if (!o) {
+          // Dismiss (Esc / overlay click) acts like Cancel: clear the
+          // rationale draft so it doesn't leak into the Reopen flow if
+          // the initiative later transitions to a terminal state.
+          setTransitionReason("");
+          setMoveBackOpen(false);
+        }
+      }}
+    >
+      <DialogContent
+        className="sm:max-w-lg"
+        data-testid="dialog-move-back-confirm"
+      >
+        <DialogHeader>
+          <DialogTitle>Move back to Backlog</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-1">
+          <Field label="Why are you taking this initiative back?">
+            <Textarea
+              rows={3}
+              value={transitionReason}
+              onChange={(e) => setTransitionReason(e.target.value)}
+              placeholder="e.g. Needs more discovery before review."
+              data-testid="input-move-back-reason"
+              autoFocus
+            />
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTransitionReason("");
+              setMoveBackOpen(false);
+            }}
+            data-testid="button-move-back-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              // Only close after the mutation actually succeeds; if
+              // validation fails (empty reason) or the request errors
+              // we keep the dialog open so the user can correct it.
+              moveBackToBacklog(() => setMoveBackOpen(false));
+            }}
+            disabled={update.isPending}
+            data-testid="button-move-back-confirm"
+          >
+            <Undo2 className="h-4 w-4 mr-1.5" />
+            Move back to Backlog
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
 // ---------- Phase progress indicator ----------
 
-function PhaseProgress({ status }: { status: InitiativeStatus }) {
+function PhaseProgress({
+  status,
+  onStageClick,
+}: {
+  status: InitiativeStatus;
+  // Optional callback. When provided, completed stages become buttons
+  // (e.g. clicking "Backlog" while in Under Review re-opens the move-back
+  // flow). The callback receives the stage key and decides what to do.
+  onStageClick?: (stageKey: "backlog" | "under_review" | "decision") => void;
+}) {
   const isFinalRejected = status === "rejected_deferred";
   const isFinalApproved = status === "approved";
   const stages: {
@@ -1225,36 +1313,70 @@ function PhaseProgress({ status }: { status: InitiativeStatus }) {
       className="flex items-center gap-2"
       data-testid="phase-progress"
     >
-      {stages.map((s, idx) => (
-        <div key={s.key} className="flex items-center gap-2 flex-1">
-          <div
-            className={
-              s.state === "active"
-                ? "flex items-center gap-1.5 text-[11.5px] font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 flex-1 justify-center"
-                : s.state === "done"
-                  ? "flex items-center gap-1.5 text-[11.5px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 flex-1 justify-center"
-                  : "flex items-center gap-1.5 text-[11.5px] text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-full px-2.5 py-1 flex-1 justify-center"
-            }
-            data-testid={`phase-${s.key}-${s.state}`}
-          >
+      {stages.map((s, idx) => {
+        const clickable =
+          !!onStageClick && s.state === "done" && s.key === "backlog";
+        const baseChip =
+          s.state === "active"
+            ? "flex items-center gap-1.5 text-[11.5px] font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 flex-1 justify-center"
+            : s.state === "done"
+              ? "flex items-center gap-1.5 text-[11.5px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 flex-1 justify-center"
+              : "flex items-center gap-1.5 text-[11.5px] text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-full px-2.5 py-1 flex-1 justify-center";
+        const interactiveChip = clickable
+          ? `${baseChip} cursor-pointer hover:bg-emerald-100 hover:border-emerald-300 transition`
+          : baseChip;
+        const inner = (
+          <>
             {s.state === "done" ? (
               <CheckCircle2 className="h-3 w-3" />
             ) : s.state === "active" ? (
               <CircleDashed className="h-3 w-3" />
             ) : null}
             {s.label}
+            {clickable && (
+              <Undo2
+                className="h-3 w-3 ml-0.5 opacity-70"
+                aria-hidden
+              />
+            )}
+          </>
+        );
+        return (
+          <div key={s.key} className="flex items-center gap-2 flex-1">
+            {clickable ? (
+              <button
+                type="button"
+                className={interactiveChip}
+                onClick={() =>
+                  onStageClick?.(
+                    s.key as "backlog" | "under_review" | "decision",
+                  )
+                }
+                data-testid={`phase-${s.key}-${s.state}-button`}
+                title="Move this initiative back to Backlog"
+              >
+                {inner}
+              </button>
+            ) : (
+              <div
+                className={baseChip}
+                data-testid={`phase-${s.key}-${s.state}`}
+              >
+                {inner}
+              </div>
+            )}
+            {idx < stages.length - 1 && (
+              <div
+                className={
+                  s.state === "done"
+                    ? "h-px flex-1 bg-emerald-300"
+                    : "h-px flex-1 bg-zinc-200"
+                }
+              />
+            )}
           </div>
-          {idx < stages.length - 1 && (
-            <div
-              className={
-                s.state === "done"
-                  ? "h-px flex-1 bg-emerald-300"
-                  : "h-px flex-1 bg-zinc-200"
-              }
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1265,34 +1387,72 @@ function Section({
   title,
   badge,
   defaultOpen,
+  tone = "default",
   children,
 }: {
   title: string;
   badge?: React.ReactNode;
   defaultOpen?: boolean;
+  // active = the phase the user needs to fill in right now
+  // done   = data already entered in a previous phase (muted, read-only)
+  // default = neutral
+  tone?: "active" | "done" | "default";
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
+  const wrapClass =
+    tone === "active"
+      ? "rounded-md border-2 border-amber-300 bg-amber-50/60 ring-1 ring-amber-200/60 shadow-sm"
+      : tone === "done"
+        ? "rounded-md border border-zinc-200 bg-zinc-50"
+        : "rounded-md border border-zinc-200 bg-white";
+  const titleClass =
+    tone === "active"
+      ? "flex items-center gap-2 text-[13px] font-semibold text-amber-900"
+      : tone === "done"
+        ? "flex items-center gap-2 text-[13px] font-medium text-zinc-500"
+        : "flex items-center gap-2 text-[13px] font-medium text-zinc-800";
+  const chevronClass =
+    tone === "done" ? "h-4 w-4 text-zinc-400 transition" : "h-4 w-4 text-zinc-500 transition";
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="rounded-md border border-zinc-200 bg-white">
+      <div className={wrapClass}>
         <CollapsibleTrigger asChild>
           <button
             type="button"
             className="w-full flex items-center justify-between px-3 py-2 text-left"
           >
-            <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-800">
+            <div className={titleClass}>
+              {tone === "active" && (
+                <span
+                  className="inline-flex items-center text-[10px] uppercase tracking-wide font-semibold text-amber-800 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5"
+                  data-testid="section-active-pill"
+                >
+                  Current step
+                </span>
+              )}
+              {tone === "done" && (
+                <CheckCircle2 className="h-3.5 w-3.5 text-zinc-400" />
+              )}
               {title}
               {badge}
             </div>
             <ChevronDown
-              className={`h-4 w-4 text-zinc-500 transition ${open ? "rotate-180" : ""}`}
+              className={`${chevronClass} ${open ? "rotate-180" : ""}`}
             />
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <Separator />
-          <div className="p-3 space-y-3">{children}</div>
+          <div
+            className={
+              tone === "done"
+                ? "p-3 space-y-3 text-zinc-500 [&_*]:text-inherit"
+                : "p-3 space-y-3"
+            }
+          >
+            {children}
+          </div>
         </CollapsibleContent>
       </div>
     </Collapsible>
