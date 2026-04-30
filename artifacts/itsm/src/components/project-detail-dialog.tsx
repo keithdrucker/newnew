@@ -1577,78 +1577,84 @@ function ChecklistEditor({
               onDragStart={() => setDragId(id)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => onDrop(id)}
-              className={`flex items-center gap-2 rounded border border-zinc-200 bg-white px-2 py-1.5 ${
+              className={`flex flex-col gap-1.5 rounded border border-zinc-200 bg-white px-2 py-2 ${
                 dragId === id ? "opacity-50" : ""
               }`}
               data-testid={`checklist-item-${id}`}
             >
-              {!readOnly && (
-                <GripVertical className="h-3.5 w-3.5 text-zinc-400 cursor-grab shrink-0" />
-              )}
-              <Checkbox
-                checked={item.done}
-                disabled={readOnly}
-                onCheckedChange={(v) =>
-                  upd.mutate({
-                    id: projectId,
-                    itemId: id,
-                    data: { done: !!v },
-                  })
-                }
-                data-testid={`checkbox-checklist-${id}`}
-              />
-              {isEditing ? (
-                <>
-                  <Input
-                    value={editingText}
-                    onChange={(e) => setEditingText(e.target.value)}
-                    className="h-7 text-[13px] flex-1 min-w-[120px]"
-                    autoFocus
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
+              <div className="flex items-start gap-2">
+                {!readOnly && (
+                  <GripVertical className="h-3.5 w-3.5 text-zinc-400 cursor-grab shrink-0 mt-1" />
+                )}
+                <Checkbox
+                  checked={item.done}
+                  disabled={readOnly}
+                  className="mt-1 shrink-0"
+                  onCheckedChange={(v) =>
+                    upd.mutate({
+                      id: projectId,
+                      itemId: id,
+                      data: { done: !!v },
+                    })
+                  }
+                  data-testid={`checkbox-checklist-${id}`}
+                />
+                {isEditing ? (
+                  <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                    <Textarea
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      rows={2}
+                      className="text-[13px] min-h-[60px] max-h-[200px] overflow-y-auto resize-y"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          upd.mutate(
+                            {
+                              id: projectId,
+                              itemId: id,
+                              data: { text: editingText },
+                            },
+                            { onSuccess: () => setEditingId(null) },
+                          );
+                        }}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={`flex-1 min-w-0 text-left text-[13px] whitespace-pre-wrap break-words max-h-[200px] overflow-y-auto ${
+                      item.done
+                        ? "line-through text-muted-foreground"
+                        : "text-zinc-800"
+                    }`}
                     onClick={() => {
-                      upd.mutate(
-                        {
-                          id: projectId,
-                          itemId: id,
-                          data: { text: editingText },
-                        },
-                        { onSuccess: () => setEditingId(null) },
-                      );
+                      if (readOnly) return;
+                      setEditingId(id);
+                      setEditingText(item.text);
                     }}
+                    title={readOnly ? undefined : "Click to edit"}
                   >
-                    Save
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setEditingId(null)}
-                  >
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className={`flex-1 min-w-[120px] text-left text-[13px] truncate ${
-                    item.done
-                      ? "line-through text-muted-foreground"
-                      : "text-zinc-800"
-                  }`}
-                  onClick={() => {
-                    if (readOnly) return;
-                    setEditingId(id);
-                    setEditingText(item.text);
-                  }}
-                  title={item.text}
-                >
-                  {item.text}
-                </button>
-              )}
+                    {item.text}
+                  </button>
+                )}
+              </div>
               {!isEditing && (
-                <>
+                <div className="flex flex-wrap items-center gap-2 pl-7">
                   <Select
                     value={assigneeValue}
                     disabled={readOnly}
@@ -1661,7 +1667,7 @@ function ChecklistEditor({
                     }
                   >
                     <SelectTrigger
-                      className="h-7 w-[140px] text-[12px]"
+                      className="h-7 w-[160px] text-[12px]"
                       data-testid={`select-assignee-checklist-${id}`}
                     >
                       <SelectValue placeholder="Unassigned" />
@@ -1688,14 +1694,14 @@ function ChecklistEditor({
                         },
                       })
                     }
-                    className="h-7 w-[140px] text-[12px]"
+                    className="h-7 w-[150px] text-[12px]"
                     data-testid={`input-due-checklist-${id}`}
                   />
                   {!readOnly && (
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-6 w-6 shrink-0"
+                      className="h-6 w-6 shrink-0 ml-auto"
                       onClick={() =>
                         del.mutate({ id: projectId, itemId: id })
                       }
@@ -1704,7 +1710,7 @@ function ChecklistEditor({
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                </>
+                </div>
               )}
             </li>
           );
@@ -1716,56 +1722,60 @@ function ChecklistEditor({
         )}
       </ul>
       {!readOnly && (
-        <div className="flex gap-2 pt-1">
-          <Input
+        <div className="flex flex-col gap-2 rounded border border-dashed border-zinc-200 bg-zinc-50/50 px-2 py-2">
+          <Textarea
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
                 submitNew();
               }
             }}
-            placeholder="Add a checklist item…"
-            className="h-8 text-[13px] flex-1 min-w-[120px]"
+            placeholder="Add a checklist item… (Cmd/Ctrl + Enter to add)"
+            rows={2}
+            className="text-[13px] min-h-[60px] max-h-[200px] overflow-y-auto resize-y"
             data-testid="input-new-checklist"
           />
-          <Select
-            value={newAssigneeId ? String(newAssigneeId) : "none"}
-            onValueChange={(v) =>
-              setNewAssigneeId(v === "none" ? null : Number(v))
-            }
-          >
-            <SelectTrigger
-              className="h-8 w-[140px] text-[12px]"
-              data-testid="select-assignee-new-checklist"
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={newAssigneeId ? String(newAssigneeId) : "none"}
+              onValueChange={(v) =>
+                setNewAssigneeId(v === "none" ? null : Number(v))
+              }
             >
-              <SelectValue placeholder="Unassigned" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Unassigned</SelectItem>
-              {agents?.map((u) => (
-                <SelectItem key={u.id} value={String(u.id)}>
-                  {u.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            type="date"
-            value={newDueDate}
-            onChange={(e) => setNewDueDate(e.target.value)}
-            className="h-8 w-[140px] text-[12px]"
-            data-testid="input-due-new-checklist"
-          />
-          <Button
-            size="sm"
-            onClick={submitNew}
-            disabled={add.isPending || !newText.trim()}
-            data-testid="button-add-checklist"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
+              <SelectTrigger
+                className="h-8 w-[160px] text-[12px]"
+                data-testid="select-assignee-new-checklist"
+              >
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Unassigned</SelectItem>
+                {agents?.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="date"
+              value={newDueDate}
+              onChange={(e) => setNewDueDate(e.target.value)}
+              className="h-8 w-[150px] text-[12px]"
+              data-testid="input-due-new-checklist"
+            />
+            <Button
+              size="sm"
+              onClick={submitNew}
+              disabled={add.isPending || !newText.trim()}
+              data-testid="button-add-checklist"
+              className="ml-auto"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add
+            </Button>
+          </div>
         </div>
       )}
     </div>
