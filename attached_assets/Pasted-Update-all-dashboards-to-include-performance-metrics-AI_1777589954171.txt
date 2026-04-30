@@ -1,0 +1,289 @@
+Update all dashboards to include performance metrics, AI impact, time tracking, and consistent chart usage.
+
+Context:
+We are building an AI-first ITSM platform where users interact with an AI chatbot first. The AI may:
+- Fully resolve the interaction (no ticket created)
+- Escalate to a human (ticket created)
+- Assist before human involvement
+
+We must measure:
+- Support performance
+- AI effectiveness
+- Time spent across work types
+- Time saved by AI BEFORE tickets reach teams
+
+--------------------------------------------------
+GLOBAL REQUIREMENTS
+--------------------------------------------------
+
+Dashboards:
+- Team Health
+- Support Performance
+- Operations Overview
+- Initiative Pipeline
+- Project Execution
+
+Keep:
+- Existing layout where possible
+- Filters (date, team, agent)
+- Clean UI (no clutter)
+
+Add Sections:
+- Performance
+- Risk
+- Workload
+- AI Impact
+- Time Intelligence
+
+--------------------------------------------------
+CHART STANDARDS
+--------------------------------------------------
+
+Use:
+- Line Chart → trends over time
+- Bar Chart → comparisons
+- Donut Chart → distributions
+- Progress Bars → completion
+- Funnel → pipeline (if supported)
+
+--------------------------------------------------
+SUPPORT PERFORMANCE (CRITICAL DASHBOARD)
+--------------------------------------------------
+
+Add/Ensure:
+
+Performance Metrics:
+- Avg First Response Time (CRITICAL)
+- Avg Resolution Time
+- SLA Compliance %
+- SLA Breaches
+
+Volume:
+- Tickets Created
+- Tickets Resolved
+- Backlog Size
+
+Risk:
+- Tickets at Risk (SLA)
+- High Priority Open Tickets
+- Unassigned Tickets
+- Stale Tickets
+
+--------------------------------------------------
+AI METRICS (SUPPORT)
+--------------------------------------------------
+
+Add:
+
+- AI Resolved Interactions
+- AI Deflected Tickets (resolved BEFORE ticket creation)
+- Human Escalations
+- AI Resolution Rate
+- AI Deflection Rate
+- Escalation Rate
+
+--------------------------------------------------
+TIME + AI SAVINGS (CORE DIFFERENTIATOR)
+--------------------------------------------------
+
+Add:
+
+- Estimated Time Saved by AI (VERY IMPORTANT)
+- Time Saved Before Team Assignment
+- Avg AI Handling Time
+- Avg Human Resolution Time
+- Avg Time per Ticket
+
+Calculation:
+Estimated Time Saved =
+AI Deflected Tickets × Avg Human Resolution Time
+
+--------------------------------------------------
+SUPPORT CHARTS
+--------------------------------------------------
+
+- Tickets Opened vs Resolved → Line
+- SLA Compliance Trend → Line
+- Tickets by Priority → Bar
+- AI vs Human Resolution → Donut
+- AI Time Saved Trend → Line
+- AI Deflected vs Created Tickets → Bar
+
+--------------------------------------------------
+TEAM HEALTH (EXECUTIVE)
+--------------------------------------------------
+
+Add:
+
+- Total Active Work
+- Tickets Open
+- Projects in Implementation
+- Operational Tasks Active
+- Tickets Breaching SLA
+- Projects On Hold
+
+AI:
+- AI Resolution Rate
+- AI Deflection Rate
+- Estimated Time Saved by AI
+
+TIME:
+- Time Allocation (Tickets vs Ops vs Projects)
+- Reactive vs Proactive Work Time
+
+Charts:
+- Work Type Allocation → Donut
+- AI vs Human Workload → Donut
+- Time Saved Trend → Line
+
+--------------------------------------------------
+TIME INTELLIGENCE (NEW CORE FEATURE)
+--------------------------------------------------
+
+Add across system:
+
+Time Allocation:
+- Time Spent on Tickets
+- Time Spent on Operations
+- Time Spent on Projects
+
+Efficiency:
+- Avg Time per Ticket
+- Avg Time per Task
+- Avg Time per Project
+
+Trends:
+- Time spent over time (split by type)
+
+Charts:
+- Time Allocation → Donut
+- Time Trend → Line
+- Avg Time Comparison → Bar
+
+--------------------------------------------------
+OPERATIONS OVERVIEW
+--------------------------------------------------
+
+Add:
+
+- Active Tasks
+- Tasks Due Today
+- Overdue Tasks
+- Avg Task Completion Time
+
+System Health:
+- Devices with Issues
+- CPU / Memory Alerts
+- Disk Issues
+- Offline Devices
+
+AI + Automation:
+- Tasks Automated by AI
+- AI Triggered Fixes
+- Agent Detected Issues
+
+Charts:
+- Tasks Completed vs Overdue → Bar
+- Automation vs Manual → Donut
+- Issues by Type → Bar
+
+--------------------------------------------------
+INITIATIVE PIPELINE
+--------------------------------------------------
+
+Add:
+
+- Total Initiatives
+- Pending Approval
+- Approved
+- Rejected
+- Avg Time to Approve
+- Conversion Rate (Initiative → Project)
+
+Charts:
+- Initiatives by Status → Bar
+- Pipeline Funnel → Funnel
+
+--------------------------------------------------
+PROJECT EXECUTION
+--------------------------------------------------
+
+Add:
+
+- Active Projects
+- Projects in Planning
+- Projects in Implementation
+- On Track vs At Risk
+- On Hold
+- Overdue Projects
+
+Time:
+- Avg Project Duration
+- Time in Planning vs Implementation
+
+Progress:
+- Checklist Completion %
+- Milestones Completed
+
+Charts:
+- Project Status → Bar
+- Completion Trend → Line
+- Time in Phases → Bar
+- Progress → Progress Bars
+
+--------------------------------------------------
+DATA LOGIC
+--------------------------------------------------
+
+Use timestamps:
+- created_at
+- assigned_at
+- started_at
+- resolved_at
+- completed_at
+
+If missing:
+- safely fallback to available timestamps
+
+AI Data:
+Prepare structure for:
+- resolved_by_ai
+- escalated_to_human
+- ticket_created
+- interaction_time
+- estimated_time_saved
+
+--------------------------------------------------
+UX REQUIREMENTS
+--------------------------------------------------
+
+Add tooltips explaining:
+- AI Deflected Tickets
+- Time Saved by AI
+- Reactive vs Proactive Work
+
+Use messaging like:
+“AI resolved X requests before they reached the support team, saving an estimated X hours.”
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Ensure:
+- No broken dashboards
+- Charts render correctly
+- Existing features untouched
+- Data integrity preserved
+- Metrics degrade gracefully if data missing
+
+--------------------------------------------------
+RETURN
+--------------------------------------------------
+
+- Summary of changes
+- Files updated
+- Metrics added
+- Charts added
+- AI logic added
+- Time tracking logic added
+- Any placeholders for future backend work
