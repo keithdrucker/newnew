@@ -5,7 +5,18 @@ import {
   useGetSession,
   useListAgents,
   getListAgentsQueryKey,
+  getDashboardOverview,
+  getDashboardTimeseries,
+  getBreachedTickets,
+  getGetDashboardOverviewQueryKey,
+  getGetDashboardTimeseriesQueryKey,
+  getGetBreachedTicketsQueryKey,
+  type DashboardOverview,
+  type DashboardTimeseries,
+  type Ticket,
+  type AgentLeaderboardItem,
 } from "@workspace/api-client-react";
+import { useQueries } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -154,22 +165,259 @@ export default function Dashboard() {
   );
 }
 
+// Merge dashboard overview rows for several teams into one weighted
+// aggregate. Counts sum, averages weight by totalTickets, top agents
+// merge by agentId. Returns null when the input is empty so consumers
+// can show their own loading state.
+function aggregateOverviews(
+  rows: DashboardOverview[],
+  rangeDays: number,
+): DashboardOverview | null {
+  if (rows.length === 0) return null;
+  if (rows.length === 1) return rows[0];
+
+  const sum = (k: keyof DashboardOverview) =>
+    rows.reduce((acc, r) => acc + ((r[k] as number) ?? 0), 0);
+
+  const totalTickets = sum("totalTickets");
+  const weightedAvg = (k: keyof DashboardOverview) => {
+    if (totalTickets === 0) return 0;
+    return (
+      rows.reduce(
+        (acc, r) => acc + ((r[k] as number) ?? 0) * (r.totalTickets ?? 0),
+        0,
+      ) / totalTickets
+    );
+  };
+
+  // Merge top-agents: keyed by agentId, sum ticket counts, then sort
+  // desc and keep the top 5 (matches the per-team API return size).
+  const agentMap = new Map<number, AgentLeaderboardItem>();
+  for (const row of rows) {
+    for (const a of row.topAgents ?? []) {
+      const existing = agentMap.get(a.agentId);
+      if (existing) {
+        existing.ticketCount += a.ticketCount;
+      } else {
+        agentMap.set(a.agentId, { ...a });
+      }
+    }
+  }
+  const topAgents = Array.from(agentMap.values())
+    .sort((a, b) => b.ticketCount - a.ticketCount)
+    .slice(0, 5);
+
+  // statusBreakdown: merge by status string.
+  const statusMap = new Map<string, number>();
+  for (const row of rows) {
+    for (const s of row.statusBreakdown ?? []) {
+      statusMap.set(s.status, (statusMap.get(s.status) ?? 0) + s.count);
+    }
+  }
+
+  return {
+    rangeDays,
+    departmentId: null,
+    averageResponseSeconds: weightedAvg("averageResponseSeconds"),
+    averageResolutionSeconds: weightedAvg("averageResolutionSeconds"),
+    slaResponseCompliance: weightedAvg("slaResponseCompliance"),
+    slaResolutionCompliance: weightedAvg("slaResolutionCompliance"),
+    ticketsBreachedSla: sum("ticketsBreachedSla"),
+    responseBreachedCount: sum("responseBreachedCount"),
+    resolutionBreachedCount: sum("resolutionBreachedCount"),
+    openTickets: sum("openTickets"),
+    closedTickets: sum("closedTickets"),
+    pendingTickets: sum("pendingTickets"),
+    resolvedTickets: sum("resolvedTickets"),
+    newTickets: sum("newTickets"),
+    inProgressTickets: sum("inProgressTickets"),
+    withUserTickets: sum("withUserTickets"),
+    withVendorTickets: sum("withVendorTickets"),
+    onHoldTickets: sum("onHoldTickets"),
+    scheduledTickets: sum("scheduledTickets"),
+    totalTickets,
+    averageSatisfactionScore: weightedAvg("averageSatisfactionScore"),
+    estimatedTimeSavedHours: sum("estimatedTimeSavedHours"),
+    estimatedCostSavedDollars: sum("estimatedCostSavedDollars"),
+    statusBreakdown: Array.from(statusMap.entries()).map(([status, count]) => ({
+      status: status as DashboardOverview["statusBreakdown"][number]["status"],
+      count,
+    })),
+    topAgents,
+  };
+}
+
+// Combine multiple per-team timeseries into one. Points are keyed by
+// date string so days that exist in only some teams still render.
+function aggregateTimeseries(
+  rows: DashboardTimeseries[],
+  rangeDays: number,
+): DashboardTimeseries | null {
+  if (rows.length === 0) return null;
+  if (rows.length === 1) return rows[0];
+
+  const byDate = new Map<string, { opened: number; resolved: number }>();
+  for (const row of rows) {
+    for (const p of row.points ?? []) {
+      const key = String(p.date);
+      const existing = byDate.get(key) ?? { opened: 0, resolved: 0 };
+      existing.opened += p.opened;
+      existing.resolved += p.resolved;
+      byDate.set(key, existing);
+    }
+  }
+  const points = Array.from(byDate.entries())
+    .map(([date, v]) => ({ date, ...v }))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return { rangeDays, points };
+}
+
+// Run the three dashboard queries in a way that respects the active
+// team scope:
+//   - single team selected → one query with departmentId
+//   - "All Teams"          → one query with no departmentId (server
+//                            returns the user's full accessible set)
+//   - explicit multi (2+   → one query per selected team in parallel,
+//     but not all)           merged client-side via aggregate*()
+// This keeps the dashboard honest when the user picks, say, two of
+// three teams: we don't quietly include the un-selected team.
+function useScopedDashboard(
+  rangeDays: 30 | 180 | 365,
+  assigneeId: number | undefined,
+) {
+  const scope = useTeamScope();
+  const isMulti = !scope.isAll && !scope.single && scope.selectedIds.length > 1;
+  const enableSingle = !isMulti && !scope.loading;
+  const singleDeptId = scope.single ? scope.singleId ?? undefined : undefined;
+
+  // Single / All paths use the regular hooks. We disable them when we
+  // know we'll use the multi path so we don't fire duplicate requests
+  // mid-scope-change.
+  const singleOverviewParams = {
+    departmentId: singleDeptId,
+    assigneeId,
+    rangeDays,
+  };
+  const singleTimeseriesParams = {
+    departmentId: singleDeptId,
+    assigneeId,
+    rangeDays,
+  };
+  const singleBreachedParams = {
+    departmentId: singleDeptId,
+    assigneeId,
+    rangeDays,
+  };
+  const singleOverview = useGetDashboardOverview(singleOverviewParams, {
+    query: {
+      queryKey: getGetDashboardOverviewQueryKey(singleOverviewParams),
+      enabled: enableSingle,
+    },
+  });
+  const singleTimeseries = useGetDashboardTimeseries(singleTimeseriesParams, {
+    query: {
+      queryKey: getGetDashboardTimeseriesQueryKey(singleTimeseriesParams),
+      enabled: enableSingle,
+    },
+  });
+  const singleBreached = useGetBreachedTickets(singleBreachedParams, {
+    query: {
+      queryKey: getGetBreachedTicketsQueryKey(singleBreachedParams),
+      enabled: enableSingle,
+    },
+  });
+
+  // Multi path: parallel per-team queries via useQueries. We always
+  // declare these (even when not multi) so React's hook order stays
+  // stable; they just resolve to empty arrays when disabled.
+  const multiTeamIds = isMulti ? scope.selectedIds : [];
+  const overviewQueries = useQueries({
+    queries: multiTeamIds.map((teamId) => ({
+      queryKey: getGetDashboardOverviewQueryKey({
+        departmentId: teamId,
+        rangeDays,
+      }),
+      queryFn: () =>
+        getDashboardOverview({ departmentId: teamId, rangeDays }),
+      enabled: isMulti,
+    })),
+  });
+  const timeseriesQueries = useQueries({
+    queries: multiTeamIds.map((teamId) => ({
+      queryKey: getGetDashboardTimeseriesQueryKey({
+        departmentId: teamId,
+        rangeDays,
+      }),
+      queryFn: () =>
+        getDashboardTimeseries({ departmentId: teamId, rangeDays }),
+      enabled: isMulti,
+    })),
+  });
+  const breachedQueries = useQueries({
+    queries: multiTeamIds.map((teamId) => ({
+      queryKey: getGetBreachedTicketsQueryKey({
+        departmentId: teamId,
+        rangeDays,
+      }),
+      queryFn: () => getBreachedTickets({ departmentId: teamId, rangeDays }),
+      enabled: isMulti,
+    })),
+  });
+
+  const aggregatedOverview = useMemo<DashboardOverview | null>(() => {
+    if (!isMulti) return null;
+    const rows = overviewQueries
+      .map((q) => q.data)
+      .filter((r): r is DashboardOverview => r != null);
+    return aggregateOverviews(rows, rangeDays);
+  }, [isMulti, overviewQueries, rangeDays]);
+
+  const aggregatedTimeseries = useMemo<DashboardTimeseries | null>(() => {
+    if (!isMulti) return null;
+    const rows = timeseriesQueries
+      .map((q) => q.data)
+      .filter((r): r is DashboardTimeseries => r != null);
+    return aggregateTimeseries(rows, rangeDays);
+  }, [isMulti, timeseriesQueries, rangeDays]);
+
+  const aggregatedBreached = useMemo<Ticket[]>(() => {
+    if (!isMulti) return [];
+    return breachedQueries.flatMap((q) => q.data ?? []);
+  }, [isMulti, breachedQueries]);
+
+  if (isMulti) {
+    const anyOverviewLoading = overviewQueries.some((q) => q.isLoading);
+    return {
+      overview: aggregatedOverview ?? undefined,
+      timeseries: aggregatedTimeseries ?? undefined,
+      breached: aggregatedBreached,
+      isOverviewLoading: anyOverviewLoading || aggregatedOverview == null,
+    };
+  }
+
+  return {
+    overview: singleOverview.data,
+    timeseries: singleTimeseries.data,
+    breached: singleBreached.data,
+    isOverviewLoading: singleOverview.isLoading,
+  };
+}
+
 function TicketsDashboardContent() {
   const scope = useTeamScope();
   const [rangeDays, setRangeDays] = useState<"30" | "180" | "365">("30");
   const [assigneeId, setAssigneeId] = useState<string>("all");
 
-  // When a single team is selected globally we pass it through to the
-  // API for an exact server-side filter. For multi-team / "All Teams"
-  // we omit the parameter so the API returns the user's full
-  // accessible set, and we narrow client-side via filterByTeamScope.
-  const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
   const queryRangeDays = Number(rangeDays) as 30 | 180 | 365;
   const queryAssigneeId = assigneeId === "all" ? undefined : Number(assigneeId);
 
   // The assignee picker is only meaningful when we've narrowed to a
   // single team — otherwise the agent list spans many teams and
-  // becomes noisy.
+  // becomes noisy. So we only thread the assignee param through when
+  // a single team is active.
+  const effectiveAssigneeId = scope.single ? queryAssigneeId : undefined;
+
+  const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
   const agentsParams = queryDeptId != null ? { departmentId: queryDeptId } : {};
   const { data: agents } = useListAgents(agentsParams, {
     query: {
@@ -185,22 +433,8 @@ function TicketsDashboardContent() {
     setAssigneeId("all");
   }, [scope.singleId]);
 
-  const { data: overview, isLoading: isOverviewLoading } =
-    useGetDashboardOverview({
-      departmentId: queryDeptId,
-      assigneeId: queryAssigneeId,
-      rangeDays: queryRangeDays,
-    });
-  const { data: timeseries } = useGetDashboardTimeseries({
-    departmentId: queryDeptId,
-    assigneeId: queryAssigneeId,
-    rangeDays: queryRangeDays,
-  });
-  const { data: breached } = useGetBreachedTickets({
-    departmentId: queryDeptId,
-    assigneeId: queryAssigneeId,
-    rangeDays: queryRangeDays,
-  });
+  const { overview, timeseries, breached, isOverviewLoading } =
+    useScopedDashboard(queryRangeDays, effectiveAssigneeId);
 
   const chartData = useMemo(() => {
     return (
