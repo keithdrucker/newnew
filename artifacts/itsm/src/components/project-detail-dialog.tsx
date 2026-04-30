@@ -515,7 +515,19 @@ function DetailInner({
     ) {
       await saveCloseout("Closeout draft saved");
     }
-    openPhaseChange("closed");
+    // The closeout fields are already on the row -- skip the
+    // re-prompt modal and run the transition directly. The server
+    // reads summary + takeaway from the row when the body omits
+    // them, so this is the same gate, just one click instead of
+    // re-typing what was just saved.
+    changePhase.mutate(
+      { id: row.id, data: { to: "closed" } },
+      {
+        onSuccess: () => {
+          toast({ title: `Moved to ${PHASE_LABEL.closed}` });
+        },
+      },
+    );
   };
 
   // ---- Backlog → Planning client-side gate. The server enforces the
