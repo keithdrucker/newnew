@@ -84,14 +84,15 @@ export default function InitiativesDashboard() {
 
   // Apply scope → time range → assignee. We filter on `updatedAt` so a
   // long-lived initiative that was decided this week still appears in
-  // a "Last 30 days" view.
+  // a "Last 30 days" view. The assignee filter applies at every scope
+  // (single/multi/all).
   const filtered = useMemo<Initiative[]>(() => {
     let list: Initiative[] = initiatives ?? [];
     if (!scope.single && !scope.isAll) {
       list = filterByTeamScope(list, scope);
     }
     list = list.filter((i) => isInRange(i.updatedAt, filters.bounds));
-    if (scope.single && filters.assigneeFilter != null) {
+    if (filters.assigneeFilter != null) {
       list = list.filter((i) => i.assigneeId === filters.assigneeFilter);
     }
     return list;
@@ -177,14 +178,12 @@ export default function InitiativesDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {scope.single && (
-            <AssigneePicker
-              value={filters.assigneeId}
-              onChange={filters.setAssigneeId}
-              agents={agents}
-              testId="select-initiatives-dashboard-assignee"
-            />
-          )}
+          <AssigneePicker
+            value={filters.assigneeId}
+            onChange={filters.setAssigneeId}
+            agents={agents}
+            testId="select-initiatives-dashboard-assignee"
+          />
           <TimeRangePicker
             value={filters.range}
             onChange={filters.setRange}

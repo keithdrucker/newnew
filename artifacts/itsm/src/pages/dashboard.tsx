@@ -330,15 +330,19 @@ function useScopedDashboard(
   // Multi path: parallel per-team queries via useQueries. We always
   // declare these (even when not multi) so React's hook order stays
   // stable; they just resolve to empty arrays when disabled.
+  // The assignee filter is threaded into each per-team query so the
+  // aggregated totals match what the user would see if they switched
+  // to a single team.
   const multiTeamIds = isMulti ? scope.selectedIds : [];
   const overviewQueries = useQueries({
     queries: multiTeamIds.map((teamId) => ({
       queryKey: getGetDashboardOverviewQueryKey({
         departmentId: teamId,
+        assigneeId,
         rangeDays,
       }),
       queryFn: () =>
-        getDashboardOverview({ departmentId: teamId, rangeDays }),
+        getDashboardOverview({ departmentId: teamId, assigneeId, rangeDays }),
       enabled: isMulti,
     })),
   });
@@ -346,10 +350,11 @@ function useScopedDashboard(
     queries: multiTeamIds.map((teamId) => ({
       queryKey: getGetDashboardTimeseriesQueryKey({
         departmentId: teamId,
+        assigneeId,
         rangeDays,
       }),
       queryFn: () =>
-        getDashboardTimeseries({ departmentId: teamId, rangeDays }),
+        getDashboardTimeseries({ departmentId: teamId, assigneeId, rangeDays }),
       enabled: isMulti,
     })),
   });
@@ -357,9 +362,11 @@ function useScopedDashboard(
     queries: multiTeamIds.map((teamId) => ({
       queryKey: getGetBreachedTicketsQueryKey({
         departmentId: teamId,
+        assigneeId,
         rangeDays,
       }),
-      queryFn: () => getBreachedTickets({ departmentId: teamId, rangeDays }),
+      queryFn: () =>
+        getBreachedTickets({ departmentId: teamId, assigneeId, rangeDays }),
       enabled: isMulti,
     })),
   });
@@ -411,30 +418,28 @@ function TicketsDashboardContent() {
   const queryRangeDays = Number(rangeDays) as 30 | 180 | 365;
   const queryAssigneeId = assigneeId === "all" ? undefined : Number(assigneeId);
 
-  // The assignee picker is only meaningful when we've narrowed to a
-  // single team — otherwise the agent list spans many teams and
-  // becomes noisy. So we only thread the assignee param through when
-  // a single team is active.
-  const effectiveAssigneeId = scope.single ? queryAssigneeId : undefined;
-
+  // The agent picker is always visible. When a single team is in
+  // scope we narrow the agent list to that team; for multi/all we
+  // fall back to every agent the API exposes, so the picker is
+  // useful at every scope.
   const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
   const agentsParams = queryDeptId != null ? { departmentId: queryDeptId } : {};
   const { data: agents } = useListAgents(agentsParams, {
     query: {
       queryKey: getListAgentsQueryKey(agentsParams),
-      enabled: queryDeptId != null,
     },
   });
 
-  // Reset the agent filter whenever the active team changes so we
-  // don't keep a stale assignee that isn't in the new team's agent
-  // list.
+  // Reset the agent filter whenever the team scope narrows or
+  // broadens. Without this, picking an agent on Team A and then
+  // switching to Team B would silently keep the old filter and
+  // could produce empty result sets if that agent isn't on Team B.
   useEffect(() => {
     setAssigneeId("all");
-  }, [scope.singleId]);
+  }, [queryDeptId]);
 
   const { overview, timeseries, breached, isOverviewLoading } =
-    useScopedDashboard(queryRangeDays, effectiveAssigneeId);
+    useScopedDashboard(queryRangeDays, queryAssigneeId);
 
   const chartData = useMemo(() => {
     return (

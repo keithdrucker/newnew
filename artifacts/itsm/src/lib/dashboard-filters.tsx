@@ -189,17 +189,18 @@ export function TimeRangePicker({
   );
 }
 
-// Assignee picker, scoped to a single team's agents. Renders nothing
-// when `departmentId` is undefined — the dashboard pages call this
-// only when the global team scope has narrowed to one team. Returns
-// "all" as a sentinel value so callers can disambiguate "no filter"
-// from a real numeric agent id.
+// Agent options for the assignee picker.
+// - When `departmentId` is provided (single team in scope), the list is
+//   narrowed to that team's agents.
+// - When it's undefined (multi-team or "All Teams"), we fall back to
+//   every agent the API returns, so the picker is always usable.
+// Returning `"all"` as a sentinel from the picker lets callers
+// disambiguate "no filter" from a real numeric agent id.
 export function useAgentOptions(departmentId: number | undefined) {
   const params = departmentId != null ? { departmentId } : {};
   const { data: agents } = useListAgents(params, {
     query: {
       queryKey: getListAgentsQueryKey(params),
-      enabled: departmentId != null,
     },
   });
   return agents ?? [];

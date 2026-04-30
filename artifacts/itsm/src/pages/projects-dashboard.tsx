@@ -92,14 +92,15 @@ export default function ProjectsDashboard() {
 
   // Apply scope → time range → assignee. Filter on `updatedAt` so a
   // long-running project that had recent activity still appears in
-  // short windows.
+  // short windows. The assignee filter applies at every scope
+  // (single/multi/all).
   const filtered = useMemo<ProjectSummary[]>(() => {
     let list: ProjectSummary[] = projects ?? [];
     if (!scope.single && !scope.isAll) {
       list = filterByTeamScope(list, scope);
     }
     list = list.filter((p) => isInRange(p.updatedAt, filters.bounds));
-    if (scope.single && filters.assigneeFilter != null) {
+    if (filters.assigneeFilter != null) {
       list = list.filter((p) => p.ownerId === filters.assigneeFilter);
     }
     return list;
@@ -194,14 +195,12 @@ export default function ProjectsDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {scope.single && (
-            <AssigneePicker
-              value={filters.assigneeId}
-              onChange={filters.setAssigneeId}
-              agents={agents}
-              testId="select-projects-dashboard-assignee"
-            />
-          )}
+          <AssigneePicker
+            value={filters.assigneeId}
+            onChange={filters.setAssigneeId}
+            agents={agents}
+            testId="select-projects-dashboard-assignee"
+          />
           <TimeRangePicker
             value={filters.range}
             onChange={filters.setRange}

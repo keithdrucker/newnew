@@ -115,14 +115,17 @@ export default function OperationalTasksDashboard() {
   const errStatus = (error as { status?: number } | null)?.status;
   const forbidden = isError && errStatus === 403;
 
-  // Apply scope → time range → assignee in that order.
+  // Apply scope → time range → assignee in that order. The assignee
+  // filter is honored at every scope (single/multi/all): when the user
+  // picks an agent on "All Teams" we just keep tasks owned by that
+  // person across the full accessible set.
   const filtered = useMemo<OperationalTask[]>(() => {
     let list: OperationalTask[] = tasks ?? [];
     if (!scope.single && !scope.isAll) {
       list = filterByTeamScope(list, scope);
     }
     list = list.filter((t) => isInRange(t.updatedAt, filters.bounds));
-    if (scope.single && filters.assigneeFilter != null) {
+    if (filters.assigneeFilter != null) {
       list = list.filter((t) => t.ownerId === filters.assigneeFilter);
     }
     return list;
@@ -214,14 +217,12 @@ export default function OperationalTasksDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {scope.single && (
-            <AssigneePicker
-              value={filters.assigneeId}
-              onChange={filters.setAssigneeId}
-              agents={agents}
-              testId="select-ops-tasks-dashboard-assignee"
-            />
-          )}
+          <AssigneePicker
+            value={filters.assigneeId}
+            onChange={filters.setAssigneeId}
+            agents={agents}
+            testId="select-ops-tasks-dashboard-assignee"
+          />
           <TimeRangePicker
             value={filters.range}
             onChange={filters.setRange}
