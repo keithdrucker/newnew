@@ -231,7 +231,7 @@ export function ProjectImportDialog({
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Department">
+            <Field label="Team">
               <Select
                 value={departmentId ? String(departmentId) : "none"}
                 onValueChange={(v) =>
@@ -689,7 +689,7 @@ function DetailInner({
               }
             >
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Department">
+                <Field label="Team">
                   <Select
                     value={departmentId ? String(departmentId) : "none"}
                     onValueChange={(v) =>

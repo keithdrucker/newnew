@@ -1347,7 +1347,7 @@ function CreateDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Department">
+          <Field label="Team">
             <Select value={departmentId} onValueChange={setDepartmentId}>
               <SelectTrigger data-testid="select-create-department">
                 <SelectValue placeholder="None" />
