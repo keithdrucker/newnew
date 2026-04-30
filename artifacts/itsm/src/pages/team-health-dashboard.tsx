@@ -37,6 +37,8 @@ import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import {
   useDashboardFilters,
   TimeRangePicker,
+  AssigneePicker,
+  useAgentOptions,
   isInRange,
 } from "@/lib/dashboard-filters";
 import { cn } from "@/lib/utils";
@@ -77,6 +79,7 @@ export default function TeamHealthDashboard() {
   // filterByTeamScope.
   const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
   const filters = useDashboardFilters();
+  const agents = useAgentOptions(queryDeptId);
 
   const ticketParams = queryDeptId != null ? { departmentId: queryDeptId } : {};
   const opsParams = queryDeptId != null ? { departmentId: queryDeptId } : {};
@@ -103,33 +106,54 @@ export default function TeamHealthDashboard() {
     projects.isLoading;
 
   // Apply scope (multi-team only — single is server-narrowed already,
-  // and "all" passes through). The time-range filter is applied per
-  // entity on the field that best reflects "recent activity": tickets
-  // by createdAt (matches the Tickets dashboard), the rest by
-  // updatedAt (matches the existing sub-dashboards).
+  // and "all" passes through). Then apply the agent filter: tickets
+  // and initiatives carry an `assigneeId`; ops tasks and projects use
+  // `ownerId`. A null assignee/owner can never match an explicit
+  // agent selection, so it gets dropped when the filter is active.
+  // Finally apply the time-range filter on the field that best
+  // reflects "recent activity": tickets by createdAt (matches the
+  // Tickets dashboard), the rest by updatedAt (matches the existing
+  // sub-dashboards).
+  const assigneeFilter = filters.assigneeFilter;
   const scopedTickets = useMemo<Ticket[]>(() => {
     let list: Ticket[] = tickets.data ?? [];
     if (!scope.single && !scope.isAll) list = filterByTeamScope(list, scope);
+    if (assigneeFilter)
+      list = list.filter(
+        (t) => t.assigneeId != null && assigneeFilter.has(t.assigneeId),
+      );
     return list.filter((t) => isInRange(t.createdAt, filters.bounds));
-  }, [tickets.data, scope, filters.bounds]);
+  }, [tickets.data, scope, assigneeFilter, filters.bounds]);
 
   const scopedOpsTasks = useMemo<OperationalTask[]>(() => {
     let list: OperationalTask[] = opsTasks.data ?? [];
     if (!scope.single && !scope.isAll) list = filterByTeamScope(list, scope);
+    if (assigneeFilter)
+      list = list.filter(
+        (t) => t.ownerId != null && assigneeFilter.has(t.ownerId),
+      );
     return list.filter((t) => isInRange(t.updatedAt, filters.bounds));
-  }, [opsTasks.data, scope, filters.bounds]);
+  }, [opsTasks.data, scope, assigneeFilter, filters.bounds]);
 
   const scopedInitiatives = useMemo<Initiative[]>(() => {
     let list: Initiative[] = initiatives.data ?? [];
     if (!scope.single && !scope.isAll) list = filterByTeamScope(list, scope);
+    if (assigneeFilter)
+      list = list.filter(
+        (i) => i.assigneeId != null && assigneeFilter.has(i.assigneeId),
+      );
     return list.filter((i) => isInRange(i.updatedAt, filters.bounds));
-  }, [initiatives.data, scope, filters.bounds]);
+  }, [initiatives.data, scope, assigneeFilter, filters.bounds]);
 
   const scopedProjects = useMemo<ProjectSummary[]>(() => {
     let list: ProjectSummary[] = projects.data ?? [];
     if (!scope.single && !scope.isAll) list = filterByTeamScope(list, scope);
+    if (assigneeFilter)
+      list = list.filter(
+        (p) => p.ownerId != null && assigneeFilter.has(p.ownerId),
+      );
     return list.filter((p) => isInRange(p.updatedAt, filters.bounds));
-  }, [projects.data, scope, filters.bounds]);
+  }, [projects.data, scope, assigneeFilter, filters.bounds]);
 
   // Aggregate KPIs across all scoped data.
   const kpis = useMemo(() => {
@@ -278,6 +302,12 @@ export default function TeamHealthDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <AssigneePicker
+            selectedIds={filters.assigneeIds}
+            onChange={filters.setAssigneeIds}
+            agents={agents}
+            testId="select-team-health-assignee"
+          />
           <TimeRangePicker
             value={filters.range}
             onChange={filters.setRange}
