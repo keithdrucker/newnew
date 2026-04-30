@@ -73,7 +73,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { backlogSubStatus, startDateLabel } from "@/pages/projects";
-import { downloadClosedProjectReport } from "@/components/project-closeout-report";
+import { downloadProjectReport } from "@/components/project-closeout-report";
 
 // ----- Constants -----------------------------------------------------------
 
@@ -1185,8 +1185,8 @@ function DetailInner({
                         size="sm"
                         onClick={async () => {
                           try {
-                            await downloadClosedProjectReport(row);
-                            toast({ title: "Closeout report downloaded" });
+                            await downloadProjectReport(row);
+                            toast({ title: "Project report downloaded" });
                           } catch (e) {
                             toast({
                               title: "Could not generate PDF",

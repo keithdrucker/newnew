@@ -54,8 +54,10 @@ import {
   Undo2,
   RotateCcw,
   History,
+  FileDown,
 } from "lucide-react";
 import { InitiativeWorkflowApproval } from "@/components/initiative-workflow-approval";
+import { downloadInitiativeReport } from "@/components/initiative-report";
 
 // ---------- Constants ----------
 
@@ -1027,19 +1029,40 @@ function DetailDialog({
                   {row.decidedByName ? ` by ${row.decidedByName}` : ""}.
                 </p>
               </div>
-              {row.createdProjectId && (
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
-                  asChild
                   size="sm"
                   variant="outline"
                   className="border-emerald-300"
+                  onClick={async () => {
+                    try {
+                      await downloadInitiativeReport(row);
+                      toast.success("Initiative report downloaded");
+                    } catch (e) {
+                      toast.error("Could not generate PDF", {
+                        description: (e as Error).message,
+                      });
+                    }
+                  }}
+                  data-testid="button-export-initiative-pdf"
                 >
-                  <Link href={`/projects`} data-testid="link-view-project">
-                    View Project
-                    <ExternalLink className="h-3 w-3 ml-1" />
-                  </Link>
+                  <FileDown className="h-3.5 w-3.5 mr-1" />
+                  Export PDF
                 </Button>
-              )}
+                {row.createdProjectId && (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-300"
+                  >
+                    <Link href={`/projects`} data-testid="link-view-project">
+                      View Project
+                      <ExternalLink className="h-3 w-3 ml-1" />
+                    </Link>
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           {status === "rejected_deferred" && (

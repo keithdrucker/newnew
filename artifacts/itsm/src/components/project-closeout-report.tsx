@@ -1,7 +1,7 @@
 // `@react-pdf/renderer` is a large dependency (~800KB gzip) used only
-// when an admin clicks "Export PDF" on a closed project. We pull it
-// in via `await import()` inside `downloadClosedProjectReport` so
-// the PDF runtime is excluded from the initial app bundle.
+// when an admin clicks "Export PDF" on a project. We pull it in via
+// `await import()` inside `downloadProjectReport` so the PDF runtime
+// is excluded from the initial app bundle.
 import type { ProjectDetail } from "@workspace/api-client-react";
 
 const PRIORITY_LABEL: Record<string, string> = {
@@ -9,6 +9,16 @@ const PRIORITY_LABEL: Record<string, string> = {
   medium: "Medium",
   high: "High",
   urgent: "Urgent",
+};
+
+const PHASE_LABEL: Record<string, string> = {
+  backlog_needs_assignment: "BACKLOG",
+  planning: "PLANNING",
+  in_progress: "IN PROGRESS",
+  on_hold: "ON HOLD",
+  completed: "COMPLETED",
+  closed: "CLOSED",
+  cancelled: "CANCELLED",
 };
 
 function fmtDate(value: string | null | undefined): string {
@@ -48,16 +58,17 @@ function safeFilenamePart(value: string): string {
     .slice(0, 80);
 }
 
-// Compute the YYYY-MM-DD stamp used in the download filename. Falls
-// back to today if `closedAt` is missing or unparseable so a bad row
-// can't throw inside the click handler.
-function fileDateStamp(closedAt: string | null | undefined): string {
-  let d = closedAt ? new Date(closedAt) : null;
+// Compute the YYYY-MM-DD stamp used in the download filename. Prefers
+// `closedAt`, then `completedAt`, then today, so a project exported
+// mid-flight still gets a sensible stamp.
+function fileDateStamp(project: ProjectDetail): string {
+  const candidate = project.closedAt ?? project.completedAt ?? null;
+  let d = candidate ? new Date(candidate) : null;
   if (!d || Number.isNaN(d.getTime())) d = new Date();
   return d.toISOString().slice(0, 10);
 }
 
-export async function downloadClosedProjectReport(
+export async function downloadProjectReport(
   project: ProjectDetail,
 ): Promise<void> {
   // Dynamic import keeps `@react-pdf/renderer` out of the main bundle.
@@ -120,7 +131,7 @@ export async function downloadClosedProjectReport(
       fontFamily: "Helvetica-Bold",
       letterSpacing: 0.6,
     },
-    badgeClosed: {
+    badgePrimary: {
       backgroundColor: "#0f172a",
       color: "#ffffff",
     },
@@ -176,6 +187,38 @@ export async function downloadClosedProjectReport(
       fontStyle: "italic",
       marginTop: 4,
     },
+    checklistHeader: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: "#cbd5e1",
+      paddingVertical: 4,
+      marginTop: 4,
+      marginBottom: 2,
+    },
+    checklistRow: {
+      flexDirection: "row",
+      paddingVertical: 4,
+      borderBottomWidth: 0.5,
+      borderBottomColor: "#e2e8f0",
+    },
+    colStatus: { width: "8%", fontSize: 11 },
+    colItem: { width: "52%", fontSize: 10, color: "#0f172a", paddingRight: 6 },
+    colItemDone: {
+      width: "52%",
+      fontSize: 10,
+      color: "#94a3b8",
+      paddingRight: 6,
+      textDecoration: "line-through",
+    },
+    colAssignee: { width: "22%", fontSize: 10, color: "#1f2937" },
+    colDue: { width: "18%", fontSize: 10, color: "#1f2937" },
+    colHeaderText: {
+      fontSize: 8,
+      color: "#64748b",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      fontFamily: "Helvetica-Bold",
+    },
     signatureRow: {
       flexDirection: "row",
       gap: 18,
@@ -227,11 +270,16 @@ export async function downloadClosedProjectReport(
     minute: "2-digit",
   });
 
+  const phaseLabel = PHASE_LABEL[project.phase] ?? project.phase.toUpperCase();
+  const checklist = project.checklist ?? [];
+  const checklistTotal = checklist.length;
+  const checklistDone = checklist.filter((c) => c.done).length;
+
   const doc = (
     <Document
-      title={`Project Closeout Report — ${project.name}`}
-      author={project.closedByName ?? "Harmony ITSM"}
-      subject="Project Closeout Report"
+      title={`Project Report — ${project.name}`}
+      author={project.closedByName ?? project.completedByName ?? "Harmony ITSM"}
+      subject="Project Report"
     >
       <Page size="LETTER" style={styles.page}>
         <View style={styles.topBar} fixed />
@@ -239,7 +287,7 @@ export async function downloadClosedProjectReport(
           <Text style={styles.brand}>
             {"<CLIENT NAME>"} · HARMONY ITSM
           </Text>
-          <Text style={styles.reportLabel}>PROJECT CLOSEOUT REPORT</Text>
+          <Text style={styles.reportLabel}>PROJECT REPORT</Text>
         </View>
         <Text style={styles.title}>{project.name}</Text>
         <Text style={styles.subtitle}>
@@ -248,7 +296,7 @@ export async function downloadClosedProjectReport(
             : "No description provided."}
         </Text>
         <View style={styles.badgeRow}>
-          <Text style={[styles.badge, styles.badgeClosed]}>CLOSED</Text>
+          <Text style={[styles.badge, styles.badgePrimary]}>{phaseLabel}</Text>
           {project.departmentName && (
             <Text style={[styles.badge, styles.badgeMuted]}>
               {project.departmentName}
@@ -262,8 +310,9 @@ export async function downloadClosedProjectReport(
           )}
         </View>
 
+        {/* ---- Backlog / project metadata ---- */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Project Details</Text>
+          <Text style={styles.sectionTitle}>Backlog · Project Details</Text>
         </View>
         <View style={styles.metaGrid}>
           <View style={styles.metaCell}>
@@ -300,32 +349,10 @@ export async function downloadClosedProjectReport(
           </View>
         </View>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Completion Summary</Text>
-        </View>
-        {project.completionSummary?.trim() ? (
-          <Text style={styles.body}>{project.completionSummary}</Text>
-        ) : (
-          <Text style={styles.bodyMuted}>
-            No completion summary recorded.
-          </Text>
-        )}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            Key Takeaway / Lessons Learned
-          </Text>
-        </View>
-        {project.keyTakeaway?.trim() ? (
-          <Text style={styles.body}>{project.keyTakeaway}</Text>
-        ) : (
-          <Text style={styles.bodyMuted}>No key takeaway recorded.</Text>
-        )}
-
         {project.goal?.trim() ? (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Original Goal</Text>
+              <Text style={styles.sectionTitle}>Goal</Text>
             </View>
             <Text style={styles.body}>{project.goal}</Text>
           </>
@@ -340,10 +367,117 @@ export async function downloadClosedProjectReport(
           </>
         ) : null}
 
-        <View style={styles.sectionHeader}>
+        {/* ---- Planning ---- */}
+        <View style={styles.sectionHeader} wrap={false}>
+          <Text style={styles.sectionTitle}>Planning · Notes</Text>
+        </View>
+        {project.planningNotes?.trim() ? (
+          <Text style={styles.body}>{project.planningNotes}</Text>
+        ) : (
+          <Text style={styles.bodyMuted}>No planning notes recorded.</Text>
+        )}
+
+        <View style={styles.sectionHeader} wrap={false}>
+          <Text style={styles.sectionTitle}>
+            Planning · Checklist ({checklistDone} / {checklistTotal} done)
+          </Text>
+        </View>
+        {checklistTotal === 0 ? (
+          <Text style={styles.bodyMuted}>No checklist items.</Text>
+        ) : (
+          <>
+            <View style={styles.checklistHeader} wrap={false}>
+              <Text style={[styles.colStatus, styles.colHeaderText]}> </Text>
+              <Text style={[styles.colItem, styles.colHeaderText]}>Item</Text>
+              <Text style={[styles.colAssignee, styles.colHeaderText]}>
+                Assignee
+              </Text>
+              <Text style={[styles.colDue, styles.colHeaderText]}>Due</Text>
+            </View>
+            {checklist.map((item, idx) => (
+              <View
+                style={styles.checklistRow}
+                key={item.id ?? idx}
+                wrap={false}
+              >
+                <Text style={styles.colStatus}>{item.done ? "☑" : "☐"}</Text>
+                <Text style={item.done ? styles.colItemDone : styles.colItem}>
+                  {item.text}
+                </Text>
+                <Text style={styles.colAssignee}>
+                  {fallback(item.assigneeName)}
+                </Text>
+                <Text style={styles.colDue}>{fmtDate(item.dueDate)}</Text>
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* ---- In Progress ---- */}
+        <View style={styles.sectionHeader} wrap={false}>
+          <Text style={styles.sectionTitle}>In Progress · Status Update</Text>
+        </View>
+        {project.statusUpdate?.trim() ? (
+          <Text style={styles.body}>{project.statusUpdate}</Text>
+        ) : (
+          <Text style={styles.bodyMuted}>No status update recorded.</Text>
+        )}
+
+        {/* ---- On Hold (only if applicable) ---- */}
+        {(project.holdReason?.trim() || project.holdNotes?.trim()) && (
+          <>
+            <View style={styles.sectionHeader} wrap={false}>
+              <Text style={styles.sectionTitle}>On Hold</Text>
+            </View>
+            {project.holdReason?.trim() ? (
+              <Text style={styles.body}>Reason: {project.holdReason}</Text>
+            ) : null}
+            {project.holdNotes?.trim() ? (
+              <Text style={styles.body}>{project.holdNotes}</Text>
+            ) : null}
+          </>
+        )}
+
+        {/* ---- Closeout ---- */}
+        <View style={styles.sectionHeader} wrap={false}>
+          <Text style={styles.sectionTitle}>
+            Project Closeout · Completion Summary
+          </Text>
+        </View>
+        {project.completionSummary?.trim() ? (
+          <Text style={styles.body}>{project.completionSummary}</Text>
+        ) : (
+          <Text style={styles.bodyMuted}>
+            No completion summary recorded.
+          </Text>
+        )}
+
+        <View style={styles.sectionHeader} wrap={false}>
+          <Text style={styles.sectionTitle}>
+            Project Closeout · Key Takeaway / Lessons Learned
+          </Text>
+        </View>
+        {project.keyTakeaway?.trim() ? (
+          <Text style={styles.body}>{project.keyTakeaway}</Text>
+        ) : (
+          <Text style={styles.bodyMuted}>No key takeaway recorded.</Text>
+        )}
+
+        {/* ---- Cancellation (only if applicable) ---- */}
+        {project.cancellationReason?.trim() && (
+          <>
+            <View style={styles.sectionHeader} wrap={false}>
+              <Text style={styles.sectionTitle}>Cancellation Reason</Text>
+            </View>
+            <Text style={styles.body}>{project.cancellationReason}</Text>
+          </>
+        )}
+
+        {/* ---- Sign-off ---- */}
+        <View style={styles.sectionHeader} wrap={false}>
           <Text style={styles.sectionTitle}>Sign-off</Text>
         </View>
-        <View style={styles.signatureRow}>
+        <View style={styles.signatureRow} wrap={false}>
           <View style={styles.signatureBlock}>
             <Text style={styles.signatureName}>
               {fallback(project.completedByName)}
@@ -382,9 +516,12 @@ export async function downloadClosedProjectReport(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Project-${safeFilenamePart(project.name) || project.id}-Closeout-${fileDateStamp(project.closedAt)}.pdf`;
+  a.download = `Project-${safeFilenamePart(project.name) || project.id}-Report-${fileDateStamp(project)}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
+
+// Backwards-compatible alias for the previous export name.
+export const downloadClosedProjectReport = downloadProjectReport;
