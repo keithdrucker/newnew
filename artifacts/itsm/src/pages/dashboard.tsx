@@ -60,8 +60,10 @@ import OperationalTasksDashboard from "@/pages/operational-tasks-dashboard";
 import TeamHealthDashboard from "@/pages/team-health-dashboard";
 import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import {
+  AssigneePicker,
   TimeRangePicker,
   resolveRange,
+  teamScopeSignature,
   DEFAULT_TIME_RANGE,
   type TimeRangeValue,
 } from "@/lib/dashboard-filters";
@@ -350,17 +352,27 @@ function aggregateTimeseries(
 }
 
 // Run the three dashboard queries in a way that respects the active
-// team scope:
-//   - single team selected → one query with departmentId
-//   - "All Teams"          → one query with no departmentId (server
-//                            returns the user's full accessible set)
-//   - explicit multi (2+   → one query per selected team in parallel,
-//     but not all)           merged client-side via aggregate*()
-// This keeps the dashboard honest when the user picks, say, two of
-// three teams: we don't quietly include the un-selected team.
+// team scope and the (multi-select) agent filter. We materialize the
+// active scope into a list of (teamId, agentId) pairs and either:
+//   - fire a single query when there's exactly 1 pair (the common
+//     case: one team or "All Teams" × no agent filter / 1 agent), or
+//   - fan out one query per pair via useQueries and aggregate the
+//     results client-side via aggregate*() for the multi case.
+//
+// Team dimension:
+//   - "All Teams"          → [undefined]    (server returns full set)
+//   - single team          → [singleId]
+//   - explicit multi (2+)  → [...selectedIds]
+// Agent dimension:
+//   - no agents selected   → [undefined]    (no agent filter)
+//   - 1+ agents selected   → [...assigneeIds]
+//
+// Cross-product fan-out matches the per-team aggregation already in
+// place: picking 2 teams × 3 agents fires 6 parallel queries and the
+// totals are the same as visiting each (team, agent) view in turn.
 function useScopedDashboard(
   rangeDays: number,
-  assigneeId: number | undefined,
+  assigneeIds: number[],
   // Custom range bounds. When both are set the server uses them as
   // the absolute window and `rangeDays` becomes a granularity hint
   // for timeseries bucketing. When undefined the server falls back
@@ -369,30 +381,53 @@ function useScopedDashboard(
   toIso: string | undefined,
 ) {
   const scope = useTeamScope();
-  const isMulti = !scope.isAll && !scope.single && scope.selectedIds.length > 1;
-  const enableSingle = !isMulti && !scope.loading;
-  const singleDeptId = scope.single ? scope.singleId ?? undefined : undefined;
 
-  // Single / All paths use the regular hooks. We disable them when we
-  // know we'll use the multi path so we don't fire duplicate requests
-  // mid-scope-change.
+  // Resolve the active team dimension. Empty list means "scope not
+  // ready yet" and we disable all queries.
+  const teamIds = useMemo<(number | undefined)[]>(() => {
+    if (scope.loading) return [];
+    if (scope.isAll) return [undefined];
+    if (scope.single) return scope.singleId != null ? [scope.singleId] : [];
+    return scope.selectedIds;
+  }, [scope]);
+
+  const agentIds = useMemo<(number | undefined)[]>(
+    () => (assigneeIds.length === 0 ? [undefined] : assigneeIds),
+    [assigneeIds],
+  );
+
+  const pairs = useMemo(
+    () =>
+      teamIds.flatMap((teamId) =>
+        agentIds.map((agentId) => ({ teamId, agentId })),
+      ),
+    [teamIds, agentIds],
+  );
+
+  const isMulti = pairs.length > 1;
+  const isSingle = pairs.length === 1;
+  const singlePair = isSingle ? pairs[0] : undefined;
+
+  // Single path: one query per endpoint. The hooks are always
+  // declared (React hook order) and gated via `enabled` so they
+  // don't fire when the multi path is active.
   const singleOverviewParams = {
-    departmentId: singleDeptId,
-    assigneeId,
+    departmentId: singlePair?.teamId,
+    assigneeId: singlePair?.agentId,
     rangeDays,
     from: fromIso,
     to: toIso,
   };
   const singleTimeseriesParams = {
-    departmentId: singleDeptId,
-    assigneeId,
+    departmentId: singlePair?.teamId,
+    assigneeId: singlePair?.agentId,
     rangeDays,
     from: fromIso,
     to: toIso,
   };
   const singleBreachedParams = {
-    departmentId: singleDeptId,
-    assigneeId,
+    departmentId: singlePair?.teamId,
+    assigneeId: singlePair?.agentId,
     rangeDays,
     from: fromIso,
     to: toIso,
@@ -400,34 +435,31 @@ function useScopedDashboard(
   const singleOverview = useGetDashboardOverview(singleOverviewParams, {
     query: {
       queryKey: getGetDashboardOverviewQueryKey(singleOverviewParams),
-      enabled: enableSingle,
+      enabled: isSingle,
     },
   });
   const singleTimeseries = useGetDashboardTimeseries(singleTimeseriesParams, {
     query: {
       queryKey: getGetDashboardTimeseriesQueryKey(singleTimeseriesParams),
-      enabled: enableSingle,
+      enabled: isSingle,
     },
   });
   const singleBreached = useGetBreachedTickets(singleBreachedParams, {
     query: {
       queryKey: getGetBreachedTicketsQueryKey(singleBreachedParams),
-      enabled: enableSingle,
+      enabled: isSingle,
     },
   });
 
-  // Multi path: parallel per-team queries via useQueries. We always
+  // Multi path: parallel per-pair queries via useQueries. We always
   // declare these (even when not multi) so React's hook order stays
-  // stable; they just resolve to empty arrays when disabled.
-  // The assignee filter is threaded into each per-team query so the
-  // aggregated totals match what the user would see if they switched
-  // to a single team.
-  const multiTeamIds = isMulti ? scope.selectedIds : [];
+  // stable; they're empty arrays when disabled.
+  const multiPairs = isMulti ? pairs : [];
   const overviewQueries = useQueries({
-    queries: multiTeamIds.map((teamId) => {
+    queries: multiPairs.map(({ teamId, agentId }) => {
       const p = {
         departmentId: teamId,
-        assigneeId,
+        assigneeId: agentId,
         rangeDays,
         from: fromIso,
         to: toIso,
@@ -440,10 +472,10 @@ function useScopedDashboard(
     }),
   });
   const timeseriesQueries = useQueries({
-    queries: multiTeamIds.map((teamId) => {
+    queries: multiPairs.map(({ teamId, agentId }) => {
       const p = {
         departmentId: teamId,
-        assigneeId,
+        assigneeId: agentId,
         rangeDays,
         from: fromIso,
         to: toIso,
@@ -456,10 +488,10 @@ function useScopedDashboard(
     }),
   });
   const breachedQueries = useQueries({
-    queries: multiTeamIds.map((teamId) => {
+    queries: multiPairs.map(({ teamId, agentId }) => {
       const p = {
         departmentId: teamId,
-        assigneeId,
+        assigneeId: agentId,
         rangeDays,
         from: fromIso,
         to: toIso,
@@ -493,6 +525,20 @@ function useScopedDashboard(
     return breachedQueries.flatMap((q) => q.data ?? []);
   }, [isMulti, breachedQueries]);
 
+  // Scope is still bootstrapping (or has zero pairs for any other
+  // reason). Force a loading state instead of falling through to the
+  // disabled single-query path, where react-query would otherwise
+  // surface stale cached data for the previous (departmentId,
+  // assigneeId) key during the brief window before scope resolves.
+  if (scope.loading || pairs.length === 0) {
+    return {
+      overview: undefined as DashboardOverview | undefined,
+      timeseries: undefined as DashboardTimeseries | undefined,
+      breached: [] as Ticket[],
+      isOverviewLoading: true,
+    };
+  }
+
   if (isMulti) {
     const anyOverviewLoading = overviewQueries.some((q) => q.isLoading);
     return {
@@ -514,7 +560,8 @@ function useScopedDashboard(
 function TicketsDashboardContent() {
   const scope = useTeamScope();
   const [range, setRange] = useState<TimeRangeValue>(DEFAULT_TIME_RANGE);
-  const [assigneeId, setAssigneeId] = useState<string>("all");
+  // Multi-select agent filter. Empty array = "All Agents" (no filter).
+  const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
 
   // Translate the shared TimeRangeValue into the params the dashboard
   // endpoints understand:
@@ -556,8 +603,6 @@ function TicketsDashboardContent() {
     };
   }, [range]);
 
-  const queryAssigneeId = assigneeId === "all" ? undefined : Number(assigneeId);
-
   // The agent picker is always visible. When a single team is in
   // scope we narrow the agent list to that team; for multi/all we
   // fall back to every agent the API exposes, so the picker is
@@ -570,18 +615,20 @@ function TicketsDashboardContent() {
     },
   });
 
-  // Reset the agent filter whenever the team scope narrows or
-  // broadens. Without this, picking an agent on Team A and then
-  // switching to Team B would silently keep the old filter and
-  // could produce empty result sets if that agent isn't on Team B.
+  // Reset the agent filter whenever the team scope changes in any
+  // meaningful way. We watch the full scope signature (not just the
+  // single-team id) so transitions like "All Teams" → an explicit
+  // multi-team subset also reset, instead of silently leaking the
+  // previously selected agent.
+  const scopeSig = teamScopeSignature(scope);
   useEffect(() => {
-    setAssigneeId("all");
-  }, [queryDeptId]);
+    setAssigneeIds([]);
+  }, [scopeSig]);
 
   const { overview, timeseries, breached, isOverviewLoading } =
     useScopedDashboard(
       queryParams.rangeDays,
-      queryAssigneeId,
+      assigneeIds,
       queryParams.from,
       queryParams.to,
     );
@@ -632,28 +679,12 @@ function TicketsDashboardContent() {
           {/* Always render the agent picker. The agent list is narrowed
               to the active team when one is in scope, and falls back
               to every agent when scope is multi or "All Teams". */}
-          <Select value={assigneeId} onValueChange={setAssigneeId}>
-            <SelectTrigger
-              className="w-[200px]"
-              data-testid="select-assignee"
-            >
-              <SelectValue placeholder="All Agents" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Agents</SelectItem>
-              {agents && agents.length > 0 ? (
-                agents.map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </SelectItem>
-                ))
-              ) : (
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                  No agents available
-                </div>
-              )}
-            </SelectContent>
-          </Select>
+          <AssigneePicker
+            selectedIds={assigneeIds}
+            onChange={setAssigneeIds}
+            agents={agents ?? []}
+            testId="select-tickets-dashboard-assignee"
+          />
           <TimeRangePicker value={range} onChange={setRange} />
         </div>
       </div>

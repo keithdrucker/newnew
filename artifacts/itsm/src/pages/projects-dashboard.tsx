@@ -68,7 +68,7 @@ function formatDue(iso: string | Date | null | undefined) {
 export default function ProjectsDashboard() {
   const scope = useTeamScope();
   const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
-  const filters = useDashboardFilters(queryDeptId);
+  const filters = useDashboardFilters();
 
   const projectsParams = { departmentId: queryDeptId };
   const { data: projects, isLoading, isError, error } = useListProjects(
@@ -100,8 +100,11 @@ export default function ProjectsDashboard() {
       list = filterByTeamScope(list, scope);
     }
     list = list.filter((p) => isInRange(p.updatedAt, filters.bounds));
-    if (filters.assigneeFilter != null) {
-      list = list.filter((p) => p.ownerId === filters.assigneeFilter);
+    const assigneeSet = filters.assigneeFilter;
+    if (assigneeSet) {
+      list = list.filter(
+        (p) => p.ownerId != null && assigneeSet.has(p.ownerId),
+      );
     }
     return list;
   }, [projects, scope, filters.bounds, filters.assigneeFilter]);
@@ -196,8 +199,8 @@ export default function ProjectsDashboard() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <AssigneePicker
-            value={filters.assigneeId}
-            onChange={filters.setAssigneeId}
+            selectedIds={filters.assigneeIds}
+            onChange={filters.setAssigneeIds}
             agents={agents}
             testId="select-projects-dashboard-assignee"
           />

@@ -58,7 +58,7 @@ function formatDate(iso: string | Date | null | undefined) {
 export default function InitiativesDashboard() {
   const scope = useTeamScope();
   const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
-  const filters = useDashboardFilters(queryDeptId);
+  const filters = useDashboardFilters();
 
   const params = queryDeptId != null ? { departmentId: queryDeptId } : {};
   const {
@@ -92,8 +92,11 @@ export default function InitiativesDashboard() {
       list = filterByTeamScope(list, scope);
     }
     list = list.filter((i) => isInRange(i.updatedAt, filters.bounds));
-    if (filters.assigneeFilter != null) {
-      list = list.filter((i) => i.assigneeId === filters.assigneeFilter);
+    const assigneeSet = filters.assigneeFilter;
+    if (assigneeSet) {
+      list = list.filter(
+        (i) => i.assigneeId != null && assigneeSet.has(i.assigneeId),
+      );
     }
     return list;
   }, [initiatives, scope, filters.bounds, filters.assigneeFilter]);
@@ -179,8 +182,8 @@ export default function InitiativesDashboard() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <AssigneePicker
-            value={filters.assigneeId}
-            onChange={filters.setAssigneeId}
+            selectedIds={filters.assigneeIds}
+            onChange={filters.setAssigneeIds}
             agents={agents}
             testId="select-initiatives-dashboard-assignee"
           />

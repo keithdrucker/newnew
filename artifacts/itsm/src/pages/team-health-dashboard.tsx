@@ -76,7 +76,7 @@ export default function TeamHealthDashboard() {
   // pull the user's full accessible set and narrow client-side via
   // filterByTeamScope.
   const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
-  const filters = useDashboardFilters(queryDeptId);
+  const filters = useDashboardFilters();
 
   const ticketParams = queryDeptId != null ? { departmentId: queryDeptId } : {};
   const opsParams = queryDeptId != null ? { departmentId: queryDeptId } : {};

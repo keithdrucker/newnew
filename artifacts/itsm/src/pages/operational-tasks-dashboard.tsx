@@ -90,7 +90,7 @@ export default function OperationalTasksDashboard() {
   // multi-team fetch the user's full accessible set then we narrow
   // client-side via filterByTeamScope.
   const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
-  const filters = useDashboardFilters(queryDeptId);
+  const filters = useDashboardFilters();
   const params =
     queryDeptId != null ? { departmentId: queryDeptId } : {};
   const {
@@ -125,8 +125,9 @@ export default function OperationalTasksDashboard() {
       list = filterByTeamScope(list, scope);
     }
     list = list.filter((t) => isInRange(t.updatedAt, filters.bounds));
-    if (filters.assigneeFilter != null) {
-      list = list.filter((t) => t.ownerId === filters.assigneeFilter);
+    const assigneeSet = filters.assigneeFilter;
+    if (assigneeSet) {
+      list = list.filter((t) => t.ownerId != null && assigneeSet.has(t.ownerId));
     }
     return list;
   }, [tasks, scope, filters.bounds, filters.assigneeFilter]);
@@ -218,8 +219,8 @@ export default function OperationalTasksDashboard() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <AssigneePicker
-            value={filters.assigneeId}
-            onChange={filters.setAssigneeId}
+            selectedIds={filters.assigneeIds}
+            onChange={filters.setAssigneeIds}
             agents={agents}
             testId="select-ops-tasks-dashboard-assignee"
           />

@@ -3,6 +3,7 @@ import {
   useListAgents,
   getListAgentsQueryKey,
 } from "@workspace/api-client-react";
+import { useTeamScope, type TeamScope } from "@/lib/team-scope";
 import {
   Select,
   SelectContent,
@@ -10,10 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { Check, ChevronDown, Users, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Shared time-range model used by every workspace sub-dashboard
 // (Tickets uses its own range type because it talks to a server-aggregated
@@ -194,8 +203,6 @@ export function TimeRangePicker({
 //   narrowed to that team's agents.
 // - When it's undefined (multi-team or "All Teams"), we fall back to
 //   every agent the API returns, so the picker is always usable.
-// Returning `"all"` as a sentinel from the picker lets callers
-// disambiguate "no filter" from a real numeric agent id.
 export function useAgentOptions(departmentId: number | undefined) {
   const params = departmentId != null ? { departmentId } : {};
   const { data: agents } = useListAgents(params, {
@@ -206,68 +213,175 @@ export function useAgentOptions(departmentId: number | undefined) {
   return agents ?? [];
 }
 
+// Multi-select agent picker. Empty selection = "All Agents" (no
+// filter), exactly mirroring the team-scope multi-select pattern in
+// <TeamScopeSelector />. The trigger label collapses to:
+//   - "All Agents"          when nothing is selected
+//   - the agent's name      when exactly one is selected
+//   - "{N} agents"          when 2+ are selected
+// A "Reset" affordance inside the popover snaps back to "All Agents"
+// — surfaced only when a narrowed selection is active so it doesn't
+// distract in the default state.
 export function AssigneePicker({
-  value,
+  selectedIds,
   onChange,
   agents,
   testId,
 }: {
-  value: string;
-  onChange: (next: string) => void;
+  selectedIds: number[];
+  onChange: (next: number[]) => void;
   agents: Array<{ id: number; name: string }>;
   testId?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const isAll = selectedIds.length === 0;
+
+  const triggerLabel = (() => {
+    if (isAll) return "All Agents";
+    if (selectedIds.length === 1) {
+      const a = agents.find((x) => x.id === selectedIds[0]);
+      return a?.name ?? "1 agent";
+    }
+    return `${selectedIds.length} agents`;
+  })();
+
+  function toggle(id: number) {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter((x) => x !== id));
+    } else {
+      onChange([...selectedIds, id]);
+    }
+  }
+
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger
-        className="w-[200px]"
-        data-testid={testId ?? "select-assignee"}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "w-[200px] flex items-center gap-2 rounded-md border border-input bg-background px-3 h-9",
+            "text-sm text-left text-foreground hover:bg-accent/50 transition-colors",
+          )}
+          data-testid={testId ?? "select-assignee"}
+        >
+          <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="truncate flex-1">{triggerLabel}</span>
+          <ChevronDown className="h-3.5 w-3.5 opacity-60 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-64 p-2"
+        data-testid={`${testId ?? "select-assignee"}-popover`}
       >
-        <SelectValue placeholder="All Agents" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All Agents</SelectItem>
-        {agents.length > 0 ? (
-          agents.map((a) => (
-            <SelectItem key={a.id} value={String(a.id)}>
-              {a.name}
-            </SelectItem>
-          ))
-        ) : (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            No agents in this team
-          </div>
-        )}
-      </SelectContent>
-    </Select>
+        <div className="flex items-center justify-between px-2 py-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Filter by Agent
+          </span>
+          {!isAll && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="inline-flex items-center gap-1 rounded text-[10px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+              data-testid={`${testId ?? "select-assignee"}-reset`}
+            >
+              <X className="h-3 w-3" />
+              Reset
+            </button>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full justify-between h-8"
+          onClick={() => {
+            onChange([]);
+            setOpen(false);
+          }}
+          data-testid={`${testId ?? "select-assignee"}-all`}
+        >
+          <span className="flex items-center gap-2">
+            <Users className="h-3.5 w-3.5" />
+            All Agents
+          </span>
+          {isAll && <Check className="h-4 w-4 text-emerald-500" />}
+        </Button>
+        <Separator className="my-1" />
+        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
+          {agents.length === 0 ? (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">
+              No agents in this team
+            </div>
+          ) : (
+            agents.map((a) => {
+              const checked = selectedIds.includes(a.id);
+              return (
+                <label
+                  key={a.id}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-2 h-8 text-sm cursor-pointer transition-colors",
+                    "hover:bg-muted",
+                  )}
+                  data-testid={`${testId ?? "select-assignee"}-option-${a.id}`}
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={() => toggle(a.id)}
+                  />
+                  <span className="truncate flex-1">{a.name}</span>
+                </label>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
+}
+
+// Stable string fingerprint of the active team scope. Used as a
+// `useEffect` dep so an agent filter is reset whenever scope changes
+// in *any* meaningful way — including All↔explicit-multi transitions
+// where the single-team id stays `undefined` and would otherwise miss
+// the reset (e.g. agent picked on "All Teams" leaking into a narrowed
+// 2-team subset).
+export function teamScopeSignature(scope: TeamScope): string {
+  if (scope.loading) return "loading";
+  if (scope.isAll) return "all";
+  return `ids:${[...scope.selectedIds].sort((a, b) => a - b).join(",")}`;
 }
 
 // Convenience hook that bundles the shared filter state used by every
 // list-style dashboard (operational tasks, initiatives, projects).
 // The team-scope state lives in <TeamScopeProvider> already, so this
-// only owns the time-range and assignee filter.
+// only owns the time-range and assignee filter, and watches the full
+// scope signature so the assignee filter resets on any scope change.
 //
-// Pass the current single-team id (or `undefined` when scope is "all"
-// or multi-team) so the hook can reset the assignee picker whenever
-// the team changes — otherwise an agent selected on Team A would
-// silently keep filtering after the user switches to Team B and
-// produce empty result sets.
-export function useDashboardFilters(scopedDeptId?: number) {
+// Multi-select model: `assigneeIds` is an array of agent IDs. An
+// empty array means "All Agents" (no filter applied). `assigneeFilter`
+// is a Set for O(1) lookups in list filters, or `null` when no agent
+// filter is active.
+export function useDashboardFilters() {
+  const scope = useTeamScope();
+  const scopeSig = teamScopeSignature(scope);
   const [range, setRange] = useState<TimeRangeValue>(DEFAULT_TIME_RANGE);
-  const [assigneeId, setAssigneeId] = useState<string>("all");
+  const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
   useEffect(() => {
-    setAssigneeId("all");
-  }, [scopedDeptId]);
+    setAssigneeIds([]);
+  }, [scopeSig]);
   const bounds = useMemo(() => resolveRange(range), [range]);
-  const assigneeFilter = assigneeId === "all" ? undefined : Number(assigneeId);
+  const assigneeFilter = useMemo<Set<number> | null>(() => {
+    if (assigneeIds.length === 0) return null;
+    return new Set(assigneeIds);
+  }, [assigneeIds]);
   return {
     range,
     setRange,
     bounds,
     rangeLabel: rangeLabel(range),
-    assigneeId,
-    setAssigneeId,
+    assigneeIds,
+    setAssigneeIds,
     assigneeFilter,
   };
 }
