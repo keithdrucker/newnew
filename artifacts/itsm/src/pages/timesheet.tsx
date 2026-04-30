@@ -206,7 +206,7 @@ export default function Timesheet() {
   // View mode toggle. Week view shows a paired Mon–Sun grid (current
   // behavior). Day view drills down to a single day with prev/next
   // navigation so users can audit one shift at a time.
-  const [viewMode, setViewMode] = useState<"day" | "week">("week");
+  const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [selectedDay, setSelectedDay] = useState<Date>(() =>
     startOfDay(new Date()),
   );
