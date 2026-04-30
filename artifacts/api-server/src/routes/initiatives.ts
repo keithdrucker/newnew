@@ -20,6 +20,7 @@ import {
 } from "@workspace/api-zod";
 import { getCurrentUser, type SessionUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
+import { fetchInitiativeWorkflowRuns } from "./workflows";
 
 const router: IRouter = Router();
 
@@ -166,6 +167,7 @@ async function hydrate(rows: InitiativeRow[]) {
       ].filter((u): u is number => u != null),
     ),
   );
+  const workflowRunsByInit = await fetchInitiativeWorkflowRuns(ids);
   const depts = deptIds.length
     ? await db
         .select()
@@ -247,6 +249,7 @@ async function hydrate(rows: InitiativeRow[]) {
       changedByName: nameOf(e.changedById),
       changedAt: e.changedAt.toISOString(),
     })),
+    workflowRuns: workflowRunsByInit.get(r.id) ?? [],
   }));
 }
 

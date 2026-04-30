@@ -55,6 +55,7 @@ import {
   RotateCcw,
   History,
 } from "lucide-react";
+import { InitiativeWorkflowApproval } from "@/components/initiative-workflow-approval";
 
 // ---------- Constants ----------
 
@@ -885,6 +886,34 @@ function DetailDialog({
               <UnderReviewView row={row} />
             )}
           </Section>
+
+          {/* Approval workflow runs (Initiatives module) */}
+          {(status === "under_review" ||
+            status === "approved" ||
+            status === "rejected_deferred") && (
+            <Section
+              title="Approval Workflow"
+              defaultOpen={
+                status === "under_review" &&
+                ((row.workflowRuns ?? []).length > 0)
+              }
+              badge={
+                (row.workflowRuns ?? []).length > 0 ? (
+                  <Badge
+                    variant="outline"
+                    className="text-[10.5px] font-normal"
+                  >
+                    {(row.workflowRuns ?? []).length}{" "}
+                    {(row.workflowRuns ?? []).length === 1
+                      ? "run"
+                      : "runs"}
+                  </Badge>
+                ) : null
+              }
+            >
+              <InitiativeWorkflowApproval row={row} />
+            </Section>
+          )}
 
           {/* Final decision (only meaningful in Under Review or post-decision) */}
           {(status === "under_review" ||

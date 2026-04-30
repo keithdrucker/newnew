@@ -20,6 +20,7 @@ import {
   Trash2,
   Users,
   ShieldAlert,
+  Workflow as WorkflowIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/components/providers/session-provider";
@@ -59,7 +60,7 @@ function AutomationCard() {
           Defaults applied to new tickets and AI categorization.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-2">
         <Link
           href="/settings/risk-rules"
           className="group flex items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm hover-elevate active-elevate-2"
@@ -72,6 +73,22 @@ function AutomationCard() {
             <p className="font-medium">Risk rules</p>
             <p className="text-xs text-muted-foreground">
               Map ticket categories to a default risk level
+            </p>
+          </div>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
+        </Link>
+        <Link
+          href="/settings/workflows"
+          className="group flex items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm hover-elevate active-elevate-2"
+          data-testid="link-settings-workflows"
+        >
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted/60 shrink-0 text-sky-600">
+            <WorkflowIcon className="h-4 w-4" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">Workflows</p>
+            <p className="text-xs text-muted-foreground">
+              Define WHEN / IF / THEN rules and approval chains across modules
             </p>
           </div>
           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />

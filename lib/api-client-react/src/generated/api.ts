@@ -23,6 +23,7 @@ import type {
   Application,
   Asset,
   BoardMember,
+  CancelWorkflowRunInput,
   CreateAgentInput,
   CreateApplicationInput,
   CreateAssetInput,
@@ -38,6 +39,7 @@ import type {
   CreateTicketViewInput,
   CreateTimeEntryInput,
   CreateVendorInput,
+  CreateWorkflowInput,
   DashboardOverview,
   DashboardTimeseries,
   Department,
@@ -61,12 +63,14 @@ import type {
   ListTicketsParams,
   ListTimeEntriesParams,
   ListVendorsParams,
+  ListWorkflowsParams,
   Person,
   ProjectComment,
   ProjectDetail,
   ProjectSummary,
   RiskRule,
   Session,
+  StartWorkflowRunInput,
   SwitchSessionInput,
   Ticket,
   TicketComment,
@@ -91,7 +95,12 @@ import type {
   UpdateTicketViewInput,
   UpdateTimeEntryInput,
   UpdateVendorInput,
+  UpdateWorkflowInput,
   Vendor,
+  Workflow,
+  WorkflowDetail,
+  WorkflowRun,
+  WorkflowRunDecisionInput,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -7117,3 +7126,878 @@ export function useGetBreachedTickets<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List workflows (admin / agent)
+ */
+export const getListWorkflowsUrl = (params?: ListWorkflowsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/workflows?${stringifiedParams}`
+    : `/api/workflows`;
+};
+
+export const listWorkflows = async (
+  params?: ListWorkflowsParams,
+  options?: RequestInit,
+): Promise<Workflow[]> => {
+  return customFetch<Workflow[]>(getListWorkflowsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListWorkflowsQueryKey = (params?: ListWorkflowsParams) => {
+  return [`/api/workflows`, ...(params ? [params] : [])] as const;
+};
+
+export const getListWorkflowsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listWorkflows>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListWorkflowsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWorkflows>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListWorkflowsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkflows>>> = ({
+    signal,
+  }) => listWorkflows(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listWorkflows>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListWorkflowsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listWorkflows>>
+>;
+export type ListWorkflowsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List workflows (admin / agent)
+ */
+
+export function useListWorkflows<
+  TData = Awaited<ReturnType<typeof listWorkflows>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListWorkflowsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWorkflows>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListWorkflowsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a workflow definition (admin only)
+ */
+export const getCreateWorkflowUrl = () => {
+  return `/api/workflows`;
+};
+
+export const createWorkflow = async (
+  createWorkflowInput: CreateWorkflowInput,
+  options?: RequestInit,
+): Promise<Workflow> => {
+  return customFetch<Workflow>(getCreateWorkflowUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createWorkflowInput),
+  });
+};
+
+export const getCreateWorkflowMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createWorkflow>>,
+    TError,
+    { data: BodyType<CreateWorkflowInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createWorkflow>>,
+  TError,
+  { data: BodyType<CreateWorkflowInput> },
+  TContext
+> => {
+  const mutationKey = ["createWorkflow"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createWorkflow>>,
+    { data: BodyType<CreateWorkflowInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createWorkflow(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateWorkflowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createWorkflow>>
+>;
+export type CreateWorkflowMutationBody = BodyType<CreateWorkflowInput>;
+export type CreateWorkflowMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a workflow definition (admin only)
+ */
+export const useCreateWorkflow = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createWorkflow>>,
+    TError,
+    { data: BodyType<CreateWorkflowInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createWorkflow>>,
+  TError,
+  { data: BodyType<CreateWorkflowInput> },
+  TContext
+> => {
+  return useMutation(getCreateWorkflowMutationOptions(options));
+};
+
+/**
+ * @summary Get a single workflow with its audit events
+ */
+export const getGetWorkflowUrl = (id: number) => {
+  return `/api/workflows/${id}`;
+};
+
+export const getWorkflow = async (
+  id: number,
+  options?: RequestInit,
+): Promise<WorkflowDetail> => {
+  return customFetch<WorkflowDetail>(getGetWorkflowUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWorkflowQueryKey = (id: number) => {
+  return [`/api/workflows/${id}`] as const;
+};
+
+export const getGetWorkflowQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWorkflow>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWorkflow>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWorkflowQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkflow>>> = ({
+    signal,
+  }) => getWorkflow(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWorkflow>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWorkflowQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWorkflow>>
+>;
+export type GetWorkflowQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a single workflow with its audit events
+ */
+
+export function useGetWorkflow<
+  TData = Awaited<ReturnType<typeof getWorkflow>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWorkflow>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWorkflowQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a workflow definition (admin only)
+ */
+export const getUpdateWorkflowUrl = (id: number) => {
+  return `/api/workflows/${id}`;
+};
+
+export const updateWorkflow = async (
+  id: number,
+  updateWorkflowInput: UpdateWorkflowInput,
+  options?: RequestInit,
+): Promise<Workflow> => {
+  return customFetch<Workflow>(getUpdateWorkflowUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateWorkflowInput),
+  });
+};
+
+export const getUpdateWorkflowMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateWorkflow>>,
+    TError,
+    { id: number; data: BodyType<UpdateWorkflowInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateWorkflow>>,
+  TError,
+  { id: number; data: BodyType<UpdateWorkflowInput> },
+  TContext
+> => {
+  const mutationKey = ["updateWorkflow"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateWorkflow>>,
+    { id: number; data: BodyType<UpdateWorkflowInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateWorkflow(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateWorkflowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateWorkflow>>
+>;
+export type UpdateWorkflowMutationBody = BodyType<UpdateWorkflowInput>;
+export type UpdateWorkflowMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a workflow definition (admin only)
+ */
+export const useUpdateWorkflow = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateWorkflow>>,
+    TError,
+    { id: number; data: BodyType<UpdateWorkflowInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateWorkflow>>,
+  TError,
+  { id: number; data: BodyType<UpdateWorkflowInput> },
+  TContext
+> => {
+  return useMutation(getUpdateWorkflowMutationOptions(options));
+};
+
+/**
+ * @summary Delete a workflow definition (admin only)
+ */
+export const getDeleteWorkflowUrl = (id: number) => {
+  return `/api/workflows/${id}`;
+};
+
+export const deleteWorkflow = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteWorkflowUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteWorkflowMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteWorkflow>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteWorkflow>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteWorkflow"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteWorkflow>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteWorkflow(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteWorkflowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteWorkflow>>
+>;
+
+export type DeleteWorkflowMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a workflow definition (admin only)
+ */
+export const useDeleteWorkflow = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteWorkflow>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteWorkflow>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteWorkflowMutationOptions(options));
+};
+
+/**
+ * @summary List runs for a workflow
+ */
+export const getListWorkflowRunsUrl = (id: number) => {
+  return `/api/workflows/${id}/runs`;
+};
+
+export const listWorkflowRuns = async (
+  id: number,
+  options?: RequestInit,
+): Promise<WorkflowRun[]> => {
+  return customFetch<WorkflowRun[]>(getListWorkflowRunsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListWorkflowRunsQueryKey = (id: number) => {
+  return [`/api/workflows/${id}/runs`] as const;
+};
+
+export const getListWorkflowRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listWorkflowRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWorkflowRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListWorkflowRunsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listWorkflowRuns>>
+  > = ({ signal }) => listWorkflowRuns(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listWorkflowRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListWorkflowRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listWorkflowRuns>>
+>;
+export type ListWorkflowRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List runs for a workflow
+ */
+
+export function useListWorkflowRuns<
+  TData = Awaited<ReturnType<typeof listWorkflowRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWorkflowRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListWorkflowRunsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Start an approval workflow run on an initiative (admin only)
+ */
+export const getStartInitiativeWorkflowRunUrl = (id: number) => {
+  return `/api/initiatives/${id}/workflow-runs`;
+};
+
+export const startInitiativeWorkflowRun = async (
+  id: number,
+  startWorkflowRunInput: StartWorkflowRunInput,
+  options?: RequestInit,
+): Promise<WorkflowRun> => {
+  return customFetch<WorkflowRun>(getStartInitiativeWorkflowRunUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(startWorkflowRunInput),
+  });
+};
+
+export const getStartInitiativeWorkflowRunMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startInitiativeWorkflowRun>>,
+    TError,
+    { id: number; data: BodyType<StartWorkflowRunInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startInitiativeWorkflowRun>>,
+  TError,
+  { id: number; data: BodyType<StartWorkflowRunInput> },
+  TContext
+> => {
+  const mutationKey = ["startInitiativeWorkflowRun"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startInitiativeWorkflowRun>>,
+    { id: number; data: BodyType<StartWorkflowRunInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return startInitiativeWorkflowRun(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartInitiativeWorkflowRunMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startInitiativeWorkflowRun>>
+>;
+export type StartInitiativeWorkflowRunMutationBody =
+  BodyType<StartWorkflowRunInput>;
+export type StartInitiativeWorkflowRunMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Start an approval workflow run on an initiative (admin only)
+ */
+export const useStartInitiativeWorkflowRun = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startInitiativeWorkflowRun>>,
+    TError,
+    { id: number; data: BodyType<StartWorkflowRunInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startInitiativeWorkflowRun>>,
+  TError,
+  { id: number; data: BodyType<StartWorkflowRunInput> },
+  TContext
+> => {
+  return useMutation(getStartInitiativeWorkflowRunMutationOptions(options));
+};
+
+/**
+ * @summary Fetch a single workflow run (with approver decisions)
+ */
+export const getGetWorkflowRunUrl = (id: number) => {
+  return `/api/workflow-runs/${id}`;
+};
+
+export const getWorkflowRun = async (
+  id: number,
+  options?: RequestInit,
+): Promise<WorkflowRun> => {
+  return customFetch<WorkflowRun>(getGetWorkflowRunUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWorkflowRunQueryKey = (id: number) => {
+  return [`/api/workflow-runs/${id}`] as const;
+};
+
+export const getGetWorkflowRunQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWorkflowRun>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWorkflowRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWorkflowRunQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkflowRun>>> = ({
+    signal,
+  }) => getWorkflowRun(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWorkflowRun>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWorkflowRunQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWorkflowRun>>
+>;
+export type GetWorkflowRunQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Fetch a single workflow run (with approver decisions)
+ */
+
+export function useGetWorkflowRun<
+  TData = Awaited<ReturnType<typeof getWorkflowRun>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWorkflowRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWorkflowRunQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Record an approver decision on a workflow run
+ */
+export const getSubmitWorkflowRunDecisionUrl = (id: number) => {
+  return `/api/workflow-runs/${id}/decision`;
+};
+
+export const submitWorkflowRunDecision = async (
+  id: number,
+  workflowRunDecisionInput: WorkflowRunDecisionInput,
+  options?: RequestInit,
+): Promise<WorkflowRun> => {
+  return customFetch<WorkflowRun>(getSubmitWorkflowRunDecisionUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(workflowRunDecisionInput),
+  });
+};
+
+export const getSubmitWorkflowRunDecisionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitWorkflowRunDecision>>,
+    TError,
+    { id: number; data: BodyType<WorkflowRunDecisionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitWorkflowRunDecision>>,
+  TError,
+  { id: number; data: BodyType<WorkflowRunDecisionInput> },
+  TContext
+> => {
+  const mutationKey = ["submitWorkflowRunDecision"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitWorkflowRunDecision>>,
+    { id: number; data: BodyType<WorkflowRunDecisionInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return submitWorkflowRunDecision(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitWorkflowRunDecisionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitWorkflowRunDecision>>
+>;
+export type SubmitWorkflowRunDecisionMutationBody =
+  BodyType<WorkflowRunDecisionInput>;
+export type SubmitWorkflowRunDecisionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record an approver decision on a workflow run
+ */
+export const useSubmitWorkflowRunDecision = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitWorkflowRunDecision>>,
+    TError,
+    { id: number; data: BodyType<WorkflowRunDecisionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitWorkflowRunDecision>>,
+  TError,
+  { id: number; data: BodyType<WorkflowRunDecisionInput> },
+  TContext
+> => {
+  return useMutation(getSubmitWorkflowRunDecisionMutationOptions(options));
+};
+
+/**
+ * @summary Cancel a pending workflow run (admin starter only)
+ */
+export const getCancelWorkflowRunUrl = (id: number) => {
+  return `/api/workflow-runs/${id}/cancel`;
+};
+
+export const cancelWorkflowRun = async (
+  id: number,
+  cancelWorkflowRunInput?: CancelWorkflowRunInput,
+  options?: RequestInit,
+): Promise<WorkflowRun> => {
+  return customFetch<WorkflowRun>(getCancelWorkflowRunUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(cancelWorkflowRunInput),
+  });
+};
+
+export const getCancelWorkflowRunMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelWorkflowRun>>,
+    TError,
+    { id: number; data: BodyType<CancelWorkflowRunInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelWorkflowRun>>,
+  TError,
+  { id: number; data: BodyType<CancelWorkflowRunInput> },
+  TContext
+> => {
+  const mutationKey = ["cancelWorkflowRun"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelWorkflowRun>>,
+    { id: number; data: BodyType<CancelWorkflowRunInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return cancelWorkflowRun(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelWorkflowRunMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelWorkflowRun>>
+>;
+export type CancelWorkflowRunMutationBody = BodyType<CancelWorkflowRunInput>;
+export type CancelWorkflowRunMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Cancel a pending workflow run (admin starter only)
+ */
+export const useCancelWorkflowRun = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelWorkflowRun>>,
+    TError,
+    { id: number; data: BodyType<CancelWorkflowRunInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelWorkflowRun>>,
+  TError,
+  { id: number; data: BodyType<CancelWorkflowRunInput> },
+  TContext
+> => {
+  return useMutation(getCancelWorkflowRunMutationOptions(options));
+};

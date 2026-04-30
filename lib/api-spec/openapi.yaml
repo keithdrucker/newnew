@@ -30,6 +30,8 @@ tags:
     description: Department portal settings
   - name: initiatives
     description: Lightweight decision records — should we even do this work?
+  - name: workflows
+    description: Admin-managed workflow definitions and approval runs
 paths:
   /healthz:
     get:
@@ -1578,6 +1580,197 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Ticket" }
 
+  /workflows:
+    get:
+      operationId: listWorkflows
+      tags: [workflows]
+      summary: List workflows (admin / agent)
+      parameters:
+        - in: query
+          name: module
+          schema:
+            type: string
+            enum: [tickets, initiatives, projects, changes, risks]
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [draft, active, inactive]
+      responses:
+        "200":
+          description: Workflows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Workflow" }
+    post:
+      operationId: createWorkflow
+      tags: [workflows]
+      summary: Create a workflow definition (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateWorkflowInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workflow" }
+
+  /workflows/{id}:
+    get:
+      operationId: getWorkflow
+      tags: [workflows]
+      summary: Get a single workflow with its audit events
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Workflow
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowDetail" }
+    patch:
+      operationId: updateWorkflow
+      tags: [workflows]
+      summary: Update a workflow definition (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateWorkflowInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workflow" }
+    delete:
+      operationId: deleteWorkflow
+      tags: [workflows]
+      summary: Delete a workflow definition (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Removed
+
+  /workflows/{id}/runs:
+    get:
+      operationId: listWorkflowRuns
+      tags: [workflows]
+      summary: List runs for a workflow
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkflowRun" }
+
+  /initiatives/{id}/workflow-runs:
+    post:
+      operationId: startInitiativeWorkflowRun
+      tags: [workflows]
+      summary: Start an approval workflow run on an initiative (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartWorkflowRunInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
+
+  /workflow-runs/{id}:
+    get:
+      operationId: getWorkflowRun
+      tags: [workflows]
+      summary: Fetch a single workflow run (with approver decisions)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
+
+  /workflow-runs/{id}/decision:
+    post:
+      operationId: submitWorkflowRunDecision
+      tags: [workflows]
+      summary: Record an approver decision on a workflow run
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkflowRunDecisionInput" }
+      responses:
+        "200":
+          description: Run updated (may also be resolved)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
+
+  /workflow-runs/{id}/cancel:
+    post:
+      operationId: cancelWorkflowRun
+      tags: [workflows]
+      summary: Cancel a pending workflow run (admin starter only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CancelWorkflowRunInput" }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
+
 components:
   schemas:
     HealthStatus:
@@ -3030,6 +3223,9 @@ components:
         auditEvents:
           type: array
           items: { $ref: "#/components/schemas/InitiativeAuditEvent" }
+        workflowRuns:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowRun" }
       required:
         - id
         - title
@@ -3060,6 +3256,7 @@ components:
         - finalDecision
         - decisionReason
         - auditEvents
+        - workflowRuns
         - createdAt
         - updatedAt
 
@@ -3125,3 +3322,322 @@ components:
         # Reason captured on the audit event for reopen / move-back /
         # close transitions. Required for those status changes.
         transitionReason: { type: string }
+
+    Workflow:
+      type: object
+      description: Admin-authored automation rule for a module.
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        module:
+          type: string
+          enum: [tickets, initiatives, projects, changes, risks]
+        workflowType:
+          type: string
+          enum:
+            - approval
+            - routing
+            - escalation
+            - notification
+            - status_change
+            - auto_assignment
+        # Module-specific token (e.g. "ticket_created", "initiative_submitted",
+        # "initiative_status_changed", …). The frontend renders the option
+        # list per module; the API just stores the string.
+        trigger: { type: string }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowCondition" }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowAction" }
+        approvalRequiredFromKind:
+          type: string
+          enum:
+            - ""
+            - specific_users
+            - roles
+            - department_heads
+            - finance
+            - security
+            - it_leadership
+            - executive_sponsor
+        approvalRequiredFromTargets:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        approvalType:
+          type: string
+          enum: [single, all, any]
+        requireDecisionRationale: { type: boolean }
+        notifications: { $ref: "#/components/schemas/WorkflowNotifications" }
+        status:
+          type: string
+          enum: [draft, active, inactive]
+        createdById: { type: ["integer", "null"] }
+        createdByName: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - name
+        - module
+        - workflowType
+        - trigger
+        - conditions
+        - actions
+        - approvalRequiredFromKind
+        - approvalRequiredFromTargets
+        - approvalType
+        - requireDecisionRationale
+        - notifications
+        - status
+        - createdAt
+        - updatedAt
+
+    WorkflowDetail:
+      allOf:
+        - $ref: "#/components/schemas/Workflow"
+        - type: object
+          properties:
+            auditEvents:
+              type: array
+              items: { $ref: "#/components/schemas/WorkflowAuditEvent" }
+          required: [auditEvents]
+
+    WorkflowCondition:
+      type: object
+      description: One row in the IF builder.
+      properties:
+        field: { type: string }
+        op:
+          type: string
+          enum: [eq, neq, in, not_in, gt, gte, lt, lte, contains, is_empty, is_not_empty]
+        value: {}
+      required: [field, op]
+
+    WorkflowAction:
+      type: object
+      description: One row in the THEN builder. `kind` discriminates payload.
+      properties:
+        kind:
+          type: string
+          enum:
+            - assign_user
+            - assign_role
+            - set_priority
+            - set_status
+            - send_notification
+            - require_approval
+            - add_comment
+            - escalate
+        # Union payload bag, validated by the frontend per-kind.
+        config:
+          type: object
+          additionalProperties: true
+      required: [kind]
+
+    WorkflowNotifications:
+      type: object
+      properties:
+        requester: { type: boolean }
+        owner: { type: boolean }
+        approvers: { type: boolean }
+        departmentHead: { type: boolean }
+        admins: { type: boolean }
+
+    CreateWorkflowInput:
+      type: object
+      required: [name, module, workflowType, trigger]
+      properties:
+        name: { type: string }
+        module:
+          type: string
+          enum: [tickets, initiatives, projects, changes, risks]
+        workflowType:
+          type: string
+          enum:
+            - approval
+            - routing
+            - escalation
+            - notification
+            - status_change
+            - auto_assignment
+        trigger: { type: string }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowCondition" }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowAction" }
+        approvalRequiredFromKind:
+          type: string
+          enum:
+            - ""
+            - specific_users
+            - roles
+            - department_heads
+            - finance
+            - security
+            - it_leadership
+            - executive_sponsor
+        approvalRequiredFromTargets:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        approvalType:
+          type: string
+          enum: [single, all, any]
+        requireDecisionRationale: { type: boolean }
+        notifications: { $ref: "#/components/schemas/WorkflowNotifications" }
+        status:
+          type: string
+          enum: [draft, active, inactive]
+
+    UpdateWorkflowInput:
+      type: object
+      properties:
+        name: { type: string }
+        module:
+          type: string
+          enum: [tickets, initiatives, projects, changes, risks]
+        workflowType:
+          type: string
+          enum:
+            - approval
+            - routing
+            - escalation
+            - notification
+            - status_change
+            - auto_assignment
+        trigger: { type: string }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowCondition" }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowAction" }
+        approvalRequiredFromKind:
+          type: string
+          enum:
+            - ""
+            - specific_users
+            - roles
+            - department_heads
+            - finance
+            - security
+            - it_leadership
+            - executive_sponsor
+        approvalRequiredFromTargets:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        approvalType:
+          type: string
+          enum: [single, all, any]
+        requireDecisionRationale: { type: boolean }
+        notifications: { $ref: "#/components/schemas/WorkflowNotifications" }
+        status:
+          type: string
+          enum: [draft, active, inactive]
+
+    WorkflowRunApprover:
+      type: object
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        userName: { type: ["string", "null"] }
+        decision:
+          type: ["string", "null"]
+          enum: [null, approve, reject, defer]
+        rationale: { type: string }
+        decidedAt: { type: ["string", "null"], format: date-time }
+      required: [id, userId, rationale]
+
+    WorkflowRun:
+      type: object
+      properties:
+        id: { type: integer }
+        workflowId: { type: integer }
+        workflowName: { type: ["string", "null"] }
+        module: { type: string }
+        subjectType: { type: string }
+        subjectId: { type: integer }
+        status:
+          type: string
+          enum: [pending, approved, rejected, deferred, cancelled]
+        startedById: { type: ["integer", "null"] }
+        startedByName: { type: ["string", "null"] }
+        startedAt: { type: string, format: date-time }
+        resolvedAt: { type: ["string", "null"], format: date-time }
+        resolvedById: { type: ["integer", "null"] }
+        resolvedByName: { type: ["string", "null"] }
+        outcomeReason: { type: string }
+        approvalType:
+          type: string
+          enum: [single, all, any]
+        requireDecisionRationale: { type: boolean }
+        approvers:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowRunApprover" }
+      required:
+        - id
+        - workflowId
+        - module
+        - subjectType
+        - subjectId
+        - status
+        - startedAt
+        - outcomeReason
+        - approvalType
+        - requireDecisionRationale
+        - approvers
+
+    WorkflowAuditEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        workflowId: { type: ["integer", "null"] }
+        runId: { type: ["integer", "null"] }
+        action:
+          type: string
+          enum:
+            - created
+            - updated
+            - activated
+            - deactivated
+            - deleted
+            - triggered
+            - approver_decided
+            - resolved
+            - cancelled
+        detail:
+          type: object
+          additionalProperties: true
+        changedById: { type: ["integer", "null"] }
+        changedByName: { type: ["string", "null"] }
+        changedAt: { type: string, format: date-time }
+      required: [id, action, changedAt]
+
+    StartWorkflowRunInput:
+      type: object
+      required: [workflowId]
+      properties:
+        workflowId: { type: integer }
+
+    WorkflowRunDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject, defer]
+        rationale: { type: string }
+
+    CancelWorkflowRunInput:
+      type: object
+      properties:
+        reason: { type: string }

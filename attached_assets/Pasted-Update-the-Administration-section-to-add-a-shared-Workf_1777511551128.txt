@@ -1,0 +1,157 @@
+Update the Administration section to add a shared “Workflow” tile.
+
+Goal:
+Workflows should support both Tickets and Initiatives now, with the ability to expand to Projects, Changes, Risks, and other modules later.
+
+Add Administration tile:
+- Name: Workflow
+- Description: “Create approval, routing, escalation, and automation workflows across tickets and initiatives.”
+- Icon: workflow / branching / automation icon
+
+Workflow Management page:
+Show workflows in a table with:
+- Workflow Name
+- Module
+- Workflow Type
+- Trigger
+- Status
+- Last Updated
+
+Create/Edit Workflow fields:
+
+1. Basic Info
+- Workflow Name
+- Module
+  Options:
+  - Tickets
+  - Initiatives
+  - Projects
+  - Changes
+  - Risks
+- Workflow Type
+  Options:
+  - Approval
+  - Routing
+  - Escalation
+  - Notification
+  - Status Change
+  - Auto Assignment
+
+2. Trigger
+Options should change based on module.
+
+For Tickets:
+- Ticket created
+- Priority changed
+- Status changed
+- SLA at risk
+- SLA breached
+- Risk level is High
+- Category equals X
+- Assigned team equals X
+
+For Initiatives:
+- Initiative submitted
+- Moved to Backlog
+- Moved to Under Review
+- Moved to Approval Pending
+- Cost level is High
+- Risk level is High
+- Business value is High
+- Estimated cost exceeds amount
+
+3. Conditions
+Allow optional conditions:
+- Department equals X
+- Category equals X
+- Priority equals X
+- Risk level equals X
+- Cost level equals X
+- Business value equals X
+- Estimated cost greater than $X
+
+4. Actions
+Options should support:
+
+For Tickets:
+- Assign to team/user
+- Change priority
+- Change status
+- Notify user/team
+- Escalate to manager
+- Require approval
+- Add internal note
+
+For Initiatives:
+- Move status
+- Start approval
+- Assign approver
+- Notify approver
+- Create project after approval
+- Return to Under Review
+- Mark deferred/rejected
+
+5. Approvals
+If Workflow Type = Approval, show:
+- Approval Required From
+  Options:
+  - Specific users
+  - Roles
+  - Department heads
+  - Finance
+  - Security
+  - IT leadership
+  - Executive sponsor
+- Approval Type
+  Options:
+  - Single approver required
+  - All selected approvers required
+  - Any selected approver can approve
+- Require decision rationale: Yes/No
+
+6. Notifications
+Options:
+- Notify requester
+- Notify assigned owner
+- Notify approvers
+- Notify department head
+- Notify admins
+
+7. Status
+Workflow status:
+- Draft
+- Active
+- Inactive
+
+Connect to Initiatives:
+- Under Review should have a “Start Approval Workflow” button.
+- User can select an active Initiative workflow.
+- Workflow determines approvers, rules, and approval type.
+- When approved, initiative can become Approved and create a Project.
+- When rejected or deferred, initiative moves to Rejected / Deferred.
+
+Connect to Tickets:
+- Ticket workflows should be available for routing, escalation, SLA alerts, approvals, and auto-assignment.
+- Example: If ticket category = Security and risk level = High, assign to Security team and notify IT leadership.
+- Example: If SLA is at risk, notify assigned technician and manager.
+- Example: If ticket requires approval, route to selected approver before work proceeds.
+
+Audit trail:
+Track all workflow actions:
+- Workflow triggered
+- Conditions matched
+- Actions taken
+- Approvers selected
+- Approval decisions
+- Status changes
+- Changed by
+- Date/time
+
+UI requirements:
+- Keep it simple and admin-friendly.
+- Do not overbuild visual drag-and-drop yet.
+- Use a clean rule-builder style:
+  WHEN [trigger]
+  IF [conditions]
+  THEN [actions]
+- Workflows should be generic enough to support Tickets and Initiatives now and more modules later.

@@ -2342,6 +2342,49 @@ export const ListInitiativesResponseItem = zod.object({
       changedAt: zod.coerce.date(),
     }),
   ),
+  workflowRuns: zod.array(
+    zod.object({
+      id: zod.number(),
+      workflowId: zod.number(),
+      workflowName: zod.string().nullish(),
+      module: zod.string(),
+      subjectType: zod.string(),
+      subjectId: zod.number(),
+      status: zod.enum([
+        "pending",
+        "approved",
+        "rejected",
+        "deferred",
+        "cancelled",
+      ]),
+      startedById: zod.number().nullish(),
+      startedByName: zod.string().nullish(),
+      startedAt: zod.coerce.date(),
+      resolvedAt: zod.coerce.date().nullish(),
+      resolvedById: zod.number().nullish(),
+      resolvedByName: zod.string().nullish(),
+      outcomeReason: zod.string(),
+      approvalType: zod.enum(["single", "all", "any"]),
+      requireDecisionRationale: zod.boolean(),
+      approvers: zod.array(
+        zod.object({
+          id: zod.number(),
+          userId: zod.number(),
+          userName: zod.string().nullish(),
+          decision: zod
+            .union([
+              zod.literal(null),
+              zod.literal("approve"),
+              zod.literal("reject"),
+              zod.literal("defer"),
+            ])
+            .nullish(),
+          rationale: zod.string(),
+          decidedAt: zod.coerce.date().nullish(),
+        }),
+      ),
+    }),
+  ),
 });
 export const ListInitiativesResponse = zod.array(ListInitiativesResponseItem);
 
@@ -2431,6 +2474,49 @@ export const GetInitiativeResponse = zod.object({
       changedById: zod.number().nullish(),
       changedByName: zod.string().nullish(),
       changedAt: zod.coerce.date(),
+    }),
+  ),
+  workflowRuns: zod.array(
+    zod.object({
+      id: zod.number(),
+      workflowId: zod.number(),
+      workflowName: zod.string().nullish(),
+      module: zod.string(),
+      subjectType: zod.string(),
+      subjectId: zod.number(),
+      status: zod.enum([
+        "pending",
+        "approved",
+        "rejected",
+        "deferred",
+        "cancelled",
+      ]),
+      startedById: zod.number().nullish(),
+      startedByName: zod.string().nullish(),
+      startedAt: zod.coerce.date(),
+      resolvedAt: zod.coerce.date().nullish(),
+      resolvedById: zod.number().nullish(),
+      resolvedByName: zod.string().nullish(),
+      outcomeReason: zod.string(),
+      approvalType: zod.enum(["single", "all", "any"]),
+      requireDecisionRationale: zod.boolean(),
+      approvers: zod.array(
+        zod.object({
+          id: zod.number(),
+          userId: zod.number(),
+          userName: zod.string().nullish(),
+          decision: zod
+            .union([
+              zod.literal(null),
+              zod.literal("approve"),
+              zod.literal("reject"),
+              zod.literal("defer"),
+            ])
+            .nullish(),
+          rationale: zod.string(),
+          decidedAt: zod.coerce.date().nullish(),
+        }),
+      ),
     }),
   ),
 });
@@ -2562,6 +2648,49 @@ export const UpdateInitiativeResponse = zod.object({
       changedById: zod.number().nullish(),
       changedByName: zod.string().nullish(),
       changedAt: zod.coerce.date(),
+    }),
+  ),
+  workflowRuns: zod.array(
+    zod.object({
+      id: zod.number(),
+      workflowId: zod.number(),
+      workflowName: zod.string().nullish(),
+      module: zod.string(),
+      subjectType: zod.string(),
+      subjectId: zod.number(),
+      status: zod.enum([
+        "pending",
+        "approved",
+        "rejected",
+        "deferred",
+        "cancelled",
+      ]),
+      startedById: zod.number().nullish(),
+      startedByName: zod.string().nullish(),
+      startedAt: zod.coerce.date(),
+      resolvedAt: zod.coerce.date().nullish(),
+      resolvedById: zod.number().nullish(),
+      resolvedByName: zod.string().nullish(),
+      outcomeReason: zod.string(),
+      approvalType: zod.enum(["single", "all", "any"]),
+      requireDecisionRationale: zod.boolean(),
+      approvers: zod.array(
+        zod.object({
+          id: zod.number(),
+          userId: zod.number(),
+          userName: zod.string().nullish(),
+          decision: zod
+            .union([
+              zod.literal(null),
+              zod.literal("approve"),
+              zod.literal("reject"),
+              zod.literal("defer"),
+            ])
+            .nullish(),
+          rationale: zod.string(),
+          decidedAt: zod.coerce.date().nullish(),
+        }),
+      ),
     }),
   ),
 });
@@ -2902,3 +3031,715 @@ export const GetBreachedTicketsResponseItem = zod.object({
 export const GetBreachedTicketsResponse = zod.array(
   GetBreachedTicketsResponseItem,
 );
+
+/**
+ * @summary List workflows (admin / agent)
+ */
+export const ListWorkflowsQueryParams = zod.object({
+  module: zod
+    .enum(["tickets", "initiatives", "projects", "changes", "risks"])
+    .optional(),
+  status: zod.enum(["draft", "active", "inactive"]).optional(),
+});
+
+export const ListWorkflowsResponseItem = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    module: zod.enum([
+      "tickets",
+      "initiatives",
+      "projects",
+      "changes",
+      "risks",
+    ]),
+    workflowType: zod.enum([
+      "approval",
+      "routing",
+      "escalation",
+      "notification",
+      "status_change",
+      "auto_assignment",
+    ]),
+    trigger: zod.string(),
+    conditions: zod.array(
+      zod
+        .object({
+          field: zod.string(),
+          op: zod.enum([
+            "eq",
+            "neq",
+            "in",
+            "not_in",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "is_empty",
+            "is_not_empty",
+          ]),
+          value: zod.unknown().optional(),
+        })
+        .describe("One row in the IF builder."),
+    ),
+    actions: zod.array(
+      zod
+        .object({
+          kind: zod.enum([
+            "assign_user",
+            "assign_role",
+            "set_priority",
+            "set_status",
+            "send_notification",
+            "require_approval",
+            "add_comment",
+            "escalate",
+          ]),
+          config: zod.record(zod.string(), zod.unknown()).optional(),
+        })
+        .describe("One row in the THEN builder. `kind` discriminates payload."),
+    ),
+    approvalRequiredFromKind: zod.enum([
+      "",
+      "specific_users",
+      "roles",
+      "department_heads",
+      "finance",
+      "security",
+      "it_leadership",
+      "executive_sponsor",
+    ]),
+    approvalRequiredFromTargets: zod.array(
+      zod.record(zod.string(), zod.unknown()),
+    ),
+    approvalType: zod.enum(["single", "all", "any"]),
+    requireDecisionRationale: zod.boolean(),
+    notifications: zod.object({
+      requester: zod.boolean().optional(),
+      owner: zod.boolean().optional(),
+      approvers: zod.boolean().optional(),
+      departmentHead: zod.boolean().optional(),
+      admins: zod.boolean().optional(),
+    }),
+    status: zod.enum(["draft", "active", "inactive"]),
+    createdById: zod.number().nullish(),
+    createdByName: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .describe("Admin-authored automation rule for a module.");
+export const ListWorkflowsResponse = zod.array(ListWorkflowsResponseItem);
+
+/**
+ * @summary Create a workflow definition (admin only)
+ */
+export const CreateWorkflowBody = zod.object({
+  name: zod.string(),
+  module: zod.enum(["tickets", "initiatives", "projects", "changes", "risks"]),
+  workflowType: zod.enum([
+    "approval",
+    "routing",
+    "escalation",
+    "notification",
+    "status_change",
+    "auto_assignment",
+  ]),
+  trigger: zod.string(),
+  conditions: zod
+    .array(
+      zod
+        .object({
+          field: zod.string(),
+          op: zod.enum([
+            "eq",
+            "neq",
+            "in",
+            "not_in",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "is_empty",
+            "is_not_empty",
+          ]),
+          value: zod.unknown().optional(),
+        })
+        .describe("One row in the IF builder."),
+    )
+    .optional(),
+  actions: zod
+    .array(
+      zod
+        .object({
+          kind: zod.enum([
+            "assign_user",
+            "assign_role",
+            "set_priority",
+            "set_status",
+            "send_notification",
+            "require_approval",
+            "add_comment",
+            "escalate",
+          ]),
+          config: zod.record(zod.string(), zod.unknown()).optional(),
+        })
+        .describe("One row in the THEN builder. `kind` discriminates payload."),
+    )
+    .optional(),
+  approvalRequiredFromKind: zod
+    .enum([
+      "",
+      "specific_users",
+      "roles",
+      "department_heads",
+      "finance",
+      "security",
+      "it_leadership",
+      "executive_sponsor",
+    ])
+    .optional(),
+  approvalRequiredFromTargets: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .optional(),
+  approvalType: zod.enum(["single", "all", "any"]).optional(),
+  requireDecisionRationale: zod.boolean().optional(),
+  notifications: zod
+    .object({
+      requester: zod.boolean().optional(),
+      owner: zod.boolean().optional(),
+      approvers: zod.boolean().optional(),
+      departmentHead: zod.boolean().optional(),
+      admins: zod.boolean().optional(),
+    })
+    .optional(),
+  status: zod.enum(["draft", "active", "inactive"]).optional(),
+});
+
+/**
+ * @summary Get a single workflow with its audit events
+ */
+export const GetWorkflowParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetWorkflowResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    module: zod.enum([
+      "tickets",
+      "initiatives",
+      "projects",
+      "changes",
+      "risks",
+    ]),
+    workflowType: zod.enum([
+      "approval",
+      "routing",
+      "escalation",
+      "notification",
+      "status_change",
+      "auto_assignment",
+    ]),
+    trigger: zod.string(),
+    conditions: zod.array(
+      zod
+        .object({
+          field: zod.string(),
+          op: zod.enum([
+            "eq",
+            "neq",
+            "in",
+            "not_in",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "is_empty",
+            "is_not_empty",
+          ]),
+          value: zod.unknown().optional(),
+        })
+        .describe("One row in the IF builder."),
+    ),
+    actions: zod.array(
+      zod
+        .object({
+          kind: zod.enum([
+            "assign_user",
+            "assign_role",
+            "set_priority",
+            "set_status",
+            "send_notification",
+            "require_approval",
+            "add_comment",
+            "escalate",
+          ]),
+          config: zod.record(zod.string(), zod.unknown()).optional(),
+        })
+        .describe("One row in the THEN builder. `kind` discriminates payload."),
+    ),
+    approvalRequiredFromKind: zod.enum([
+      "",
+      "specific_users",
+      "roles",
+      "department_heads",
+      "finance",
+      "security",
+      "it_leadership",
+      "executive_sponsor",
+    ]),
+    approvalRequiredFromTargets: zod.array(
+      zod.record(zod.string(), zod.unknown()),
+    ),
+    approvalType: zod.enum(["single", "all", "any"]),
+    requireDecisionRationale: zod.boolean(),
+    notifications: zod.object({
+      requester: zod.boolean().optional(),
+      owner: zod.boolean().optional(),
+      approvers: zod.boolean().optional(),
+      departmentHead: zod.boolean().optional(),
+      admins: zod.boolean().optional(),
+    }),
+    status: zod.enum(["draft", "active", "inactive"]),
+    createdById: zod.number().nullish(),
+    createdByName: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .describe("Admin-authored automation rule for a module.")
+  .and(
+    zod.object({
+      auditEvents: zod.array(
+        zod.object({
+          id: zod.number(),
+          workflowId: zod.number().nullish(),
+          runId: zod.number().nullish(),
+          action: zod.enum([
+            "created",
+            "updated",
+            "activated",
+            "deactivated",
+            "deleted",
+            "triggered",
+            "approver_decided",
+            "resolved",
+            "cancelled",
+          ]),
+          detail: zod.record(zod.string(), zod.unknown()).optional(),
+          changedById: zod.number().nullish(),
+          changedByName: zod.string().nullish(),
+          changedAt: zod.coerce.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Update a workflow definition (admin only)
+ */
+export const UpdateWorkflowParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateWorkflowBody = zod.object({
+  name: zod.string().optional(),
+  module: zod
+    .enum(["tickets", "initiatives", "projects", "changes", "risks"])
+    .optional(),
+  workflowType: zod
+    .enum([
+      "approval",
+      "routing",
+      "escalation",
+      "notification",
+      "status_change",
+      "auto_assignment",
+    ])
+    .optional(),
+  trigger: zod.string().optional(),
+  conditions: zod
+    .array(
+      zod
+        .object({
+          field: zod.string(),
+          op: zod.enum([
+            "eq",
+            "neq",
+            "in",
+            "not_in",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "is_empty",
+            "is_not_empty",
+          ]),
+          value: zod.unknown().optional(),
+        })
+        .describe("One row in the IF builder."),
+    )
+    .optional(),
+  actions: zod
+    .array(
+      zod
+        .object({
+          kind: zod.enum([
+            "assign_user",
+            "assign_role",
+            "set_priority",
+            "set_status",
+            "send_notification",
+            "require_approval",
+            "add_comment",
+            "escalate",
+          ]),
+          config: zod.record(zod.string(), zod.unknown()).optional(),
+        })
+        .describe("One row in the THEN builder. `kind` discriminates payload."),
+    )
+    .optional(),
+  approvalRequiredFromKind: zod
+    .enum([
+      "",
+      "specific_users",
+      "roles",
+      "department_heads",
+      "finance",
+      "security",
+      "it_leadership",
+      "executive_sponsor",
+    ])
+    .optional(),
+  approvalRequiredFromTargets: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .optional(),
+  approvalType: zod.enum(["single", "all", "any"]).optional(),
+  requireDecisionRationale: zod.boolean().optional(),
+  notifications: zod
+    .object({
+      requester: zod.boolean().optional(),
+      owner: zod.boolean().optional(),
+      approvers: zod.boolean().optional(),
+      departmentHead: zod.boolean().optional(),
+      admins: zod.boolean().optional(),
+    })
+    .optional(),
+  status: zod.enum(["draft", "active", "inactive"]).optional(),
+});
+
+export const UpdateWorkflowResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    module: zod.enum([
+      "tickets",
+      "initiatives",
+      "projects",
+      "changes",
+      "risks",
+    ]),
+    workflowType: zod.enum([
+      "approval",
+      "routing",
+      "escalation",
+      "notification",
+      "status_change",
+      "auto_assignment",
+    ]),
+    trigger: zod.string(),
+    conditions: zod.array(
+      zod
+        .object({
+          field: zod.string(),
+          op: zod.enum([
+            "eq",
+            "neq",
+            "in",
+            "not_in",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "contains",
+            "is_empty",
+            "is_not_empty",
+          ]),
+          value: zod.unknown().optional(),
+        })
+        .describe("One row in the IF builder."),
+    ),
+    actions: zod.array(
+      zod
+        .object({
+          kind: zod.enum([
+            "assign_user",
+            "assign_role",
+            "set_priority",
+            "set_status",
+            "send_notification",
+            "require_approval",
+            "add_comment",
+            "escalate",
+          ]),
+          config: zod.record(zod.string(), zod.unknown()).optional(),
+        })
+        .describe("One row in the THEN builder. `kind` discriminates payload."),
+    ),
+    approvalRequiredFromKind: zod.enum([
+      "",
+      "specific_users",
+      "roles",
+      "department_heads",
+      "finance",
+      "security",
+      "it_leadership",
+      "executive_sponsor",
+    ]),
+    approvalRequiredFromTargets: zod.array(
+      zod.record(zod.string(), zod.unknown()),
+    ),
+    approvalType: zod.enum(["single", "all", "any"]),
+    requireDecisionRationale: zod.boolean(),
+    notifications: zod.object({
+      requester: zod.boolean().optional(),
+      owner: zod.boolean().optional(),
+      approvers: zod.boolean().optional(),
+      departmentHead: zod.boolean().optional(),
+      admins: zod.boolean().optional(),
+    }),
+    status: zod.enum(["draft", "active", "inactive"]),
+    createdById: zod.number().nullish(),
+    createdByName: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .describe("Admin-authored automation rule for a module.");
+
+/**
+ * @summary Delete a workflow definition (admin only)
+ */
+export const DeleteWorkflowParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List runs for a workflow
+ */
+export const ListWorkflowRunsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListWorkflowRunsResponseItem = zod.object({
+  id: zod.number(),
+  workflowId: zod.number(),
+  workflowName: zod.string().nullish(),
+  module: zod.string(),
+  subjectType: zod.string(),
+  subjectId: zod.number(),
+  status: zod.enum([
+    "pending",
+    "approved",
+    "rejected",
+    "deferred",
+    "cancelled",
+  ]),
+  startedById: zod.number().nullish(),
+  startedByName: zod.string().nullish(),
+  startedAt: zod.coerce.date(),
+  resolvedAt: zod.coerce.date().nullish(),
+  resolvedById: zod.number().nullish(),
+  resolvedByName: zod.string().nullish(),
+  outcomeReason: zod.string(),
+  approvalType: zod.enum(["single", "all", "any"]),
+  requireDecisionRationale: zod.boolean(),
+  approvers: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      userName: zod.string().nullish(),
+      decision: zod
+        .union([
+          zod.literal(null),
+          zod.literal("approve"),
+          zod.literal("reject"),
+          zod.literal("defer"),
+        ])
+        .nullish(),
+      rationale: zod.string(),
+      decidedAt: zod.coerce.date().nullish(),
+    }),
+  ),
+});
+export const ListWorkflowRunsResponse = zod.array(ListWorkflowRunsResponseItem);
+
+/**
+ * @summary Start an approval workflow run on an initiative (admin only)
+ */
+export const StartInitiativeWorkflowRunParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const StartInitiativeWorkflowRunBody = zod.object({
+  workflowId: zod.number(),
+});
+
+/**
+ * @summary Fetch a single workflow run (with approver decisions)
+ */
+export const GetWorkflowRunParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetWorkflowRunResponse = zod.object({
+  id: zod.number(),
+  workflowId: zod.number(),
+  workflowName: zod.string().nullish(),
+  module: zod.string(),
+  subjectType: zod.string(),
+  subjectId: zod.number(),
+  status: zod.enum([
+    "pending",
+    "approved",
+    "rejected",
+    "deferred",
+    "cancelled",
+  ]),
+  startedById: zod.number().nullish(),
+  startedByName: zod.string().nullish(),
+  startedAt: zod.coerce.date(),
+  resolvedAt: zod.coerce.date().nullish(),
+  resolvedById: zod.number().nullish(),
+  resolvedByName: zod.string().nullish(),
+  outcomeReason: zod.string(),
+  approvalType: zod.enum(["single", "all", "any"]),
+  requireDecisionRationale: zod.boolean(),
+  approvers: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      userName: zod.string().nullish(),
+      decision: zod
+        .union([
+          zod.literal(null),
+          zod.literal("approve"),
+          zod.literal("reject"),
+          zod.literal("defer"),
+        ])
+        .nullish(),
+      rationale: zod.string(),
+      decidedAt: zod.coerce.date().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Record an approver decision on a workflow run
+ */
+export const SubmitWorkflowRunDecisionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SubmitWorkflowRunDecisionBody = zod.object({
+  decision: zod.enum(["approve", "reject", "defer"]),
+  rationale: zod.string().optional(),
+});
+
+export const SubmitWorkflowRunDecisionResponse = zod.object({
+  id: zod.number(),
+  workflowId: zod.number(),
+  workflowName: zod.string().nullish(),
+  module: zod.string(),
+  subjectType: zod.string(),
+  subjectId: zod.number(),
+  status: zod.enum([
+    "pending",
+    "approved",
+    "rejected",
+    "deferred",
+    "cancelled",
+  ]),
+  startedById: zod.number().nullish(),
+  startedByName: zod.string().nullish(),
+  startedAt: zod.coerce.date(),
+  resolvedAt: zod.coerce.date().nullish(),
+  resolvedById: zod.number().nullish(),
+  resolvedByName: zod.string().nullish(),
+  outcomeReason: zod.string(),
+  approvalType: zod.enum(["single", "all", "any"]),
+  requireDecisionRationale: zod.boolean(),
+  approvers: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      userName: zod.string().nullish(),
+      decision: zod
+        .union([
+          zod.literal(null),
+          zod.literal("approve"),
+          zod.literal("reject"),
+          zod.literal("defer"),
+        ])
+        .nullish(),
+      rationale: zod.string(),
+      decidedAt: zod.coerce.date().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Cancel a pending workflow run (admin starter only)
+ */
+export const CancelWorkflowRunParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CancelWorkflowRunBody = zod.object({
+  reason: zod.string().optional(),
+});
+
+export const CancelWorkflowRunResponse = zod.object({
+  id: zod.number(),
+  workflowId: zod.number(),
+  workflowName: zod.string().nullish(),
+  module: zod.string(),
+  subjectType: zod.string(),
+  subjectId: zod.number(),
+  status: zod.enum([
+    "pending",
+    "approved",
+    "rejected",
+    "deferred",
+    "cancelled",
+  ]),
+  startedById: zod.number().nullish(),
+  startedByName: zod.string().nullish(),
+  startedAt: zod.coerce.date(),
+  resolvedAt: zod.coerce.date().nullish(),
+  resolvedById: zod.number().nullish(),
+  resolvedByName: zod.string().nullish(),
+  outcomeReason: zod.string(),
+  approvalType: zod.enum(["single", "all", "any"]),
+  requireDecisionRationale: zod.boolean(),
+  approvers: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      userName: zod.string().nullish(),
+      decision: zod
+        .union([
+          zod.literal(null),
+          zod.literal("approve"),
+          zod.literal("reject"),
+          zod.literal("defer"),
+        ])
+        .nullish(),
+      rationale: zod.string(),
+      decidedAt: zod.coerce.date().nullish(),
+    }),
+  ),
+});

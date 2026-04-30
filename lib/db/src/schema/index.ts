@@ -13,3 +13,4 @@ export * from "./projects";
 export * from "./initiatives";
 export * from "./riskRules";
 export * from "./timeEntries";
+export * from "./workflows";

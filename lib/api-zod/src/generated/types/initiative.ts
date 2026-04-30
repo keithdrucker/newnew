@@ -7,6 +7,7 @@
  */
 import type { InitiativeAuditEvent } from "./initiativeAuditEvent";
 import type { InitiativeStatus } from "./initiativeStatus";
+import type { WorkflowRun } from "./workflowRun";
 
 export interface Initiative {
   id: number;
@@ -68,4 +69,5 @@ export interface Initiative {
   createdAt: Date;
   updatedAt: Date;
   auditEvents: InitiativeAuditEvent[];
+  workflowRuns: WorkflowRun[];
 }

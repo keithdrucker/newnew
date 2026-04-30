@@ -1597,6 +1597,77 @@ export interface InitiativeAuditEvent {
   changedAt: string;
 }
 
+export type WorkflowRunStatus =
+  (typeof WorkflowRunStatus)[keyof typeof WorkflowRunStatus];
+
+export const WorkflowRunStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+  deferred: "deferred",
+  cancelled: "cancelled",
+} as const;
+
+export type WorkflowRunApprovalType =
+  (typeof WorkflowRunApprovalType)[keyof typeof WorkflowRunApprovalType];
+
+export const WorkflowRunApprovalType = {
+  single: "single",
+  all: "all",
+  any: "any",
+} as const;
+
+/**
+ * @nullable
+ */
+export type WorkflowRunApproverDecision =
+  | (typeof WorkflowRunApproverDecision)[keyof typeof WorkflowRunApproverDecision]
+  | null;
+
+export const WorkflowRunApproverDecision = {
+  approve: "approve",
+  reject: "reject",
+  defer: "defer",
+} as const;
+
+export interface WorkflowRunApprover {
+  id: number;
+  userId: number;
+  /** @nullable */
+  userName?: string | null;
+  /** @nullable */
+  decision?: WorkflowRunApproverDecision;
+  rationale: string;
+  /** @nullable */
+  decidedAt?: string | null;
+}
+
+export interface WorkflowRun {
+  id: number;
+  workflowId: number;
+  /** @nullable */
+  workflowName?: string | null;
+  module: string;
+  subjectType: string;
+  subjectId: number;
+  status: WorkflowRunStatus;
+  /** @nullable */
+  startedById?: number | null;
+  /** @nullable */
+  startedByName?: string | null;
+  startedAt: string;
+  /** @nullable */
+  resolvedAt?: string | null;
+  /** @nullable */
+  resolvedById?: number | null;
+  /** @nullable */
+  resolvedByName?: string | null;
+  outcomeReason: string;
+  approvalType: WorkflowRunApprovalType;
+  requireDecisionRationale: boolean;
+  approvers: WorkflowRunApprover[];
+}
+
 export interface Initiative {
   id: number;
   title: string;
@@ -1657,6 +1728,7 @@ export interface Initiative {
   createdAt: string;
   updatedAt: string;
   auditEvents: InitiativeAuditEvent[];
+  workflowRuns: WorkflowRun[];
 }
 
 export interface CreateInitiativeInput {
@@ -1721,6 +1793,354 @@ export interface UpdateInitiativeInput {
   /** @nullable */
   revisitDate?: string | null;
   transitionReason?: string;
+}
+
+export type WorkflowModule =
+  (typeof WorkflowModule)[keyof typeof WorkflowModule];
+
+export const WorkflowModule = {
+  tickets: "tickets",
+  initiatives: "initiatives",
+  projects: "projects",
+  changes: "changes",
+  risks: "risks",
+} as const;
+
+export type WorkflowWorkflowType =
+  (typeof WorkflowWorkflowType)[keyof typeof WorkflowWorkflowType];
+
+export const WorkflowWorkflowType = {
+  approval: "approval",
+  routing: "routing",
+  escalation: "escalation",
+  notification: "notification",
+  status_change: "status_change",
+  auto_assignment: "auto_assignment",
+} as const;
+
+export type WorkflowApprovalRequiredFromKind =
+  (typeof WorkflowApprovalRequiredFromKind)[keyof typeof WorkflowApprovalRequiredFromKind];
+
+export const WorkflowApprovalRequiredFromKind = {
+  "": "",
+  specific_users: "specific_users",
+  roles: "roles",
+  department_heads: "department_heads",
+  finance: "finance",
+  security: "security",
+  it_leadership: "it_leadership",
+  executive_sponsor: "executive_sponsor",
+} as const;
+
+export type WorkflowApprovalRequiredFromTargetsItem = {
+  [key: string]: unknown;
+};
+
+export type WorkflowApprovalType =
+  (typeof WorkflowApprovalType)[keyof typeof WorkflowApprovalType];
+
+export const WorkflowApprovalType = {
+  single: "single",
+  all: "all",
+  any: "any",
+} as const;
+
+export type WorkflowStatus =
+  (typeof WorkflowStatus)[keyof typeof WorkflowStatus];
+
+export const WorkflowStatus = {
+  draft: "draft",
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export type WorkflowConditionOp =
+  (typeof WorkflowConditionOp)[keyof typeof WorkflowConditionOp];
+
+export const WorkflowConditionOp = {
+  eq: "eq",
+  neq: "neq",
+  in: "in",
+  not_in: "not_in",
+  gt: "gt",
+  gte: "gte",
+  lt: "lt",
+  lte: "lte",
+  contains: "contains",
+  is_empty: "is_empty",
+  is_not_empty: "is_not_empty",
+} as const;
+
+/**
+ * One row in the IF builder.
+ */
+export interface WorkflowCondition {
+  field: string;
+  op: WorkflowConditionOp;
+  value?: unknown;
+}
+
+export type WorkflowActionKind =
+  (typeof WorkflowActionKind)[keyof typeof WorkflowActionKind];
+
+export const WorkflowActionKind = {
+  assign_user: "assign_user",
+  assign_role: "assign_role",
+  set_priority: "set_priority",
+  set_status: "set_status",
+  send_notification: "send_notification",
+  require_approval: "require_approval",
+  add_comment: "add_comment",
+  escalate: "escalate",
+} as const;
+
+export type WorkflowActionConfig = { [key: string]: unknown };
+
+/**
+ * One row in the THEN builder. `kind` discriminates payload.
+ */
+export interface WorkflowAction {
+  kind: WorkflowActionKind;
+  config?: WorkflowActionConfig;
+}
+
+export interface WorkflowNotifications {
+  requester?: boolean;
+  owner?: boolean;
+  approvers?: boolean;
+  departmentHead?: boolean;
+  admins?: boolean;
+}
+
+/**
+ * Admin-authored automation rule for a module.
+ */
+export interface Workflow {
+  id: number;
+  name: string;
+  module: WorkflowModule;
+  workflowType: WorkflowWorkflowType;
+  trigger: string;
+  conditions: WorkflowCondition[];
+  actions: WorkflowAction[];
+  approvalRequiredFromKind: WorkflowApprovalRequiredFromKind;
+  approvalRequiredFromTargets: WorkflowApprovalRequiredFromTargetsItem[];
+  approvalType: WorkflowApprovalType;
+  requireDecisionRationale: boolean;
+  notifications: WorkflowNotifications;
+  status: WorkflowStatus;
+  /** @nullable */
+  createdById?: number | null;
+  /** @nullable */
+  createdByName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WorkflowAuditEventAction =
+  (typeof WorkflowAuditEventAction)[keyof typeof WorkflowAuditEventAction];
+
+export const WorkflowAuditEventAction = {
+  created: "created",
+  updated: "updated",
+  activated: "activated",
+  deactivated: "deactivated",
+  deleted: "deleted",
+  triggered: "triggered",
+  approver_decided: "approver_decided",
+  resolved: "resolved",
+  cancelled: "cancelled",
+} as const;
+
+export type WorkflowAuditEventDetail = { [key: string]: unknown };
+
+export interface WorkflowAuditEvent {
+  id: number;
+  /** @nullable */
+  workflowId?: number | null;
+  /** @nullable */
+  runId?: number | null;
+  action: WorkflowAuditEventAction;
+  detail?: WorkflowAuditEventDetail;
+  /** @nullable */
+  changedById?: number | null;
+  /** @nullable */
+  changedByName?: string | null;
+  changedAt: string;
+}
+
+export type WorkflowDetail = Workflow & {
+  auditEvents: WorkflowAuditEvent[];
+};
+
+export type CreateWorkflowInputModule =
+  (typeof CreateWorkflowInputModule)[keyof typeof CreateWorkflowInputModule];
+
+export const CreateWorkflowInputModule = {
+  tickets: "tickets",
+  initiatives: "initiatives",
+  projects: "projects",
+  changes: "changes",
+  risks: "risks",
+} as const;
+
+export type CreateWorkflowInputWorkflowType =
+  (typeof CreateWorkflowInputWorkflowType)[keyof typeof CreateWorkflowInputWorkflowType];
+
+export const CreateWorkflowInputWorkflowType = {
+  approval: "approval",
+  routing: "routing",
+  escalation: "escalation",
+  notification: "notification",
+  status_change: "status_change",
+  auto_assignment: "auto_assignment",
+} as const;
+
+export type CreateWorkflowInputApprovalRequiredFromKind =
+  (typeof CreateWorkflowInputApprovalRequiredFromKind)[keyof typeof CreateWorkflowInputApprovalRequiredFromKind];
+
+export const CreateWorkflowInputApprovalRequiredFromKind = {
+  "": "",
+  specific_users: "specific_users",
+  roles: "roles",
+  department_heads: "department_heads",
+  finance: "finance",
+  security: "security",
+  it_leadership: "it_leadership",
+  executive_sponsor: "executive_sponsor",
+} as const;
+
+export type CreateWorkflowInputApprovalRequiredFromTargetsItem = {
+  [key: string]: unknown;
+};
+
+export type CreateWorkflowInputApprovalType =
+  (typeof CreateWorkflowInputApprovalType)[keyof typeof CreateWorkflowInputApprovalType];
+
+export const CreateWorkflowInputApprovalType = {
+  single: "single",
+  all: "all",
+  any: "any",
+} as const;
+
+export type CreateWorkflowInputStatus =
+  (typeof CreateWorkflowInputStatus)[keyof typeof CreateWorkflowInputStatus];
+
+export const CreateWorkflowInputStatus = {
+  draft: "draft",
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface CreateWorkflowInput {
+  name: string;
+  module: CreateWorkflowInputModule;
+  workflowType: CreateWorkflowInputWorkflowType;
+  trigger: string;
+  conditions?: WorkflowCondition[];
+  actions?: WorkflowAction[];
+  approvalRequiredFromKind?: CreateWorkflowInputApprovalRequiredFromKind;
+  approvalRequiredFromTargets?: CreateWorkflowInputApprovalRequiredFromTargetsItem[];
+  approvalType?: CreateWorkflowInputApprovalType;
+  requireDecisionRationale?: boolean;
+  notifications?: WorkflowNotifications;
+  status?: CreateWorkflowInputStatus;
+}
+
+export type UpdateWorkflowInputModule =
+  (typeof UpdateWorkflowInputModule)[keyof typeof UpdateWorkflowInputModule];
+
+export const UpdateWorkflowInputModule = {
+  tickets: "tickets",
+  initiatives: "initiatives",
+  projects: "projects",
+  changes: "changes",
+  risks: "risks",
+} as const;
+
+export type UpdateWorkflowInputWorkflowType =
+  (typeof UpdateWorkflowInputWorkflowType)[keyof typeof UpdateWorkflowInputWorkflowType];
+
+export const UpdateWorkflowInputWorkflowType = {
+  approval: "approval",
+  routing: "routing",
+  escalation: "escalation",
+  notification: "notification",
+  status_change: "status_change",
+  auto_assignment: "auto_assignment",
+} as const;
+
+export type UpdateWorkflowInputApprovalRequiredFromKind =
+  (typeof UpdateWorkflowInputApprovalRequiredFromKind)[keyof typeof UpdateWorkflowInputApprovalRequiredFromKind];
+
+export const UpdateWorkflowInputApprovalRequiredFromKind = {
+  "": "",
+  specific_users: "specific_users",
+  roles: "roles",
+  department_heads: "department_heads",
+  finance: "finance",
+  security: "security",
+  it_leadership: "it_leadership",
+  executive_sponsor: "executive_sponsor",
+} as const;
+
+export type UpdateWorkflowInputApprovalRequiredFromTargetsItem = {
+  [key: string]: unknown;
+};
+
+export type UpdateWorkflowInputApprovalType =
+  (typeof UpdateWorkflowInputApprovalType)[keyof typeof UpdateWorkflowInputApprovalType];
+
+export const UpdateWorkflowInputApprovalType = {
+  single: "single",
+  all: "all",
+  any: "any",
+} as const;
+
+export type UpdateWorkflowInputStatus =
+  (typeof UpdateWorkflowInputStatus)[keyof typeof UpdateWorkflowInputStatus];
+
+export const UpdateWorkflowInputStatus = {
+  draft: "draft",
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface UpdateWorkflowInput {
+  name?: string;
+  module?: UpdateWorkflowInputModule;
+  workflowType?: UpdateWorkflowInputWorkflowType;
+  trigger?: string;
+  conditions?: WorkflowCondition[];
+  actions?: WorkflowAction[];
+  approvalRequiredFromKind?: UpdateWorkflowInputApprovalRequiredFromKind;
+  approvalRequiredFromTargets?: UpdateWorkflowInputApprovalRequiredFromTargetsItem[];
+  approvalType?: UpdateWorkflowInputApprovalType;
+  requireDecisionRationale?: boolean;
+  notifications?: WorkflowNotifications;
+  status?: UpdateWorkflowInputStatus;
+}
+
+export interface StartWorkflowRunInput {
+  workflowId: number;
+}
+
+export type WorkflowRunDecisionInputDecision =
+  (typeof WorkflowRunDecisionInputDecision)[keyof typeof WorkflowRunDecisionInputDecision];
+
+export const WorkflowRunDecisionInputDecision = {
+  approve: "approve",
+  reject: "reject",
+  defer: "defer",
+} as const;
+
+export interface WorkflowRunDecisionInput {
+  decision: WorkflowRunDecisionInputDecision;
+  rationale?: string;
+}
+
+export interface CancelWorkflowRunInput {
+  reason?: string;
 }
 
 export type ListDepartmentsParams = {
@@ -1991,4 +2411,29 @@ export const GetBreachedTicketsRangeDays = {
   NUMBER_30: 30,
   NUMBER_180: 180,
   NUMBER_365: 365,
+} as const;
+
+export type ListWorkflowsParams = {
+  module?: ListWorkflowsModule;
+  status?: ListWorkflowsStatus;
+};
+
+export type ListWorkflowsModule =
+  (typeof ListWorkflowsModule)[keyof typeof ListWorkflowsModule];
+
+export const ListWorkflowsModule = {
+  tickets: "tickets",
+  initiatives: "initiatives",
+  projects: "projects",
+  changes: "changes",
+  risks: "risks",
+} as const;
+
+export type ListWorkflowsStatus =
+  (typeof ListWorkflowsStatus)[keyof typeof ListWorkflowsStatus];
+
+export const ListWorkflowsStatus = {
+  draft: "draft",
+  active: "active",
+  inactive: "inactive",
 } as const;

@@ -16,6 +16,7 @@ import vendorsRouter from "./vendors";
 import projectsRouter from "./projects";
 import initiativesRouter from "./initiatives";
 import riskRulesRouter from "./riskRules";
+import workflowsRouter from "./workflows";
 import dashboardRouter from "./dashboard";
 
 const router: IRouter = Router();
@@ -37,6 +38,7 @@ router.use(vendorsRouter);
 router.use(projectsRouter);
 router.use(initiativesRouter);
 router.use(riskRulesRouter);
+router.use(workflowsRouter);
 router.use(dashboardRouter);
 
 export default router;

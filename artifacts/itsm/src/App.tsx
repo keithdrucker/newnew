@@ -19,6 +19,8 @@ import Vendors from "@/pages/vendors";
 import Projects from "@/pages/projects";
 import Settings from "@/pages/settings";
 import SettingsRiskRules from "@/pages/settings-risk-rules";
+import SettingsWorkflows from "@/pages/settings-workflows";
+import SettingsWorkflowEdit from "@/pages/settings-workflow-edit";
 import BoardSettings from "@/pages/board-settings";
 import {
   KnowledgeBaseList,
@@ -57,6 +59,9 @@ function Router() {
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />
         <Route path="/settings/risk-rules" component={SettingsRiskRules} />
+        <Route path="/settings/workflows" component={SettingsWorkflows} />
+        <Route path="/settings/workflows/new" component={SettingsWorkflowEdit} />
+        <Route path="/settings/workflows/:id" component={SettingsWorkflowEdit} />
         <Route path="/settings/boards/:slug" component={BoardSettings} />
         <Route component={NotFound} />
       </Switch>
