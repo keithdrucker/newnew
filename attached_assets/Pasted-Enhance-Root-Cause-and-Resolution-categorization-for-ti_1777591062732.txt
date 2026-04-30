@@ -1,0 +1,169 @@
+Enhance Root Cause and Resolution categorization for tickets.
+
+Goal:
+Automatically categorize ticket Root Cause and Resolution notes for dashboard reporting while preserving the original text exactly as written by the tech.
+
+Important:
+- Do NOT overwrite or replace the original Root Cause text.
+- Do NOT overwrite or replace the original Resolution text.
+- Add structured categories alongside the original notes for analytics and dashboards.
+
+--------------------------------------------------
+DATA MODEL
+--------------------------------------------------
+
+For each ticket, support these fields:
+
+Root Cause:
+- root_cause_notes: original free-text root cause entered by tech
+- root_cause_category: structured category used for reporting
+- root_cause_category_source: manual | ai_suggested | auto_classified
+- root_cause_category_confidence: optional number 0-100
+
+Resolution:
+- resolution_notes: original free-text resolution entered by tech
+- resolution_category: structured category used for reporting
+- resolution_category_source: manual | ai_suggested | auto_classified
+- resolution_category_confidence: optional number 0-100
+
+Default:
+- If no category can be determined, use "Unknown / Not Categorized"
+
+--------------------------------------------------
+ROOT CAUSE CATEGORIES
+--------------------------------------------------
+
+Use this controlled list only:
+
+- User Error / Training Gap
+- Software Issue / Bug
+- Configuration Issue
+- Access / Permissions
+- Network / Connectivity
+- Hardware Failure
+- Data Issue
+- External Vendor Issue
+- Security / Policy Block
+- Other (Needs Review)
+- Unknown / Not Categorized
+
+--------------------------------------------------
+RESOLUTION CATEGORIES
+--------------------------------------------------
+
+Use this controlled list only:
+
+- User Training / Guidance
+- Configuration Change
+- Software Fix / Patch
+- Access Granted / Modified
+- System Restart / Reset
+- Hardware Replacement
+- Escalated to Vendor
+- Process Change
+- Documentation Updated
+- No Issue Found
+- Other (Needs Review)
+- Unknown / Not Categorized
+
+--------------------------------------------------
+AUTO-CATEGORIZATION LOGIC
+--------------------------------------------------
+
+When a ticket is saved or closed:
+- Analyze root_cause_notes and suggest/set root_cause_category
+- Analyze resolution_notes and suggest/set resolution_category
+- Do not alter the notes fields
+
+Behavior:
+- If the tech manually selected a category, do not overwrite it.
+- If no category exists, auto-classify from the notes.
+- If confidence is low, classify as "Other (Needs Review)" or "Unknown / Not Categorized"
+- Store confidence score if available.
+
+Add helper functions:
+- classifyRootCause(notes)
+- classifyResolution(notes)
+
+For now:
+- Use keyword/rule-based classification if AI API integration is not ready.
+- Structure the code so it can later be replaced or enhanced with OpenAI classification.
+
+--------------------------------------------------
+UI / UX
+--------------------------------------------------
+
+Ticket Detail / Close Ticket Form:
+- Show Root Cause Notes and Resolution Notes as editable text fields.
+- Show Root Cause Category and Resolution Category as dropdowns.
+- Display AI/auto suggestion if available:
+  Example: "Suggested: User Error / Training Gap (87% confidence)"
+- Allow tech to accept, override, or manually change category.
+- Make category required before closing a ticket.
+- Preserve all original notes.
+
+--------------------------------------------------
+DASHBOARD REPORTING
+--------------------------------------------------
+
+Use the structured category fields for dashboards, not the free-text notes.
+
+Support Performance Dashboard:
+Add Root Cause and Resolution analytics:
+
+Metrics:
+- Top Root Cause Categories
+- Top Resolution Categories
+- % User Error / Training Gap
+- % System/Technical Issues
+- % Other / Needs Review
+
+Charts:
+- Root Cause Distribution → Bar Chart
+- Resolution Distribution → Bar Chart
+- Root Cause Trend Over Time → Line Chart
+- Root Cause vs Resolution Mapping → Grouped Bar Chart or Matrix if supported
+
+Team Health Dashboard:
+Add:
+- Top recurring root causes
+- Training Opportunity Indicator
+  - Based on % of tickets categorized as User Error / Training Gap
+- System Improvement Indicator
+  - Based on Software Issue / Bug, Configuration Issue, Network / Connectivity, Hardware Failure
+
+Operations Overview:
+Add:
+- Recurring operational root causes
+- Repeat issue categories
+- Categories that may require process change or automation
+
+--------------------------------------------------
+INSIGHT MESSAGING
+--------------------------------------------------
+
+Add simple dashboard insight text where relevant:
+
+- "High User Error / Training Gap volume may indicate a training opportunity."
+- "Frequent Configuration Issues may indicate a need for standardization or automation."
+- "High Other (Needs Review) volume means categories may need review or AI classification needs improvement."
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Confirm:
+- Original root cause notes remain unchanged.
+- Original resolution notes remain unchanged.
+- Categories are used for dashboard charts.
+- Manual category selections are not overwritten.
+- Existing tickets without categories safely default to Unknown / Not Categorized.
+- Charts render even with partial data.
+- No ticket workflow breaks.
+
+Return:
+- Summary of files changed
+- Fields added or reused
+- Classification logic added
+- Dashboard charts added
+- Any placeholder AI logic added

@@ -21,6 +21,8 @@ import {
   Tooltip,
   CartesianGrid,
   Cell,
+  LineChart,
+  Line,
 } from "recharts";
 import {
   KanbanSquare,
@@ -32,6 +34,10 @@ import {
   Archive,
   CalendarDays,
   TrendingUp,
+  ShieldCheck,
+  Timer,
+  Hammer,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
@@ -114,6 +120,16 @@ export default function ProjectsDashboard() {
     let totalTasks = 0;
     let doneTasks = 0;
     let overdue = 0;
+    // Phase counts that aren't reflected by the top-line status enum.
+    // "planning" and "in_progress" are both "active" in status terms,
+    // but stakeholders care about the planning↔execution split.
+    let planningCount = 0;
+    let implementationCount = 0;
+    let totalDurationMs = 0;
+    let durationSamples = 0;
+    // Weekly buckets of completed projects, used by the trend line
+    // chart. Key = ISO date of the Monday of that week, in local time.
+    const completedByWeek = new Map<string, number>();
     const byDept = new Map<string, number>();
     const byOwner = new Map<string, number>();
 
@@ -122,12 +138,61 @@ export default function ProjectsDashboard() {
       totalTasks += p.checklistTotal;
       doneTasks += p.checklistDone;
       if (isOverdue(p)) overdue += 1;
+      // Phase split — only for live projects, since closed/archived
+      // projects keep their last phase value but are no longer
+      // "in flight".
+      if (p.status === "active") {
+        if (p.phase === "planning") planningCount += 1;
+        else if (p.phase === "in_progress") implementationCount += 1;
+      }
+      // Avg duration: completedAt - startDate, with createdAt as
+      // fallback when startDate isn't recorded, for completed projects
+      // only. Without the fallback, projects missing a startDate
+      // silently drop out of the sample and bias the average.
+      if (p.status === "completed" && p.completedAt) {
+        const startIso = p.startDate ?? p.createdAt ?? null;
+        const startMs = startIso
+          ? new Date(startIso as string).getTime()
+          : null;
+        const endMs = new Date(p.completedAt as string).getTime();
+        if (startMs != null && Number.isFinite(endMs - startMs) && endMs >= startMs) {
+          totalDurationMs += endMs - startMs;
+          durationSamples += 1;
+        }
+        // Bucket completion into the Monday of its week (local).
+        const d = new Date(endMs);
+        d.setHours(0, 0, 0, 0);
+        const dow = d.getDay();
+        const mondayOffset = dow === 0 ? -6 : 1 - dow;
+        d.setDate(d.getDate() + mondayOffset);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        completedByWeek.set(key, (completedByWeek.get(key) ?? 0) + 1);
+      }
       const deptKey = p.departmentName ?? "Cross-functional";
       byDept.set(deptKey, (byDept.get(deptKey) ?? 0) + 1);
       if (p.ownerName) {
         byOwner.set(p.ownerName, (byOwner.get(p.ownerName) ?? 0) + 1);
       }
     }
+    const onTrack = counts.active - overdue;
+    const avgDurationDays =
+      durationSamples === 0
+        ? null
+        : totalDurationMs / durationSamples / (1000 * 60 * 60 * 24);
+    const completionTrend = [...completedByWeek.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([key, value]) => {
+        const [y, m, d] = key.split("-").map(Number);
+        const date = new Date(y, (m ?? 1) - 1, d ?? 1);
+        return {
+          weekStart: key,
+          label: date.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          }),
+          completed: value,
+        };
+      });
 
     const overallPct =
       totalTasks === 0 ? 0 : Math.round((doneTasks / totalTasks) * 100);
@@ -167,12 +232,27 @@ export default function ProjectsDashboard() {
       doneTasks,
       overallPct,
       overdue,
+      onTrack,
+      planningCount,
+      implementationCount,
+      avgDurationDays,
+      completionTrend,
       topProgress,
       departmentBreakdown,
       topOwners,
       overdueList,
     };
   }, [filtered]);
+
+  function fmtAvgDays(days: number | null): string {
+    if (days == null) return "—";
+    if (days < 1) {
+      const hrs = Math.round(days * 24);
+      return `${hrs}h`;
+    }
+    if (days < 10) return `${days.toFixed(1)}d`;
+    return `${Math.round(days)}d`;
+  }
 
   const scopeLabel = useMemo(() => {
     if (scope.isAll) return "All Teams";
@@ -300,6 +380,76 @@ export default function ProjectsDashboard() {
               value={stats.counts.archived}
             />
           </div>
+
+          <div className="grid gap-4 md:grid-cols-4">
+            <KpiCard
+              icon={<ClipboardList className="h-4 w-4 text-sky-500" />}
+              label="In Planning"
+              value={String(stats.planningCount)}
+              hint="Active projects pre-execution"
+            />
+            <KpiCard
+              icon={<Hammer className="h-4 w-4 text-indigo-500" />}
+              label="Implementation"
+              value={String(stats.implementationCount)}
+              hint="Active projects in delivery"
+            />
+            <KpiCard
+              icon={<ShieldCheck className="h-4 w-4 text-emerald-500" />}
+              label="On Track vs At Risk"
+              value={`${Math.max(stats.onTrack, 0)} / ${stats.overdue}`}
+              hint={`${stats.counts.active} active projects`}
+              tone={stats.overdue > 0 ? "warning" : undefined}
+            />
+            <KpiCard
+              icon={<Timer className="h-4 w-4 text-violet-500" />}
+              label="Avg Duration"
+              value={fmtAvgDays(stats.avgDurationDays)}
+              hint={`From ${stats.counts.completed} completed`}
+            />
+          </div>
+
+          <Card data-testid="card-completion-trend">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Project completions per week
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[260px]">
+              {stats.completionTrend.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No projects completed in this window.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={stats.completionTrend}
+                    margin={{ top: 5, right: 20, left: -10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      allowDecimals={false}
+                    />
+                    <Tooltip />
+                    <Line
+                      type="monotone"
+                      dataKey="completed"
+                      name="Completed"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">

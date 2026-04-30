@@ -4,7 +4,9 @@ import {
   useGetBreachedTickets,
   useGetSession,
   useListAgents,
+  useListTickets,
   getListAgentsQueryKey,
+  getListTicketsQueryKey,
   getDashboardOverview,
   getDashboardTimeseries,
   getBreachedTickets,
@@ -14,6 +16,7 @@ import {
   type DashboardOverview,
   type DashboardTimeseries,
   type Ticket,
+  type TicketPriority,
   type AgentLeaderboardItem,
 } from "@workspace/api-client-react";
 import { useQueries } from "@tanstack/react-query";
@@ -35,6 +38,11 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  Cell,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -63,6 +71,7 @@ import {
   AssigneePicker,
   TimeRangePicker,
   resolveRange,
+  isInRange,
   teamScopeSignature,
   DEFAULT_TIME_RANGE,
   type TimeRangeValue,
@@ -633,6 +642,93 @@ function TicketsDashboardContent() {
       queryParams.to,
     );
 
+  // Pull the full ticket list for the active team scope so we can
+  // derive risk metrics (high-priority open, unassigned, stale) and
+  // the priority breakdown chart client-side. The server-side
+  // `/dashboard/overview` endpoint exposes aggregates only — it
+  // doesn't expose per-ticket priority/assignee/age — so this is the
+  // only path to those metrics without a new endpoint.
+  const ticketsParams = queryDeptId != null ? { departmentId: queryDeptId } : {};
+  const { data: allTickets } = useListTickets(ticketsParams, {
+    query: { queryKey: getListTicketsQueryKey(ticketsParams) },
+  });
+
+  // Match the date window the rest of this dashboard is showing.
+  // Without this, the Risk/Workload tiles would always be computed
+  // off the full ticket history while the SLA/Throughput cards next
+  // to them obey the picker — producing contradictory numbers on the
+  // same screen when users change the range.
+  const ticketBounds = useMemo(() => resolveRange(range), [range]);
+
+  const scopedTickets = useMemo<Ticket[]>(() => {
+    let list: Ticket[] = allTickets ?? [];
+    if (!scope.single && !scope.isAll) list = filterByTeamScope(list, scope);
+    if (assigneeIds.length > 0) {
+      const idSet = new Set(assigneeIds);
+      list = list.filter(
+        (t) => t.assigneeId != null && idSet.has(t.assigneeId),
+      );
+    }
+    list = list.filter((t) => isInRange(t.createdAt, ticketBounds));
+    return list;
+  }, [allTickets, scope, assigneeIds, ticketBounds]);
+
+  const riskStats = useMemo(() => {
+    const now = Date.now();
+    const STALE_MS = 7 * 24 * 60 * 60 * 1000;
+    const AT_RISK_WINDOW_MS = 24 * 60 * 60 * 1000;
+    const isOpen = (t: Ticket) =>
+      t.status !== "resolved" && t.status !== "closed";
+    const open = scopedTickets.filter(isOpen);
+    // "At-risk" = active SLA clock running (not paused, not breached) and
+    // the deadline lands inside the next 24h. The schema only exposes
+    // on_track / breached / paused, so we derive the at-risk bucket
+    // ourselves from `slaActiveDueAt`.
+    const atRiskSla = open.filter((t) => {
+      if (t.slaStatus !== "on_track") return false;
+      if (!t.slaActiveDueAt) return false;
+      const dueMs = new Date(t.slaActiveDueAt).getTime();
+      return dueMs - now > 0 && dueMs - now <= AT_RISK_WINDOW_MS;
+    }).length;
+    const highPriorityOpen = open.filter(
+      (t) => t.priority === "urgent" || t.priority === "high",
+    ).length;
+    const unassigned = open.filter((t) => t.assigneeId == null).length;
+    const stale = open.filter(
+      (t) => now - new Date(t.updatedAt).getTime() > STALE_MS,
+    ).length;
+    const created = scopedTickets.length;
+    const resolved = scopedTickets.filter((t) => t.resolvedAt != null).length;
+    const backlog = open.length;
+    // Priority distribution chart — always render the four buckets
+    // even when empty so the X axis is stable across re-renders.
+    const priorityCounts: Record<TicketPriority, number> = {
+      urgent: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
+    for (const t of scopedTickets) {
+      priorityCounts[t.priority] = (priorityCounts[t.priority] ?? 0) + 1;
+    }
+    const priorityChart = [
+      { name: "Urgent", value: priorityCounts.urgent, fill: "#ef4444" },
+      { name: "High", value: priorityCounts.high, fill: "#f97316" },
+      { name: "Medium", value: priorityCounts.medium, fill: "#eab308" },
+      { name: "Low", value: priorityCounts.low, fill: "#10b981" },
+    ];
+    return {
+      atRiskSla,
+      highPriorityOpen,
+      unassigned,
+      stale,
+      created,
+      resolved,
+      backlog,
+      priorityChart,
+    };
+  }, [scopedTickets]);
+
   const chartData = useMemo(() => {
     return (
       timeseries?.points.map((p) => ({
@@ -758,6 +854,98 @@ function TicketsDashboardContent() {
               value={overview.closedTickets}
             />
           </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <KpiCard
+              icon={<Inbox className="h-4 w-4 text-sky-500" />}
+              label="Created (in scope)"
+              value={String(riskStats.created)}
+              hint="Tickets visible at current scope"
+            />
+            <KpiCard
+              icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+              label="Resolved (in scope)"
+              value={String(riskStats.resolved)}
+              hint="Including closed"
+            />
+            <KpiCard
+              icon={<Hourglass className="h-4 w-4 text-amber-500" />}
+              label="Backlog"
+              value={String(riskStats.backlog)}
+              hint="Open + pending + on hold"
+              tone={riskStats.backlog > 0 ? "warning" : undefined}
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-4">
+            <KpiCard
+              icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+              label="At-Risk SLA"
+              value={String(riskStats.atRiskSla)}
+              hint="Open tickets nearing breach"
+              tone={riskStats.atRiskSla > 0 ? "warning" : undefined}
+            />
+            <KpiCard
+              icon={<AlertTriangle className="h-4 w-4 text-rose-500" />}
+              label="High-Priority Open"
+              value={String(riskStats.highPriorityOpen)}
+              hint="Urgent + high, still open"
+              tone={riskStats.highPriorityOpen > 0 ? "warning" : undefined}
+            />
+            <KpiCard
+              icon={<Inbox className="h-4 w-4 text-violet-500" />}
+              label="Unassigned"
+              value={String(riskStats.unassigned)}
+              hint="Open tickets with no owner"
+              tone={riskStats.unassigned > 0 ? "warning" : undefined}
+            />
+            <KpiCard
+              icon={<Clock className="h-4 w-4 text-orange-500" />}
+              label="Stale > 7d"
+              value={String(riskStats.stale)}
+              hint="No update in 7+ days"
+              tone={riskStats.stale > 0 ? "warning" : undefined}
+            />
+          </div>
+
+          <Card data-testid="card-priority-distribution">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Tickets by priority
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[240px]">
+              {riskStats.created === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No tickets in scope.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={riskStats.priorityChart}
+                    margin={{ top: 5, right: 20, left: -10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      allowDecimals={false}
+                    />
+                    <Tooltip />
+                    <Bar dataKey="value" name="Tickets" radius={[4, 4, 0, 0]}>
+                      {riskStats.priorityChart.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">

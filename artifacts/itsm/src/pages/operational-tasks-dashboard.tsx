@@ -22,7 +22,19 @@ import {
   AlertTriangle,
   CalendarDays,
   Repeat,
+  Sun,
+  Timer,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import {
   useDashboardFilters,
@@ -141,8 +153,18 @@ export default function OperationalTasksDashboard() {
     };
     let overdue = 0;
     let dueThisWeek = 0;
+    let dueToday = 0;
+    let totalCompletionMs = 0;
+    let completionSamples = 0;
     const byDept = new Map<string, number>();
     const byFreq = new Map<string, number>();
+    // Per-team Completed vs Overdue (only teams with at least one
+    // task in the window appear). Overdue only counts open work so
+    // we don't double-mark a finished task.
+    const byTeamPerf = new Map<
+      string,
+      { name: string; completed: number; overdue: number }
+    >();
 
     for (const t of filtered) {
       counts[t.status] = (counts[t.status] ?? 0) + 1;
@@ -150,12 +172,38 @@ export default function OperationalTasksDashboard() {
       if (
         t.status !== "completed" &&
         !t.isOverdue &&
+        isDueWithinDays(t.nextDueDate, 0)
+      ) {
+        dueToday += 1;
+      }
+      if (
+        t.status !== "completed" &&
+        !t.isOverdue &&
         isDueWithinDays(t.nextDueDate, 7)
       ) {
         dueThisWeek += 1;
       }
+      // Avg completion time: completedAt - createdAt for completed
+      // tasks. Skip negative or invalid spans (clock skew etc).
+      if (t.status === "completed" && t.completedAt) {
+        const span =
+          new Date(t.completedAt).getTime() -
+          new Date(t.createdAt).getTime();
+        if (Number.isFinite(span) && span >= 0) {
+          totalCompletionMs += span;
+          completionSamples += 1;
+        }
+      }
       const deptKey = t.departmentName ?? "—";
       byDept.set(deptKey, (byDept.get(deptKey) ?? 0) + 1);
+      const perf = byTeamPerf.get(deptKey) ?? {
+        name: deptKey,
+        completed: 0,
+        overdue: 0,
+      };
+      if (t.status === "completed") perf.completed += 1;
+      if (t.isOverdue && t.status !== "completed") perf.overdue += 1;
+      byTeamPerf.set(deptKey, perf);
       if (t.frequency) {
         const label = FREQUENCY_LABEL[t.frequency] ?? t.frequency;
         byFreq.set(label, (byFreq.get(label) ?? 0) + 1);
@@ -170,6 +218,19 @@ export default function OperationalTasksDashboard() {
     const frequencyBreakdown = [...byFreq.entries()]
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
+    // Top 8 teams by activity, sorted by completed desc, used by the
+    // Completed-vs-Overdue chart.
+    const teamPerformance = [...byTeamPerf.values()]
+      .filter((r) => r.completed > 0 || r.overdue > 0)
+      .sort(
+        (a, b) =>
+          b.completed + b.overdue - (a.completed + a.overdue),
+      )
+      .slice(0, 8);
+    const avgCompletionDays =
+      completionSamples === 0
+        ? null
+        : totalCompletionMs / completionSamples / (1000 * 60 * 60 * 24);
 
     // "Needs attention" = overdue first, then due-soonest open tasks.
     const openTasks = filtered.filter((t) => t.status !== "completed");
@@ -188,11 +249,24 @@ export default function OperationalTasksDashboard() {
       counts,
       overdue,
       dueThisWeek,
+      dueToday,
+      avgCompletionDays,
+      teamPerformance,
       departmentBreakdown,
       frequencyBreakdown,
       needsAttention,
     };
   }, [filtered]);
+
+  function fmtAvgDays(days: number | null): string {
+    if (days == null) return "—";
+    if (days < 1) {
+      const hrs = Math.round(days * 24);
+      return `${hrs}h`;
+    }
+    if (days < 10) return `${days.toFixed(1)}d`;
+    return `${Math.round(days)}d`;
+  }
 
   const scopeLabel = useMemo(() => {
     if (scope.isAll) return "All Teams";
@@ -300,6 +374,73 @@ export default function OperationalTasksDashboard() {
               tone={stats.overdue > 0 ? "warning" : undefined}
             />
           </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <KpiCard
+              icon={<Sun className="h-4 w-4 text-amber-500" />}
+              label="Due Today"
+              value={String(stats.dueToday)}
+              hint="Open tasks due today"
+              tone={stats.dueToday > 0 ? "warning" : undefined}
+            />
+            <KpiCard
+              icon={<Timer className="h-4 w-4 text-violet-500" />}
+              label="Avg Completion Time"
+              value={fmtAvgDays(stats.avgCompletionDays)}
+              hint={`From ${stats.counts.completed} completed task${stats.counts.completed === 1 ? "" : "s"}`}
+            />
+          </div>
+
+          <Card data-testid="card-team-performance">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Activity className="h-4 w-4 text-emerald-500" />
+                Completed vs Overdue by team
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[280px]">
+              {stats.teamPerformance.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No completed or overdue tasks in this window.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={stats.teamPerformance}
+                    margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      interval={0}
+                      angle={-15}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      allowDecimals={false}
+                    />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar
+                      dataKey="completed"
+                      name="Completed"
+                      fill="#10b981"
+                      radius={[3, 3, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="overdue"
+                      name="Overdue"
+                      fill="#f59e0b"
+                      radius={[3, 3, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 md:grid-cols-3">
             <StatusCard

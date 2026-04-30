@@ -22,7 +22,20 @@ import {
   AlertTriangle,
   CalendarDays,
   Clock,
+  Timer,
+  GitBranch,
+  BarChart3,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Cell,
+} from "recharts";
 import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import {
   useDashboardFilters,
@@ -110,12 +123,28 @@ export default function InitiativesDashboard() {
     };
     const byDept = new Map<string, number>();
     const byCategory = new Map<string, number>();
+    // Avg time-to-approve = decidedAt - createdAt for approved
+    // initiatives only. Rejected/deferred are excluded so we don't
+    // skew the metric with quick "no" calls.
+    let totalApproveMs = 0;
+    let approveSamples = 0;
+    let convertedFromApproved = 0;
     for (const i of filtered) {
       counts[i.status] = (counts[i.status] ?? 0) + 1;
       const deptKey = i.departmentName ?? "Cross-functional";
       byDept.set(deptKey, (byDept.get(deptKey) ?? 0) + 1);
       const cat = i.category?.trim() || "Uncategorized";
       byCategory.set(cat, (byCategory.get(cat) ?? 0) + 1);
+      if (i.status === "approved" && i.decidedAt) {
+        const span =
+          new Date(i.decidedAt as string).getTime() -
+          new Date(i.createdAt as string).getTime();
+        if (Number.isFinite(span) && span >= 0) {
+          totalApproveMs += span;
+          approveSamples += 1;
+        }
+        if (i.createdProjectId != null) convertedFromApproved += 1;
+      }
     }
     const departmentBreakdown = [...byDept.entries()]
       .map(([name, count]) => ({ name, count }))
@@ -147,15 +176,56 @@ export default function InitiativesDashboard() {
       )
       .slice(0, 6);
 
+    const avgApproveDays =
+      approveSamples === 0
+        ? null
+        : totalApproveMs / approveSamples / (1000 * 60 * 60 * 24);
+    // Conversion rate = % of approved initiatives that have a
+    // linked project. Null when there are no approvals to divide
+    // by, which the UI displays as "—" rather than "0%" so we don't
+    // imply zero conversion when there's simply no data.
+    const conversionRate =
+      counts.approved === 0
+        ? null
+        : Math.round((convertedFromApproved / counts.approved) * 100);
+    const statusChartData = [
+      { name: "Backlog", value: counts.backlog, fill: "#94a3b8" },
+      {
+        name: "Under review",
+        value: counts.under_review,
+        fill: "#f59e0b",
+      },
+      { name: "Approved", value: counts.approved, fill: "#10b981" },
+      {
+        name: "Rejected",
+        value: counts.rejected_deferred,
+        fill: "#f43f5e",
+      },
+    ];
+
     return {
       total: filtered.length,
       counts,
+      avgApproveDays,
+      conversionRate,
+      convertedFromApproved,
+      statusChartData,
       departmentBreakdown,
       categoryBreakdown,
       needsReview,
       recentlyDecided,
     };
   }, [filtered]);
+
+  function fmtAvgDays(days: number | null): string {
+    if (days == null) return "—";
+    if (days < 1) {
+      const hrs = Math.round(days * 24);
+      return `${hrs}h`;
+    }
+    if (days < 10) return `${days.toFixed(1)}d`;
+    return `${Math.round(days)}d`;
+  }
 
   const scopeLabel = useMemo(() => {
     if (scope.isAll) return "All Teams";
@@ -261,6 +331,70 @@ export default function InitiativesDashboard() {
               hint={`${stats.counts.rejected_deferred} rejected/deferred`}
             />
           </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <KpiCard
+              icon={<XCircle className="h-4 w-4 text-rose-500" />}
+              label="Rejected / Deferred"
+              value={String(stats.counts.rejected_deferred)}
+              hint="Closed without action"
+            />
+            <KpiCard
+              icon={<Timer className="h-4 w-4 text-violet-500" />}
+              label="Avg Time to Approve"
+              value={fmtAvgDays(stats.avgApproveDays)}
+              hint={`From ${stats.counts.approved} approval${stats.counts.approved === 1 ? "" : "s"}`}
+            />
+            <KpiCard
+              icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
+              label="Conversion Rate"
+              value={
+                stats.conversionRate == null
+                  ? "—"
+                  : `${stats.conversionRate}%`
+              }
+              hint={`${stats.convertedFromApproved} of ${stats.counts.approved} approved became projects`}
+            />
+          </div>
+
+          <Card data-testid="card-status-distribution">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-indigo-500" />
+                Status distribution
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[260px]">
+              {stats.total === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No initiatives in this window.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={stats.statusChartData}
+                    margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      allowDecimals={false}
+                    />
+                    <Tooltip />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {stats.statusChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>

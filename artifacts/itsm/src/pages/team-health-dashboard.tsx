@@ -30,8 +30,10 @@ import {
   KanbanSquare,
   Lightbulb,
   ListChecks,
+  PauseCircle,
   ShieldCheck,
   Users,
+  Layers,
 } from "lucide-react";
 import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import {
@@ -159,13 +161,25 @@ export default function TeamHealthDashboard() {
   const kpis = useMemo(() => {
     const activeTickets = scopedTickets.filter(ticketIsActive);
     const breachedTickets = activeTickets.filter((t) => t.slaBreached);
+    // "Active" ops tasks = non-terminal only. The status enum is
+    // scheduled / in_progress / completed / closed; both completed and
+    // closed are terminal and must be excluded so we don't inflate the
+    // workload composite below.
+    const activeOps = scopedOpsTasks.filter(
+      (t) => t.status === "scheduled" || t.status === "in_progress",
+    );
     const overdueOps = scopedOpsTasks.filter(
-      (t) => t.isOverdue && t.status !== "completed",
+      (t) =>
+        t.isOverdue &&
+        (t.status === "scheduled" || t.status === "in_progress"),
     );
     const inReviewInitiatives = scopedInitiatives.filter(
       (i) => i.status === "under_review",
     );
     const activeProjects = scopedProjects.filter(projectIsActive);
+    const onHoldProjects = scopedProjects.filter(
+      (p) => p.status === "on_hold",
+    );
     const atRiskProjects = scopedProjects.filter(projectIsAtRisk);
 
     const slaCompliance =
@@ -177,16 +191,28 @@ export default function TeamHealthDashboard() {
               100,
           );
 
+    // "Total active work" composite — what's currently on the team's
+    // plate across every channel. Initiatives count only the in-review
+    // ones since backlog isn't truly "active work".
+    const totalActiveWork =
+      activeTickets.length +
+      activeOps.length +
+      inReviewInitiatives.length +
+      activeProjects.length;
+
     return {
       activeTickets: activeTickets.length,
       breachedTickets: breachedTickets.length,
       slaCompliance,
+      activeOps: activeOps.length,
       overdueOps: overdueOps.length,
       totalOps: scopedOpsTasks.length,
       inReviewInitiatives: inReviewInitiatives.length,
       totalInitiatives: scopedInitiatives.length,
       activeProjects: activeProjects.length,
+      onHoldProjects: onHoldProjects.length,
       atRiskProjects: atRiskProjects.length,
+      totalActiveWork,
     };
   }, [scopedTickets, scopedOpsTasks, scopedInitiatives, scopedProjects]);
 
@@ -335,6 +361,42 @@ export default function TeamHealthDashboard() {
         </div>
       ) : (
         <>
+          <div className="grid gap-4 md:grid-cols-4">
+            <KpiCard
+              icon={<Layers className="h-4 w-4 text-indigo-500" />}
+              label="Total Active Work"
+              value={String(kpis.totalActiveWork)}
+              hint="Tickets + ops + reviews + projects"
+              testId="kpi-total-active-work"
+            />
+            <KpiCard
+              icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+              label="Tickets Breaching SLA"
+              value={String(kpis.breachedTickets)}
+              hint={`of ${kpis.activeTickets} active tickets`}
+              tone={kpis.breachedTickets > 0 ? "warning" : undefined}
+              href="/tickets"
+              testId="kpi-tickets-breaching-sla"
+            />
+            <KpiCard
+              icon={<PauseCircle className="h-4 w-4 text-amber-500" />}
+              label="Projects On Hold"
+              value={String(kpis.onHoldProjects)}
+              hint="Paused or blocked"
+              href="/projects"
+              testId="kpi-projects-on-hold"
+            />
+            <KpiCard
+              icon={<ListChecks className="h-4 w-4 text-sky-500" />}
+              label="Ops Tasks Active"
+              value={String(kpis.activeOps)}
+              hint={`${kpis.overdueOps} overdue`}
+              tone={kpis.overdueOps > 0 ? "warning" : undefined}
+              href="/operational-tasks"
+              testId="kpi-ops-tasks-active"
+            />
+          </div>
+
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<Inbox className="h-4 w-4 text-sky-500" />}
