@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, lte, inArray, sql } from "drizzle-orm";
 import {
   db,
   ticketsTable,
@@ -23,6 +23,34 @@ const router: IRouter = Router();
 
 function rangeStart(rangeDays: number): Date {
   return new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
+}
+
+// Resolve the effective createdAt window for a dashboard query. If the
+// caller passed both `from` and `to` (custom range), use that exact
+// window; otherwise fall back to "last N days from now". `null` end
+// means "no upper bound" (matches the legacy behavior of rangeDays).
+function resolveWindow(p: {
+  from?: Date | undefined;
+  to?: Date | undefined;
+  rangeDays: number;
+}): { since: Date; until: Date | null } {
+  if (p.from && p.to) {
+    const fromMs = p.from.getTime();
+    const toMs = p.to.getTime();
+    // Reject inverted or invalid windows (NaN, from > to) and fall
+    // back to the rangeDays default. We deliberately keep the
+    // fallback silent rather than 400-ing — the client picker can
+    // produce a transient `to < from` state while the user is mid-
+    // edit, and a hard error there would just blank the dashboard.
+    if (
+      !Number.isNaN(fromMs) &&
+      !Number.isNaN(toMs) &&
+      fromMs <= toMs
+    ) {
+      return { since: p.from, until: p.to };
+    }
+  }
+  return { since: rangeStart(p.rangeDays), until: null };
 }
 
 /**
@@ -59,12 +87,19 @@ router.get("/dashboard/overview", async (req, res): Promise<void> => {
     return;
   }
   const rangeDays = params.data.rangeDays ?? 30;
-  const since = rangeStart(rangeDays);
+  const { since, until } = resolveWindow({
+    from: params.data.from,
+    to: params.data.to,
+    rangeDays,
+  });
   const { deptIds } = await applyAccess(user, params.data.departmentId);
 
   const conds: Array<ReturnType<typeof eq>> = [
     gte(ticketsTable.createdAt, since),
   ];
+  if (until != null) {
+    conds.push(lte(ticketsTable.createdAt, until));
+  }
   if (deptIds != null) {
     if (deptIds.length === 0) {
       conds.push(sql`false` as unknown as ReturnType<typeof eq>);
@@ -242,12 +277,19 @@ router.get("/dashboard/timeseries", async (req, res): Promise<void> => {
     return;
   }
   const rangeDays = params.data.rangeDays ?? 30;
-  const since = rangeStart(rangeDays);
+  const { since, until } = resolveWindow({
+    from: params.data.from,
+    to: params.data.to,
+    rangeDays,
+  });
   const { deptIds } = await applyAccess(user, params.data.departmentId);
 
   const conds: Array<ReturnType<typeof eq>> = [
     gte(ticketsTable.createdAt, since),
   ];
+  if (until != null) {
+    conds.push(lte(ticketsTable.createdAt, until));
+  }
   if (deptIds != null) {
     if (deptIds.length === 0) {
       conds.push(sql`false` as unknown as ReturnType<typeof eq>);
@@ -282,27 +324,63 @@ router.get("/dashboard/timeseries", async (req, res): Promise<void> => {
     )}`;
   }
 
-  // Pre-fill all buckets so the chart isn't sparse.
-  const now = new Date();
+  // Pre-fill all buckets so the chart isn't sparse. Bucket boundaries
+  // are derived from the *resolved* window — not "now" — so custom
+  // historical windows (and any window whose end isn't today) still
+  // render every bucket inside the chosen span. Without this the
+  // counting loop below would silently drop tickets whose key isn't
+  // in the prefilled set.
+  const windowStart = since;
+  const windowEnd = until ?? new Date();
   if (rangeDays <= 30) {
-    for (let i = rangeDays - 1; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const k = keyFor(d);
+    const oneDay = 24 * 60 * 60 * 1000;
+    // Walk day-by-day from the start of `windowStart`'s UTC day to
+    // `windowEnd`. Using a UTC-day floor keeps the keys (which are
+    // YYYY-MM-DD) aligned with what `keyFor` produces from any
+    // timestamp inside the same day.
+    const startMs = Date.UTC(
+      windowStart.getUTCFullYear(),
+      windowStart.getUTCMonth(),
+      windowStart.getUTCDate(),
+    );
+    const endMs = windowEnd.getTime();
+    for (let t = startMs; t <= endMs; t += oneDay) {
+      const k = keyFor(new Date(t));
       if (!buckets.has(k)) buckets.set(k, { date: k, opened: 0, resolved: 0 });
     }
   } else if (rangeDays <= 180) {
-    for (let i = Math.ceil(rangeDays / 7) - 1; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-      const k = keyFor(d);
+    const oneWeek = 7 * 24 * 60 * 60 * 1000;
+    // Snap to the Sunday at-or-before `windowStart` so we step through
+    // the same week-boundaries `keyFor` uses.
+    const startDay = new Date(
+      Date.UTC(
+        windowStart.getUTCFullYear(),
+        windowStart.getUTCMonth(),
+        windowStart.getUTCDate() - windowStart.getUTCDay(),
+      ),
+    );
+    const endMs = windowEnd.getTime();
+    for (let t = startDay.getTime(); t <= endMs; t += oneWeek) {
+      const k = keyFor(new Date(t));
       if (!buckets.has(k)) buckets.set(k, { date: k, opened: 0, resolved: 0 });
     }
   } else {
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1),
-      );
-      const k = keyFor(d);
+    // Monthly: walk every month from `windowStart`'s month to
+    // `windowEnd`'s month inclusive, no matter how many years that
+    // spans. Previously this was hardcoded to 12 buckets ending at
+    // "now", which truncated multi-year custom windows.
+    let y = windowStart.getUTCFullYear();
+    let m = windowStart.getUTCMonth();
+    const endY = windowEnd.getUTCFullYear();
+    const endM = windowEnd.getUTCMonth();
+    while (y < endY || (y === endY && m <= endM)) {
+      const k = keyFor(new Date(Date.UTC(y, m, 1)));
       if (!buckets.has(k)) buckets.set(k, { date: k, opened: 0, resolved: 0 });
+      m += 1;
+      if (m > 11) {
+        m = 0;
+        y += 1;
+      }
     }
   }
 
@@ -332,7 +410,11 @@ router.get("/dashboard/breached", async (req, res): Promise<void> => {
     return;
   }
   const rangeDays = params.data.rangeDays ?? 30;
-  const since = rangeStart(rangeDays);
+  const { since, until } = resolveWindow({
+    from: params.data.from,
+    to: params.data.to,
+    rangeDays,
+  });
   const { deptIds: allowedDeptIds } = await applyAccess(
     user,
     params.data.departmentId,
@@ -345,6 +427,9 @@ router.get("/dashboard/breached", async (req, res): Promise<void> => {
   const conds: Array<ReturnType<typeof eq>> = [
     gte(ticketsTable.createdAt, since),
   ];
+  if (until != null) {
+    conds.push(lte(ticketsTable.createdAt, until));
+  }
   if (allowedDeptIds != null) {
     if (allowedDeptIds.length === 0) {
       conds.push(sql`false` as unknown as ReturnType<typeof eq>);

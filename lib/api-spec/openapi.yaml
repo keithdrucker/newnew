@@ -1711,10 +1711,30 @@ paths:
           schema: { type: integer }
         - in: query
           name: rangeDays
+          description: |
+            Number of days back from "now" to include. Used as a
+            fallback when an explicit `from`/`to` window is not
+            provided, and as a granularity hint for the timeseries
+            endpoint. Any positive integer is accepted.
           schema:
             type: integer
-            enum: [30, 180, 365]
+            minimum: 1
             default: 30
+        - in: query
+          name: from
+          description: |
+            Inclusive lower bound for ticket createdAt as an ISO 8601
+            timestamp. When both `from` and `to` are provided, this
+            window overrides `rangeDays` for filtering.
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          description: Inclusive upper bound for ticket createdAt as an ISO 8601 timestamp.
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
           description: Dashboard overview
@@ -1738,8 +1758,18 @@ paths:
           name: rangeDays
           schema:
             type: integer
-            enum: [30, 180, 365]
+            minimum: 1
             default: 30
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
           description: Timeseries data
@@ -1763,8 +1793,18 @@ paths:
           name: rangeDays
           schema:
             type: integer
-            enum: [30, 180, 365]
+            minimum: 1
             default: 30
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
           description: Breached tickets

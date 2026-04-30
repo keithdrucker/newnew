@@ -4015,9 +4015,25 @@ export const getDashboardOverviewQueryRangeDaysDefault = 30;
 export const GetDashboardOverviewQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
   assigneeId: zod.coerce.number().optional(),
-  rangeDays: zod
-    .union([zod.literal(30), zod.literal(180), zod.literal(365)])
-    .default(getDashboardOverviewQueryRangeDaysDefault),
+  rangeDays: zod.coerce
+    .number()
+    .min(1)
+    .default(getDashboardOverviewQueryRangeDaysDefault)
+    .describe(
+      'Number of days back from \"now\" to include. Used as a\nfallback when an explicit `from`\/`to` window is not\nprovided, and as a granularity hint for the timeseries\nendpoint. Any positive integer is accepted.\n',
+    ),
+  from: zod
+    .date()
+    .optional()
+    .describe(
+      "Inclusive lower bound for ticket createdAt as an ISO 8601\ntimestamp. When both `from` and `to` are provided, this\nwindow overrides `rangeDays` for filtering.\n",
+    ),
+  to: zod
+    .date()
+    .optional()
+    .describe(
+      "Inclusive upper bound for ticket createdAt as an ISO 8601 timestamp.",
+    ),
 });
 
 export const GetDashboardOverviewResponse = zod.object({
@@ -4067,9 +4083,12 @@ export const getDashboardTimeseriesQueryRangeDaysDefault = 30;
 export const GetDashboardTimeseriesQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
   assigneeId: zod.coerce.number().optional(),
-  rangeDays: zod
-    .union([zod.literal(30), zod.literal(180), zod.literal(365)])
+  rangeDays: zod.coerce
+    .number()
+    .min(1)
     .default(getDashboardTimeseriesQueryRangeDaysDefault),
+  from: zod.date().optional(),
+  to: zod.date().optional(),
 });
 
 export const GetDashboardTimeseriesResponse = zod.object({
@@ -4091,9 +4110,12 @@ export const getBreachedTicketsQueryRangeDaysDefault = 30;
 export const GetBreachedTicketsQueryParams = zod.object({
   departmentId: zod.coerce.number().optional(),
   assigneeId: zod.coerce.number().optional(),
-  rangeDays: zod
-    .union([zod.literal(30), zod.literal(180), zod.literal(365)])
+  rangeDays: zod.coerce
+    .number()
+    .min(1)
     .default(getBreachedTicketsQueryRangeDaysDefault),
+  from: zod.date().optional(),
+  to: zod.date().optional(),
 });
 
 export const GetBreachedTicketsResponseItem = zod.object({

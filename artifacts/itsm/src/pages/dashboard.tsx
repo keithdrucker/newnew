@@ -58,6 +58,12 @@ import ProjectsDashboard from "@/pages/projects-dashboard";
 import InitiativesDashboard from "@/pages/initiatives-dashboard";
 import OperationalTasksDashboard from "@/pages/operational-tasks-dashboard";
 import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
+import {
+  TimeRangePicker,
+  resolveRange,
+  DEFAULT_TIME_RANGE,
+  type TimeRangeValue,
+} from "@/lib/dashboard-filters";
 
 function fmtDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "—";
@@ -282,8 +288,14 @@ function aggregateTimeseries(
 // This keeps the dashboard honest when the user picks, say, two of
 // three teams: we don't quietly include the un-selected team.
 function useScopedDashboard(
-  rangeDays: 30 | 180 | 365,
+  rangeDays: number,
   assigneeId: number | undefined,
+  // Custom range bounds. When both are set the server uses them as
+  // the absolute window and `rangeDays` becomes a granularity hint
+  // for timeseries bucketing. When undefined the server falls back
+  // to "last `rangeDays` days from now".
+  fromIso: string | undefined,
+  toIso: string | undefined,
 ) {
   const scope = useTeamScope();
   const isMulti = !scope.isAll && !scope.single && scope.selectedIds.length > 1;
@@ -297,16 +309,22 @@ function useScopedDashboard(
     departmentId: singleDeptId,
     assigneeId,
     rangeDays,
+    from: fromIso,
+    to: toIso,
   };
   const singleTimeseriesParams = {
     departmentId: singleDeptId,
     assigneeId,
     rangeDays,
+    from: fromIso,
+    to: toIso,
   };
   const singleBreachedParams = {
     departmentId: singleDeptId,
     assigneeId,
     rangeDays,
+    from: fromIso,
+    to: toIso,
   };
   const singleOverview = useGetDashboardOverview(singleOverviewParams, {
     query: {
@@ -335,40 +353,52 @@ function useScopedDashboard(
   // to a single team.
   const multiTeamIds = isMulti ? scope.selectedIds : [];
   const overviewQueries = useQueries({
-    queries: multiTeamIds.map((teamId) => ({
-      queryKey: getGetDashboardOverviewQueryKey({
+    queries: multiTeamIds.map((teamId) => {
+      const p = {
         departmentId: teamId,
         assigneeId,
         rangeDays,
-      }),
-      queryFn: () =>
-        getDashboardOverview({ departmentId: teamId, assigneeId, rangeDays }),
-      enabled: isMulti,
-    })),
+        from: fromIso,
+        to: toIso,
+      };
+      return {
+        queryKey: getGetDashboardOverviewQueryKey(p),
+        queryFn: () => getDashboardOverview(p),
+        enabled: isMulti,
+      };
+    }),
   });
   const timeseriesQueries = useQueries({
-    queries: multiTeamIds.map((teamId) => ({
-      queryKey: getGetDashboardTimeseriesQueryKey({
+    queries: multiTeamIds.map((teamId) => {
+      const p = {
         departmentId: teamId,
         assigneeId,
         rangeDays,
-      }),
-      queryFn: () =>
-        getDashboardTimeseries({ departmentId: teamId, assigneeId, rangeDays }),
-      enabled: isMulti,
-    })),
+        from: fromIso,
+        to: toIso,
+      };
+      return {
+        queryKey: getGetDashboardTimeseriesQueryKey(p),
+        queryFn: () => getDashboardTimeseries(p),
+        enabled: isMulti,
+      };
+    }),
   });
   const breachedQueries = useQueries({
-    queries: multiTeamIds.map((teamId) => ({
-      queryKey: getGetBreachedTicketsQueryKey({
+    queries: multiTeamIds.map((teamId) => {
+      const p = {
         departmentId: teamId,
         assigneeId,
         rangeDays,
-      }),
-      queryFn: () =>
-        getBreachedTickets({ departmentId: teamId, assigneeId, rangeDays }),
-      enabled: isMulti,
-    })),
+        from: fromIso,
+        to: toIso,
+      };
+      return {
+        queryKey: getGetBreachedTicketsQueryKey(p),
+        queryFn: () => getBreachedTickets(p),
+        enabled: isMulti,
+      };
+    }),
   });
 
   const aggregatedOverview = useMemo<DashboardOverview | null>(() => {
@@ -412,10 +442,49 @@ function useScopedDashboard(
 
 function TicketsDashboardContent() {
   const scope = useTeamScope();
-  const [rangeDays, setRangeDays] = useState<"30" | "180" | "365">("30");
+  const [range, setRange] = useState<TimeRangeValue>(DEFAULT_TIME_RANGE);
   const [assigneeId, setAssigneeId] = useState<string>("all");
 
-  const queryRangeDays = Number(rangeDays) as 30 | 180 | 365;
+  // Translate the shared TimeRangeValue into the params the dashboard
+  // endpoints understand:
+  //   - For a preset (e.g. 30/90/365) the server computes the window
+  //     itself from `rangeDays`, so we pass that and leave from/to
+  //     undefined.
+  //   - For "custom" we resolve the absolute window client-side and
+  //     pass it as ISO strings; `rangeDays` is then sent purely as a
+  //     bucket-granularity hint (≤30 days → daily, ≤180 → weekly,
+  //     otherwise monthly), computed from the span so the chart
+  //     resolution matches the chosen window.
+  const queryParams = useMemo(() => {
+    if (range.preset !== "custom") {
+      return {
+        rangeDays: Number(range.preset),
+        from: undefined as string | undefined,
+        to: undefined as string | undefined,
+      };
+    }
+    const bounds = resolveRange(range);
+    if (bounds.startMs == null || bounds.endMs == null) {
+      // Half-specified custom range — fall back to the default preset
+      // until the user fills in both dates so we don't accidentally
+      // hit the server with a one-sided window.
+      return {
+        rangeDays: 30,
+        from: undefined as string | undefined,
+        to: undefined as string | undefined,
+      };
+    }
+    const spanDays = Math.max(
+      1,
+      Math.ceil((bounds.endMs - bounds.startMs) / (24 * 60 * 60 * 1000)),
+    );
+    return {
+      rangeDays: spanDays,
+      from: new Date(bounds.startMs).toISOString(),
+      to: new Date(bounds.endMs).toISOString(),
+    };
+  }, [range]);
+
   const queryAssigneeId = assigneeId === "all" ? undefined : Number(assigneeId);
 
   // The agent picker is always visible. When a single team is in
@@ -439,7 +508,12 @@ function TicketsDashboardContent() {
   }, [queryDeptId]);
 
   const { overview, timeseries, breached, isOverviewLoading } =
-    useScopedDashboard(queryRangeDays, queryAssigneeId);
+    useScopedDashboard(
+      queryParams.rangeDays,
+      queryAssigneeId,
+      queryParams.from,
+      queryParams.to,
+    );
 
   const chartData = useMemo(() => {
     return (
@@ -509,19 +583,7 @@ function TicketsDashboardContent() {
               )}
             </SelectContent>
           </Select>
-          <Select
-            value={rangeDays}
-            onValueChange={(v) => setRangeDays(v as "30" | "180" | "365")}
-          >
-            <SelectTrigger className="w-[160px]" data-testid="select-range">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="180">Last 180 days</SelectItem>
-              <SelectItem value="365">Last 365 days</SelectItem>
-            </SelectContent>
-          </Select>
+          <TimeRangePicker value={range} onChange={setRange} />
         </div>
       </div>
 

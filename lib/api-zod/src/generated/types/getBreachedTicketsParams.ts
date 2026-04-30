@@ -5,10 +5,14 @@
  * Sidekick API
  * OpenAPI spec version: 0.1.0
  */
-import type { GetBreachedTicketsRangeDays } from "./getBreachedTicketsRangeDays";
 
 export type GetBreachedTicketsParams = {
   departmentId?: number;
   assigneeId?: number;
-  rangeDays?: GetBreachedTicketsRangeDays;
+  /**
+   * @minimum 1
+   */
+  rangeDays?: number;
+  from?: Date;
+  to?: Date;
 };

@@ -2844,47 +2844,49 @@ export type ListInitiativesParams = {
 export type GetDashboardOverviewParams = {
   departmentId?: number;
   assigneeId?: number;
-  rangeDays?: GetDashboardOverviewRangeDays;
+  /**
+ * Number of days back from "now" to include. Used as a
+fallback when an explicit `from`/`to` window is not
+provided, and as a granularity hint for the timeseries
+endpoint. Any positive integer is accepted.
+
+ * @minimum 1
+ */
+  rangeDays?: number;
+  /**
+ * Inclusive lower bound for ticket createdAt as an ISO 8601
+timestamp. When both `from` and `to` are provided, this
+window overrides `rangeDays` for filtering.
+
+ */
+  from?: string;
+  /**
+   * Inclusive upper bound for ticket createdAt as an ISO 8601 timestamp.
+   */
+  to?: string;
 };
-
-export type GetDashboardOverviewRangeDays =
-  (typeof GetDashboardOverviewRangeDays)[keyof typeof GetDashboardOverviewRangeDays];
-
-export const GetDashboardOverviewRangeDays = {
-  NUMBER_30: 30,
-  NUMBER_180: 180,
-  NUMBER_365: 365,
-} as const;
 
 export type GetDashboardTimeseriesParams = {
   departmentId?: number;
   assigneeId?: number;
-  rangeDays?: GetDashboardTimeseriesRangeDays;
+  /**
+   * @minimum 1
+   */
+  rangeDays?: number;
+  from?: string;
+  to?: string;
 };
-
-export type GetDashboardTimeseriesRangeDays =
-  (typeof GetDashboardTimeseriesRangeDays)[keyof typeof GetDashboardTimeseriesRangeDays];
-
-export const GetDashboardTimeseriesRangeDays = {
-  NUMBER_30: 30,
-  NUMBER_180: 180,
-  NUMBER_365: 365,
-} as const;
 
 export type GetBreachedTicketsParams = {
   departmentId?: number;
   assigneeId?: number;
-  rangeDays?: GetBreachedTicketsRangeDays;
+  /**
+   * @minimum 1
+   */
+  rangeDays?: number;
+  from?: string;
+  to?: string;
 };
-
-export type GetBreachedTicketsRangeDays =
-  (typeof GetBreachedTicketsRangeDays)[keyof typeof GetBreachedTicketsRangeDays];
-
-export const GetBreachedTicketsRangeDays = {
-  NUMBER_30: 30,
-  NUMBER_180: 180,
-  NUMBER_365: 365,
-} as const;
 
 export type ListWorkflowsParams = {
   module?: ListWorkflowsModule;

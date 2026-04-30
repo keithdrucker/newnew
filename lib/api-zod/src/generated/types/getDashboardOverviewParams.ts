@@ -5,10 +5,28 @@
  * Sidekick API
  * OpenAPI spec version: 0.1.0
  */
-import type { GetDashboardOverviewRangeDays } from "./getDashboardOverviewRangeDays";
 
 export type GetDashboardOverviewParams = {
   departmentId?: number;
   assigneeId?: number;
-  rangeDays?: GetDashboardOverviewRangeDays;
+  /**
+ * Number of days back from "now" to include. Used as a
+fallback when an explicit `from`/`to` window is not
+provided, and as a granularity hint for the timeseries
+endpoint. Any positive integer is accepted.
+
+ * @minimum 1
+ */
+  rangeDays?: number;
+  /**
+ * Inclusive lower bound for ticket createdAt as an ISO 8601
+timestamp. When both `from` and `to` are provided, this
+window overrides `rangeDays` for filtering.
+
+ */
+  from?: Date;
+  /**
+   * Inclusive upper bound for ticket createdAt as an ISO 8601 timestamp.
+   */
+  to?: Date;
 };

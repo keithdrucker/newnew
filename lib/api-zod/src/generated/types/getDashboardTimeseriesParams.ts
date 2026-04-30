@@ -5,10 +5,14 @@
  * Sidekick API
  * OpenAPI spec version: 0.1.0
  */
-import type { GetDashboardTimeseriesRangeDays } from "./getDashboardTimeseriesRangeDays";
 
 export type GetDashboardTimeseriesParams = {
   departmentId?: number;
   assigneeId?: number;
-  rangeDays?: GetDashboardTimeseriesRangeDays;
+  /**
+   * @minimum 1
+   */
+  rangeDays?: number;
+  from?: Date;
+  to?: Date;
 };
