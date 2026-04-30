@@ -54,17 +54,24 @@ type ProjectPhase =
   | "in_progress"
   | "on_hold"
   | "completed"
+  | "closed"
   | "cancelled";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 // Allowed phase transitions (the source of truth for the phase
 // state machine). Anything not present in this map → 409.
+//
+// `completed` is the closeout-paperwork phase; the user fills in
+// Completion Summary + Key Takeaway on the project view, then
+// clicks "Mark as Closed" to advance to `closed` (which validates
+// both fields are non-empty). Either Completed or Closed can be
+// reopened back to In Progress.
 const PHASE_TRANSITIONS: Record<ProjectPhase, ReadonlyArray<ProjectPhase>> = {
   backlog_needs_assignment: ["planning", "cancelled"],
   planning: ["in_progress", "on_hold", "cancelled"],
   in_progress: ["completed", "planning", "on_hold", "cancelled"],
-  // Reopen / resume paths.
-  completed: ["in_progress"],
+  completed: ["closed", "in_progress"],
+  closed: ["in_progress"],
   cancelled: ["backlog_needs_assignment"],
   // on_hold can resume to whatever phase it came from
   // (validated dynamically against `previousActivePhase`) or be
@@ -371,6 +378,11 @@ async function summarizeProjects(rows: ProjectRow[]) {
       completedByName: r.completedById
         ? (userMap.get(r.completedById)?.name ?? null)
         : null,
+      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
+      closedById: r.closedById ?? null,
+      closedByName: r.closedById
+        ? (userMap.get(r.closedById)?.name ?? null)
+        : null,
       cancellationReason: r.cancellationReason,
       linkedInitiativeId: r.linkedInitiativeId ?? null,
       linkedInitiativeTitle:
@@ -580,31 +592,38 @@ router.post("/projects", async (req, res): Promise<void> => {
   }
 
   // Closeout invariant on direct-create-to-completed (the import flow):
-  // a project that lands in "completed" must carry both a Completion
-  // Summary and a Key Takeaway, and we auto-capture who/when. Without
-  // this guard, importing a finished project would yield a Completed
-  // card with no closeout data and no `completedById`.
+  // Importing into the closeout-side phases auto-captures who finished
+  // the work. `completed` (paperwork) just needs `completedAt`/`By`;
+  // closeout text can be filled in later via PATCH. `closed` (locked)
+  // additionally requires both Completion Summary and Key Takeaway up
+  // front and auto-captures the closure pair.
   const incomingPhase =
     (parsed.data.phase as ProjectPhase | undefined) ??
     "backlog_needs_assignment";
   let completedAtForInsert: Date | null = null;
   let completedByIdForInsert: number | null = null;
-  if (incomingPhase === "completed") {
+  let closedAtForInsert: Date | null = null;
+  let closedByIdForInsert: number | null = null;
+  if (incomingPhase === "completed" || incomingPhase === "closed") {
+    completedAtForInsert = new Date();
+    completedByIdForInsert = user.id;
+  }
+  if (incomingPhase === "closed") {
     if (!parsed.data.completionSummary?.trim()) {
       res.status(400).json({
         error:
-          "Importing a project as completed requires a completion summary.",
+          "Importing a project as closed requires a completion summary.",
       });
       return;
     }
     if (!parsed.data.keyTakeaway?.trim()) {
       res
         .status(400)
-        .json({ error: "Importing a project as completed requires a key takeaway." });
+        .json({ error: "Importing a project as closed requires a key takeaway." });
       return;
     }
-    completedAtForInsert = new Date();
-    completedByIdForInsert = user.id;
+    closedAtForInsert = new Date();
+    closedByIdForInsert = user.id;
   }
 
   const row = await db.transaction(async (tx) => {
@@ -632,6 +651,8 @@ router.post("/projects", async (req, res): Promise<void> => {
         keyTakeaway: parsed.data.keyTakeaway ?? "",
         completedAt: completedAtForInsert,
         completedById: completedByIdForInsert,
+        closedAt: closedAtForInsert,
+        closedById: closedByIdForInsert,
         linkedInitiativeId: parsed.data.linkedInitiativeId ?? null,
         suggestedById: parsed.data.suggestedById ?? user.id,
         goal: parsed.data.goal ?? "",
@@ -811,26 +832,10 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     updates.planningNotes = parsed.data.planningNotes;
   if (parsed.data.statusUpdate !== undefined)
     updates.statusUpdate = parsed.data.statusUpdate;
+  if (parsed.data.completionSummary !== undefined)
+    updates.completionSummary = parsed.data.completionSummary;
   if (parsed.data.keyTakeaway !== undefined)
     updates.keyTakeaway = parsed.data.keyTakeaway;
-  // Closeout integrity: once a project is completed, the closeout
-  // Key Takeaway cannot be patched to empty. (Completion Summary
-  // isn't part of UpdateProjectInput — it can only be set via
-  // POST /phase — so it can't be cleared via PATCH at all.) Re-opening
-  // (which goes through POST /phase) is how you intentionally clear
-  // these fields.
-  if (
-    existing.phase === "completed" &&
-    parsed.data.keyTakeaway !== undefined &&
-    !parsed.data.keyTakeaway.trim()
-  ) {
-    res.status(400).json({
-      error:
-        "Key takeaway cannot be cleared on a completed project. " +
-        "Reopen the project first.",
-    });
-    return;
-  }
   if (parsed.data.suggestedById !== undefined)
     updates.suggestedById = parsed.data.suggestedById;
   if (parsed.data.goal !== undefined) updates.goal = parsed.data.goal;
@@ -868,16 +873,68 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     }
   }
 
-  const [row] = await db
-    .update(projectsTable)
-    .set(updates)
-    .where(eq(projectsTable.id, params.data.id))
-    .returning();
-  if (!row) {
-    res.status(404).json({ error: "Project not found" });
-    return;
+  // Run the locked re-read + invariants + UPDATE inside a single
+  // transaction so a concurrent `* → closed` transition can't slip
+  // a closeout edit through this PATCH between the unlocked authz
+  // pre-read and the actual write.
+  class PatchError extends Error {
+    constructor(public status: number, public body: { error: string }) {
+      super(body.error);
+    }
   }
-  const detail = await detailProject(row.id);
+  let updatedId: number;
+  try {
+    updatedId = await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select()
+        .from(projectsTable)
+        .where(eq(projectsTable.id, params.data.id))
+        .for("update");
+      if (!locked) {
+        throw new PatchError(404, { error: "Project not found" });
+      }
+      // Re-check authz against the locked row (departmentId may have
+      // been moved to a board the caller can no longer modify).
+      if (!(await authorizeProjectAccess(user, locked, "modify"))) {
+        throw new PatchError(403, { error: "Forbidden on this project" });
+      }
+      // Closeout integrity: once a project is `closed` (locked,
+      // archived) its closeout fields are fully write-locked --
+      // any attempt to edit them via PATCH is rejected. Editing is
+      // an explicit "Reopen" action through POST /phase. The
+      // intermediate `completed` (paperwork) phase is intentionally
+      // editable so the user can fill in the prompts before
+      // clicking "Mark as Closed".
+      if (locked.phase === "closed") {
+        if (
+          parsed.data.completionSummary !== undefined ||
+          parsed.data.keyTakeaway !== undefined
+        ) {
+          throw new PatchError(400, {
+            error:
+              "Closeout fields are locked on a closed project. " +
+              "Reopen the project first.",
+          });
+        }
+      }
+      const [row] = await tx
+        .update(projectsTable)
+        .set(updates)
+        .where(eq(projectsTable.id, params.data.id))
+        .returning();
+      if (!row) {
+        throw new PatchError(404, { error: "Project not found" });
+      }
+      return row.id;
+    });
+  } catch (err) {
+    if (err instanceof PatchError) {
+      res.status(err.status).json(err.body);
+      return;
+    }
+    throw err;
+  }
+  const detail = await detailProject(updatedId);
   res.json(detail);
 });
 
@@ -960,163 +1017,225 @@ router.post("/projects/:id/phase", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [existing] = await db
+  // Authz reads the row outside the transaction (cheap, no locks).
+  // The full transition (re-read with row lock, validate, update,
+  // audit) runs atomically below so two concurrent transitions can't
+  // race on a stale `phase`.
+  const [authzRow] = await db
     .select()
     .from(projectsTable)
     .where(eq(projectsTable.id, id));
-  if (!existing) {
+  if (!authzRow) {
     res.status(404).json({ error: "Project not found" });
     return;
   }
-  if (!(await authorizeProjectAccess(user, existing, "modify"))) {
+  if (!(await authorizeProjectAccess(user, authzRow, "modify"))) {
     res.status(403).json({ error: "Forbidden on this project" });
     return;
   }
 
-  const from = existing.phase as ProjectPhase;
   const to = parsed.data.to as ProjectPhase;
-  if (from === to) {
-    res.status(409).json({ error: `Project is already in phase ${to}` });
-    return;
-  }
-
-  // Validate the legal transition. on_hold → resume requires the
-  // target to match `previousActivePhase` (or fall back to `planning`
-  // if the on-hold record was created before this field existed).
-  const allowed = PHASE_TRANSITIONS[from] ?? [];
-  if (!allowed.includes(to)) {
-    res.status(409).json({
-      error: `Cannot move from ${from} to ${to}`,
-    });
-    return;
-  }
-  if (from === "on_hold" && to !== "cancelled") {
-    const expected =
-      (existing.previousActivePhase as ProjectPhase | null) ?? "planning";
-    if (to !== expected) {
-      res.status(409).json({
-        error:
-          `Resume from on_hold must return to ${expected} ` +
-          `(was: previousActivePhase=${existing.previousActivePhase ?? "null"})`,
-      });
-      return;
+  // ConflictError signals a 4xx that should bubble out of the
+  // transaction without committing the audit row. We branch on
+  // `status` after the catch so the response code matches the gate.
+  class TransitionError extends Error {
+    constructor(public status: number, public body: { error: string }) {
+      super(body.error);
     }
   }
 
-  // ---- Backlog → Planning gate: require start + anticipated
-  //      completion dates with anticipated > start. The dates live on
-  //      the project itself (saved during Backlog edits), so we
-  //      validate against `existing` rather than the request body. ----
-  if (from === "backlog_needs_assignment" && to === "planning") {
-    if (!existing.startDate || !existing.endDate) {
-      res.status(400).json({
-        error:
-          "Start date and anticipated completion date are required " +
-          "before moving to Planning.",
-      });
-      return;
-    }
-    if (existing.endDate <= existing.startDate) {
-      res.status(400).json({
-        error: "Anticipated completion date must be after start date.",
-      });
-      return;
-    }
-  }
-
-  // ---- Closeout gate: require BOTH summary and key takeaway when
-  //      moving into Completed. We accept either values from the
-  //      request body OR pre-existing values on the row (so a project
-  //      can be drafted in Backlog and re-promoted later). ----
-  if (to === "completed") {
-    const summary = (
-      parsed.data.completionSummary ?? existing.completionSummary ?? ""
-    ).trim();
-    const takeaway = (
-      parsed.data.keyTakeaway ?? existing.keyTakeaway ?? ""
-    ).trim();
-    if (!summary) {
-      res.status(400).json({ error: "Completion summary is required." });
-      return;
-    }
-    if (!takeaway) {
-      res.status(400).json({
-        error: "Key takeaway / lesson learned is required.",
-      });
-      return;
-    }
-  }
-
-  const updates: Partial<typeof projectsTable.$inferInsert> = { phase: to };
+  let from: ProjectPhase = authzRow.phase as ProjectPhase;
   let action = "phase_changed";
+  try {
+    await db.transaction(async (tx) => {
+      // Re-read under row lock so the validation + update see the
+      // current persisted phase, not the pre-tx snapshot.
+      const [existing] = await tx
+        .select()
+        .from(projectsTable)
+        .where(eq(projectsTable.id, id))
+        .for("update");
+      if (!existing) {
+        throw new TransitionError(404, { error: "Project not found" });
+      }
+      // Re-check authz against the locked row in case the project's
+      // departmentId moved to a board the caller no longer has
+      // modify access on between the pre-tx authz read and now.
+      if (!(await authorizeProjectAccess(user, existing, "modify"))) {
+        throw new TransitionError(403, {
+          error: "Forbidden on this project",
+        });
+      }
+      from = existing.phase as ProjectPhase;
+      if (from === to) {
+        throw new TransitionError(409, {
+          error: `Project is already in phase ${to}`,
+        });
+      }
+      const allowed = PHASE_TRANSITIONS[from] ?? [];
+      if (!allowed.includes(to)) {
+        throw new TransitionError(409, {
+          error: `Cannot move from ${from} to ${to}`,
+        });
+      }
+      if (from === "on_hold" && to !== "cancelled") {
+        const expected =
+          (existing.previousActivePhase as ProjectPhase | null) ??
+          "planning";
+        if (to !== expected) {
+          throw new TransitionError(409, {
+            error:
+              `Resume from on_hold must return to ${expected} ` +
+              `(was: previousActivePhase=${existing.previousActivePhase ?? "null"})`,
+          });
+        }
+      }
 
-  if (to === "on_hold") {
-    // Going on hold from an active phase — remember where to come back to.
-    updates.previousActivePhase = from;
-    if (parsed.data.holdReason !== undefined)
-      updates.holdReason = parsed.data.holdReason;
-    if (parsed.data.holdNotes !== undefined)
-      updates.holdNotes = parsed.data.holdNotes;
-    if (parsed.data.revisitDate !== undefined)
-      updates.revisitDate = toDateString(parsed.data.revisitDate) ?? null;
-    action = "hold_started";
-  } else if (from === "on_hold") {
-    // Resuming or cancelling out of on_hold — clear the bookkeeping.
-    updates.previousActivePhase = null;
-    if (to !== "cancelled") action = "hold_resumed";
-  }
+      // ---- Backlog → Planning gate: require start + anticipated
+      //      completion dates with anticipated > start. The dates
+      //      live on the project itself, so we validate against the
+      //      locked row rather than the request body. ----
+      if (from === "backlog_needs_assignment" && to === "planning") {
+        if (!existing.startDate || !existing.endDate) {
+          throw new TransitionError(400, {
+            error:
+              "Start date and anticipated completion date are required " +
+              "before moving to Planning.",
+          });
+        }
+        if (existing.endDate <= existing.startDate) {
+          throw new TransitionError(400, {
+            error: "Anticipated completion date must be after start date.",
+          });
+        }
+      }
 
-  if (to === "completed") {
-    updates.completedAt = new Date();
-    updates.completedById = user.id;
-    if (parsed.data.completionSummary !== undefined)
-      updates.completionSummary = parsed.data.completionSummary;
-    if (parsed.data.keyTakeaway !== undefined)
-      updates.keyTakeaway = parsed.data.keyTakeaway;
-    // Mirror to legacy status for back-compat.
-    updates.status = "completed";
-    action = "completed";
-  } else if (to === "cancelled") {
-    if (parsed.data.cancellationReason !== undefined)
-      updates.cancellationReason = parsed.data.cancellationReason;
-    updates.status = "archived";
-    action = "cancelled";
-  } else if (from === "completed" || from === "cancelled") {
-    // Reopen → clear the closing-side fields and remap legacy status.
-    // We clear BOTH `completedAt` and `completedById` so that only one
-    // active completion pair lives on the row at any time. Prior completion
-    // events (and this reopen event) remain in `project_audit_events` for
-    // history, including their `changedById` + `changedAt`. When the project
-    // is completed again, a fresh pair is captured (see `to === "completed"`
-    // branch above).
-    if (from === "completed") {
-      updates.completedAt = null;
-      updates.completedById = null;
-    }
-    updates.status = to === "in_progress" ? "active" : "active";
-    action = "reopened";
-  } else if (to === "in_progress") {
-    updates.status = "active";
-    if (parsed.data.statusUpdate !== undefined)
-      updates.statusUpdate = parsed.data.statusUpdate;
-  } else if (to === "planning") {
-    updates.status = "active";
-    if (parsed.data.planningNotes !== undefined)
-      updates.planningNotes = parsed.data.planningNotes;
-  }
+      // ---- Closeout gate: require BOTH summary and key takeaway
+      //      when moving into `closed` ("Mark as Closed" on the
+      //      Completed view). The `completed` transition itself is
+      //      bare — Mark Completed just records `completedAt`/`By`
+      //      and reveals the editable closeout prompts. We accept
+      //      either values from the request body OR pre-existing
+      //      values on the row, so users who edited the prompts
+      //      via PATCH first can finalize closure with an empty
+      //      body. ----
+      if (to === "closed") {
+        const summary = (
+          parsed.data.completionSummary ?? existing.completionSummary ?? ""
+        ).trim();
+        const takeaway = (
+          parsed.data.keyTakeaway ?? existing.keyTakeaway ?? ""
+        ).trim();
+        if (!summary) {
+          throw new TransitionError(400, {
+            error: "Completion summary is required.",
+          });
+        }
+        if (!takeaway) {
+          throw new TransitionError(400, {
+            error: "Key takeaway / lesson learned is required.",
+          });
+        }
+      }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(projectsTable)
-      .set(updates)
-      .where(eq(projectsTable.id, id));
-    await writeAudit(tx, id, action, {
-      oldPhase: from,
-      newPhase: to,
-      reason: parsed.data.reason ?? "",
-      changedById: user.id,
+      const updates: Partial<typeof projectsTable.$inferInsert> = {
+        phase: to,
+      };
+      action = "phase_changed";
+
+      if (to === "on_hold") {
+        // Going on hold from an active phase — remember where to come back to.
+        updates.previousActivePhase = from;
+        if (parsed.data.holdReason !== undefined)
+          updates.holdReason = parsed.data.holdReason;
+        if (parsed.data.holdNotes !== undefined)
+          updates.holdNotes = parsed.data.holdNotes;
+        if (parsed.data.revisitDate !== undefined)
+          updates.revisitDate = toDateString(parsed.data.revisitDate) ?? null;
+        action = "hold_started";
+      } else if (from === "on_hold") {
+        // Resuming or cancelling out of on_hold — clear the bookkeeping.
+        updates.previousActivePhase = null;
+        if (to !== "cancelled") action = "hold_resumed";
+      }
+
+      if (to === "completed") {
+        // Mark Completed: paperwork phase. Capture who/when
+        // finished the work; the user fills the editable closeout
+        // prompts after.
+        updates.completedAt = new Date();
+        updates.completedById = user.id;
+        if (parsed.data.completionSummary !== undefined)
+          updates.completionSummary = parsed.data.completionSummary;
+        if (parsed.data.keyTakeaway !== undefined)
+          updates.keyTakeaway = parsed.data.keyTakeaway;
+        updates.status = "completed";
+        action = "completed";
+      } else if (to === "closed") {
+        // Mark as Closed: closeout signed off. Required summary +
+        // takeaway have already been validated by the gate above.
+        if (parsed.data.completionSummary !== undefined)
+          updates.completionSummary = parsed.data.completionSummary;
+        if (parsed.data.keyTakeaway !== undefined)
+          updates.keyTakeaway = parsed.data.keyTakeaway;
+        updates.closedAt = new Date();
+        updates.closedById = user.id;
+        updates.status = "completed";
+        action = "closed";
+      } else if (to === "cancelled") {
+        if (parsed.data.cancellationReason !== undefined)
+          updates.cancellationReason = parsed.data.cancellationReason;
+        updates.status = "archived";
+        action = "cancelled";
+      } else if (
+        from === "completed" ||
+        from === "closed" ||
+        from === "cancelled"
+      ) {
+        // Reopen → clear the closing-side fields and remap legacy
+        // status. We clear `completedAt`+`completedById` AND
+        // `closedAt`+`closedById` so that only one active
+        // completion/closure pair lives on the row at any time.
+        // Prior completion events (and this reopen event) remain
+        // in `project_audit_events` for history.
+        if (from === "completed" || from === "closed") {
+          updates.completedAt = null;
+          updates.completedById = null;
+        }
+        if (from === "closed") {
+          updates.closedAt = null;
+          updates.closedById = null;
+        }
+        updates.status = "active";
+        action = "reopened";
+      } else if (to === "in_progress") {
+        updates.status = "active";
+        if (parsed.data.statusUpdate !== undefined)
+          updates.statusUpdate = parsed.data.statusUpdate;
+      } else if (to === "planning") {
+        updates.status = "active";
+        if (parsed.data.planningNotes !== undefined)
+          updates.planningNotes = parsed.data.planningNotes;
+      }
+
+      await tx
+        .update(projectsTable)
+        .set(updates)
+        .where(eq(projectsTable.id, id));
+      await writeAudit(tx, id, action, {
+        oldPhase: from,
+        newPhase: to,
+        reason: parsed.data.reason ?? "",
+        changedById: user.id,
+      });
     });
-  });
+  } catch (err) {
+    if (err instanceof TransitionError) {
+      res.status(err.status).json(err.body);
+      return;
+    }
+    throw err;
+  }
 
   const detail = await detailProject(id);
   res.json(detail);

@@ -5827,12 +5827,15 @@ export const useDeleteProject = <
 backlog_needs_assignment → planning;
 planning → in_progress | on_hold | cancelled;
 in_progress → completed | planning | on_hold | cancelled;
-completed → in_progress (reopen);
+completed → closed | in_progress (reopen);
+closed → in_progress (reopen);
 cancelled → backlog_needs_assignment (reopen);
 on_hold → previousActivePhase (resume) | cancelled.
 Disallowed transitions return 409. Going to on_hold stores
 the current phase as previousActivePhase; resuming restores
-it. Each call writes a project_audit_events row.
+it. Going to `closed` requires non-empty completionSummary
+AND keyTakeaway (either on the row or in the request body).
+Each call writes a project_audit_events row.
 
  */
 export const getChangeProjectPhaseUrl = (id: number) => {
@@ -5901,12 +5904,15 @@ export type ChangeProjectPhaseMutationError = ErrorType<void>;
 backlog_needs_assignment → planning;
 planning → in_progress | on_hold | cancelled;
 in_progress → completed | planning | on_hold | cancelled;
-completed → in_progress (reopen);
+completed → closed | in_progress (reopen);
+closed → in_progress (reopen);
 cancelled → backlog_needs_assignment (reopen);
 on_hold → previousActivePhase (resume) | cancelled.
 Disallowed transitions return 409. Going to on_hold stores
 the current phase as previousActivePhase; resuming restores
-it. Each call writes a project_audit_events row.
+it. Going to `closed` requires non-empty completionSummary
+AND keyTakeaway (either on the row or in the request body).
+Each call writes a project_audit_events row.
 
  */
 export const useChangeProjectPhase = <

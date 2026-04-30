@@ -30,6 +30,7 @@ export interface UpdateProjectInput {
   dueAt?: Date | null;
   planningNotes?: string;
   statusUpdate?: string;
+  completionSummary?: string;
   keyTakeaway?: string;
   /** @nullable */
   suggestedById?: number | null;

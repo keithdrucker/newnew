@@ -53,6 +53,12 @@ export interface ProjectSummary {
   completedById?: number | null;
   /** @nullable */
   completedByName?: string | null;
+  /** @nullable */
+  closedAt?: Date | null;
+  /** @nullable */
+  closedById?: number | null;
+  /** @nullable */
+  closedByName?: string | null;
   cancellationReason: string;
   /** @nullable */
   linkedInitiativeId?: number | null;

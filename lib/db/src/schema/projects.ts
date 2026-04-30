@@ -64,7 +64,14 @@ export const departmentBucketsTable = pgTable(
 // A project is a unit of execution with a clear phase lifecycle.
 //
 // Linear phases:
-//   backlog_needs_assignment → planning → in_progress → completed
+//   backlog_needs_assignment → planning → in_progress → completed → closed
+//
+// `completed` is the closeout-paperwork phase: the work is done,
+// `completedAt`/`completedById` are auto-captured, and the user
+// fills in the editable Completion Summary + Key Takeaway prompts
+// on the project view. Clicking "Mark as Closed" requires both
+// fields and transitions to `closed`, which is the locked,
+// archived state with its own lane on the board.
 //
 // Side states (NOT linear; can be entered from planning or
 // in_progress and resumed back via `previousActivePhase`):
@@ -132,7 +139,17 @@ export const projectsTable = pgTable(
       onDelete: "set null",
     }),
 
-    // ---- Phase 6: Cancelled ----
+    // ---- Phase 6: Closed ("Mark as Closed" action on Completed) ----
+    // Auto-captured when the project transitions completed → closed.
+    // We keep the original `completedAt`/`completedById` pair untouched
+    // (so "when was the work done" stays distinct from "when was the
+    // closeout signed off"). Reopening clears both pairs.
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    closedById: integer("closed_by_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+
+    // ---- Phase 7: Cancelled ----
     cancellationReason: text("cancellation_reason").notNull().default(""),
 
     // Reverse link to the initiative that spawned this project (if

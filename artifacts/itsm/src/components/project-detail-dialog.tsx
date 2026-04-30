@@ -88,6 +88,7 @@ const PHASES: ProjectPhase[] = [
   "in_progress",
   "on_hold",
   "completed",
+  "closed",
   "cancelled",
 ];
 
@@ -97,6 +98,7 @@ const PHASE_LABEL: Record<ProjectPhase, string> = {
   in_progress: "In Progress",
   on_hold: "On Hold",
   completed: "Completed",
+  closed: "Closed",
   cancelled: "Cancelled",
 };
 
@@ -106,7 +108,8 @@ const PHASE_BADGE: Record<ProjectPhase, string> = {
   planning: "bg-sky-100 text-sky-800 border-sky-200",
   in_progress: "bg-emerald-100 text-emerald-800 border-emerald-200",
   on_hold: "bg-amber-100 text-amber-800 border-amber-200",
-  completed: "bg-slate-100 text-slate-700 border-slate-200",
+  completed: "bg-teal-100 text-teal-800 border-teal-200",
+  closed: "bg-slate-200 text-slate-700 border-slate-300",
   cancelled: "bg-rose-100 text-rose-800 border-rose-200",
 };
 
@@ -277,11 +280,19 @@ export function ProjectImportDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {PHASES.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {PHASE_LABEL[p]}
-                    </SelectItem>
-                  ))}
+                  {PHASES
+                    // Importing a project as `closed` requires
+                    // closeout summary + takeaway, which this
+                    // lightweight dialog doesn't capture; admins
+                    // should import as `completed` and then close
+                    // from the project view. `cancelled` is a side
+                    // state and not a meaningful import target.
+                    .filter((p) => p !== "closed" && p !== "cancelled")
+                    .map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {PHASE_LABEL[p]}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </Field>
@@ -424,6 +435,12 @@ function DetailInner({
   const [endDate, setEndDate] = useState<string>(row.endDate ?? "");
   const [planningNotes, setPlanningNotes] = useState(row.planningNotes);
   const [statusUpdate, setStatusUpdate] = useState(row.statusUpdate);
+  // Editable closeout prompts (only writable while phase === "completed";
+  // the server PATCH guard locks them once phase === "closed").
+  const [completionSummary, setCompletionSummary] = useState(
+    row.completionSummary,
+  );
+  const [keyTakeaway, setKeyTakeaway] = useState(row.keyTakeaway);
 
   useEffect(() => {
     setDepartmentId(row.departmentId ?? null);
@@ -434,6 +451,8 @@ function DetailInner({
     setEndDate(row.endDate ?? "");
     setPlanningNotes(row.planningNotes);
     setStatusUpdate(row.statusUpdate);
+    setCompletionSummary(row.completionSummary);
+    setKeyTakeaway(row.keyTakeaway);
   }, [row.id, row]);
 
   const saveBasics = async (msg: string) => {
@@ -451,6 +470,52 @@ function DetailInner({
       },
     });
     toast({ title: msg });
+  };
+
+  // Persist the editable Completion Summary + Key Takeaway prompts
+  // while the project is in the Completed (paperwork) phase. Saves go
+  // through PATCH so they don't trigger a phase change.
+  const saveCloseout = async (msg: string) => {
+    await update.mutateAsync({
+      id: row.id,
+      data: { completionSummary, keyTakeaway },
+    });
+    toast({ title: msg });
+  };
+
+  // ---- Completed → Closed client-side gate. The server enforces the
+  //      same rule; this just gives instant feedback before opening
+  //      the phase modal (and saves any unsaved prompt edits first
+  //      so the gate sees the freshly-persisted text). ----
+  const tryMarkAsClosed = async () => {
+    const sum = completionSummary.trim();
+    const tak = keyTakeaway.trim();
+    if (!sum) {
+      toast({
+        title: "Completion summary is required",
+        description: "Fill in the closeout summary before marking as closed.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!tak) {
+      toast({
+        title: "Key takeaway / lesson learned is required",
+        description: "Capture what to repeat or change next time.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Persist any unsaved edits to the prompts so the server-side
+    // gate (which falls back to row values when the body is empty)
+    // sees the freshly-saved closeout text.
+    if (
+      completionSummary !== row.completionSummary ||
+      keyTakeaway !== row.keyTakeaway
+    ) {
+      await saveCloseout("Closeout draft saved");
+    }
+    openPhaseChange("closed");
   };
 
   // ---- Backlog → Planning client-side gate. The server enforces the
@@ -603,7 +668,8 @@ function DetailInner({
                   : phase === "planning" ||
                       phase === "in_progress" ||
                       phase === "on_hold" ||
-                      phase === "completed"
+                      phase === "completed" ||
+                      phase === "closed"
                     ? "done"
                     : "default"
               }
@@ -724,6 +790,7 @@ function DetailInner({
                   ? "active"
                   : phase === "in_progress" ||
                       phase === "completed" ||
+                      phase === "closed" ||
                       phase === "on_hold"
                     ? "done"
                     : "default"
@@ -815,7 +882,7 @@ function DetailInner({
               tone={
                 phase === "in_progress"
                   ? "active"
-                  : phase === "completed"
+                  : phase === "completed" || phase === "closed"
                     ? "done"
                     : "default"
               }
@@ -954,10 +1021,99 @@ function DetailInner({
               </Section>
             )}
 
-            {/* ---- Project Closeout (only when applicable) ---- */}
+            {/* ---- Project Closeout (paperwork phase: editable) ---- */}
             {phase === "completed" && (
               <>
                 <Section title="Project Closeout" defaultOpen tone="active">
+                  <p className="text-[12px] text-muted-foreground">
+                    The work is done. Capture the closeout below, then
+                    click <strong>Mark as Closed</strong> to move this
+                    project to the Closed lane.
+                  </p>
+                  <Field label="Completion summary" required>
+                    <Textarea
+                      value={completionSummary}
+                      onChange={(e) => setCompletionSummary(e.target.value)}
+                      rows={3}
+                      placeholder="What was delivered or completed?"
+                      data-testid="textarea-completion-summary"
+                    />
+                  </Field>
+                  <Field label="Key takeaway / lesson learned" required>
+                    <Textarea
+                      value={keyTakeaway}
+                      onChange={(e) => setKeyTakeaway(e.target.value)}
+                      rows={3}
+                      placeholder="What should we repeat or do differently next time?"
+                      data-testid="textarea-key-takeaway"
+                    />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <ReadField
+                      label="Completed by"
+                      value={row.completedByName}
+                    />
+                    <ReadField
+                      label="Completed on"
+                      value={
+                        row.completedAt
+                          ? new Date(row.completedAt).toLocaleString()
+                          : null
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => saveCloseout("Closeout draft saved")}
+                      disabled={
+                        update.isPending ||
+                        (completionSummary === row.completionSummary &&
+                          keyTakeaway === row.keyTakeaway)
+                      }
+                      data-testid="button-save-closeout"
+                    >
+                      Save draft
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={tryMarkAsClosed}
+                      disabled={update.isPending}
+                      data-testid="button-mark-as-closed"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                      Mark as Closed
+                    </Button>
+                  </div>
+                </Section>
+
+                <Section title="Actions" defaultOpen tone="default">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[12px] text-muted-foreground">
+                      Reopening sends this project back to In Progress and
+                      clears the active Completed By &amp; Completed On.
+                      The current values remain in the History below.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPhaseChange("in_progress")}
+                      data-testid="button-reopen-completed"
+                      className="shrink-0"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen
+                      Project
+                    </Button>
+                  </div>
+                </Section>
+              </>
+            )}
+
+            {/* ---- Closed (locked, archived) ---- */}
+            {phase === "closed" && (
+              <>
+                <Section title="Project Closeout" defaultOpen tone="done">
                   <ReadField
                     label="Completion summary"
                     value={row.completionSummary}
@@ -980,9 +1136,23 @@ function DetailInner({
                       }
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <ReadField
+                      label="Closed by"
+                      value={row.closedByName}
+                    />
+                    <ReadField
+                      label="Closed on"
+                      value={
+                        row.closedAt
+                          ? new Date(row.closedAt).toLocaleString()
+                          : null
+                      }
+                    />
+                  </div>
                   <p className="text-[11.5px] text-muted-foreground italic pt-1">
-                    Each completion and reopen is preserved in the History
-                    section below.
+                    This project is closed. Each completion, closure,
+                    and reopen is preserved in the History section below.
                   </p>
                 </Section>
 
@@ -990,14 +1160,14 @@ function DetailInner({
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[12px] text-muted-foreground">
                       Reopening sends this project back to In Progress and
-                      clears the active Completed By &amp; Completed On.
+                      clears the active Completed and Closed signatures.
                       The current values remain in the History below.
                     </p>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => openPhaseChange("in_progress")}
-                      data-testid="button-reopen-completed"
+                      data-testid="button-reopen-closed"
                       className="shrink-0"
                     >
                       <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen
@@ -1108,7 +1278,7 @@ function PhaseChangeDialog({
       toast({ title: "Hold reason is required", variant: "destructive" });
       return;
     }
-    if (to === "completed") {
+    if (to === "closed") {
       if (!completionSummary.trim()) {
         toast({
           title: "Completion summary is required",
@@ -1193,8 +1363,12 @@ function PhaseChangeDialog({
               </Field>
             </>
           )}
-          {to === "completed" && (
+          {to === "closed" && (
             <>
+              <p className="text-[12px] text-muted-foreground">
+                Closing locks this project. Confirm the closeout fields
+                you captured on the Completed view.
+              </p>
               <Field label="Completion summary" required>
                 <Textarea
                   value={completionSummary}
@@ -1226,7 +1400,7 @@ function PhaseChangeDialog({
             </Field>
           )}
           {to !== "on_hold" &&
-            to !== "completed" &&
+            to !== "closed" &&
             to !== "cancelled" && (
               <Field label="Reason (optional)">
                 <Textarea
@@ -1588,14 +1762,24 @@ function PhaseProgress({ phase }: { phase: ProjectPhase }) {
       state:
         phase === "in_progress"
           ? "active"
-          : phase === "completed"
+          : phase === "completed" || phase === "closed"
             ? "done"
             : "future",
     },
     {
       key: "completed",
       label: "Completed",
-      state: phase === "completed" ? "active" : "future",
+      state:
+        phase === "completed"
+          ? "active"
+          : phase === "closed"
+            ? "done"
+            : "future",
+    },
+    {
+      key: "closed",
+      label: "Closed",
+      state: phase === "closed" ? "active" : "future",
     },
   ];
 

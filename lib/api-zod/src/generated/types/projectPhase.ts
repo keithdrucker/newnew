@@ -14,5 +14,6 @@ export const ProjectPhase = {
   in_progress: "in_progress",
   on_hold: "on_hold",
   completed: "completed",
+  closed: "closed",
   cancelled: "cancelled",
 } as const;

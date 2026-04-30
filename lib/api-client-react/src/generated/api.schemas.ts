@@ -1433,6 +1433,7 @@ export const ProjectPhase = {
   in_progress: "in_progress",
   on_hold: "on_hold",
   completed: "completed",
+  closed: "closed",
   cancelled: "cancelled",
 } as const;
 
@@ -1505,6 +1506,12 @@ export interface ProjectSummary {
   completedById?: number | null;
   /** @nullable */
   completedByName?: string | null;
+  /** @nullable */
+  closedAt?: string | null;
+  /** @nullable */
+  closedById?: number | null;
+  /** @nullable */
+  closedByName?: string | null;
   cancellationReason: string;
   /** @nullable */
   linkedInitiativeId?: number | null;
@@ -1641,6 +1648,7 @@ export interface UpdateProjectInput {
   dueAt?: string | null;
   planningNotes?: string;
   statusUpdate?: string;
+  completionSummary?: string;
   keyTakeaway?: string;
   /** @nullable */
   suggestedById?: number | null;

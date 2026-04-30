@@ -1289,12 +1289,15 @@ paths:
         backlog_needs_assignment → planning;
         planning → in_progress | on_hold | cancelled;
         in_progress → completed | planning | on_hold | cancelled;
-        completed → in_progress (reopen);
+        completed → closed | in_progress (reopen);
+        closed → in_progress (reopen);
         cancelled → backlog_needs_assignment (reopen);
         on_hold → previousActivePhase (resume) | cancelled.
         Disallowed transitions return 409. Going to on_hold stores
         the current phase as previousActivePhase; resuming restores
-        it. Each call writes a project_audit_events row.
+        it. Going to `closed` requires non-empty completionSummary
+        AND keyTakeaway (either on the row or in the request body).
+        Each call writes a project_audit_events row.
       parameters:
         - in: path
           name: id
@@ -3074,7 +3077,9 @@ components:
       type: string
       enum: [active, on_hold, completed, archived]
 
-    # Canonical six-state phase lifecycle that drives the Projects board.
+    # Canonical phase lifecycle that drives the Projects board.
+    # `completed` is the closeout-paperwork phase; `closed` is the
+    # locked archived state reached via "Mark as Closed".
     ProjectPhase:
       type: string
       enum:
@@ -3083,6 +3088,7 @@ components:
         - in_progress
         - on_hold
         - completed
+        - closed
         - cancelled
 
     ProjectAuditEvent:
@@ -3135,14 +3141,18 @@ components:
         holdReason: { type: string }
         holdNotes: { type: string }
         revisitDate: { type: ["string", "null"], format: date }
-        # --- Phase 5: Completed (a.k.a. Project Closeout) ---
+        # --- Phase 5: Completed (closeout paperwork; editable) ---
         completionSummary: { type: string }
-        # Required at completion; what to repeat / change next time.
+        # Required at "Mark as Closed"; what to repeat / change next time.
         keyTakeaway: { type: string }
         completedAt: { type: ["string", "null"], format: date-time }
         completedById: { type: ["integer", "null"] }
         completedByName: { type: ["string", "null"] }
-        # --- Phase 6: Cancelled ---
+        # --- Phase 6: Closed (locked; auto-captured at Mark as Closed) ---
+        closedAt: { type: ["string", "null"], format: date-time }
+        closedById: { type: ["integer", "null"] }
+        closedByName: { type: ["string", "null"] }
+        # --- Phase 7: Cancelled ---
         cancellationReason: { type: string }
         # Reverse link to the spawning Initiative (if any).
         linkedInitiativeId: { type: ["integer", "null"] }
@@ -3338,7 +3348,10 @@ components:
         dueAt: { type: ["string", "null"], format: date-time }
         planningNotes: { type: string }
         statusUpdate: { type: string }
-        # Editable from the closeout view; required at completion.
+        # Editable from the Completed (paperwork) view; locked once the
+        # project is moved to `closed`. Required when transitioning to
+        # `closed`.
+        completionSummary: { type: string }
         keyTakeaway: { type: string }
         suggestedById: { type: ["integer", "null"] }
         goal: { type: string }
@@ -3366,7 +3379,8 @@ components:
         holdNotes: { type: string }
         revisitDate: { type: ["string", "null"], format: date }
         completionSummary: { type: string }
-        # Required when to=completed; what to repeat / change.
+        # Required (with completionSummary) when to=closed; either on
+        # the row or in the body. Bare on to=completed.
         keyTakeaway: { type: string }
         cancellationReason: { type: string }
         statusUpdate: { type: string }

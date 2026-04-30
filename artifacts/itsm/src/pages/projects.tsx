@@ -36,7 +36,8 @@ const PHASE_COLUMNS: { key: ProjectPhase; label: string; color: string }[] = [
   { key: "planning", label: "Planning", color: "#0EA5E9" },
   { key: "in_progress", label: "In Progress", color: "#10B981" },
   { key: "on_hold", label: "On Hold", color: "#F59E0B" },
-  { key: "completed", label: "Completed", color: "#64748B" },
+  { key: "completed", label: "Completed", color: "#0D9488" },
+  { key: "closed", label: "Closed", color: "#64748B" },
   { key: "cancelled", label: "Cancelled", color: "#F43F5E" },
 ];
 
@@ -152,6 +153,7 @@ export default function ProjectsPage() {
       in_progress: [],
       on_hold: [],
       completed: [],
+      closed: [],
       cancelled: [],
     };
     for (const p of filtered) {
