@@ -1,0 +1,140 @@
+Update the ITSM application to finalize the Team scoping strategy and Executive Dashboard approach.
+
+────────────────────────────────────
+GLOBAL TEAM SELECTOR (WORKSPACE SCOPE)
+────────────────────────────────────
+
+LOCATION:
+- Place a global Team selector ABOVE the Workspace navigation.
+
+PURPOSE:
+- The Team selector defines the active scope for all Workspace execution views.
+- Users select the team(s) they are currently working with.
+
+DEFAULT BEHAVIOR:
+- If a user has access to ONLY ONE team:
+  - Automatically select that team by default.
+- If a user has access to MULTIPLE teams:
+  - Allow multi‑select in the Team picker.
+  - Options include:
+    - One team
+    - Multiple specific teams (e.g. IT + Security)
+    - All Teams
+
+VIEWING RULES (VERY IMPORTANT):
+- Selecting multiple teams is VALID and encouraged for users who oversee or work across teams.
+- When multiple teams are selected:
+  - Data is aggregated and displayed together.
+
+The selected team(s) must apply automatically to:
+- Workspace Dashboard
+- Tickets
+- Operational Tasks
+- Initiatives
+- Projects
+
+REMOVE REDUNDANCY:
+- Remove or disable team dropdowns or team filters inside:
+  - Tickets
+  - Operational Tasks
+  - Initiatives
+  - Projects
+- Team context must ONLY come from the global selector.
+
+────────────────────────────────────
+OWNERSHIP VS VIEWING (GUARDRAIL)
+────────────────────────────────────
+
+- Viewing scope may include MULTIPLE teams.
+- Every individual work item must belong to EXACTLY ONE owning team.
+
+CREATION RULES:
+- If exactly ONE team is selected:
+  - New items automatically inherit that team.
+- If MULTIPLE teams are selected:
+  - Require the user to explicitly choose ONE owning team during creation.
+- Do not allow multi‑team ownership on a single record.
+
+────────────────────────────────────
+WORKSPACE DASHBOARD (EXECUTION)
+────────────────────────────────────
+
+LOCATION:
+Workspace → Dashboard
+
+PURPOSE:
+- Execution‑focused dashboard for contributors and managers.
+
+BEHAVIOR:
+- Must always respect the global Team selector.
+- Shows only data for the selected team(s).
+
+CONTENT SHOULD INCLUDE:
+- Team‑scoped summaries for:
+  - Tickets
+  - Operational Tasks
+  - Initiatives
+  - Projects
+- Focus on:
+  - Active work
+  - Overdue work
+  - Items needing attention
+
+DO NOT:
+- Show organization‑wide department comparisons.
+- Show portfolio‑level decision analytics.
+
+────────────────────────────────────
+EXECUTIVE DASHBOARD (GOVERNANCE)
+────────────────────────────────────
+
+CREATE A NEW DASHBOARD:
+Name: Executive Dashboard (or Portfolio Dashboard)
+
+AUDIENCE:
+- Executives
+- Department Heads
+- Portfolio Owners
+- Steering Committees
+
+ACCESS:
+- Role‑based (not visible to all users).
+
+SCOPE:
+- Always cross‑team and cross‑department.
+- Ignores the global Team selector.
+- Defaults to All Departments.
+
+CONTENT:
+- Initiatives overview:
+  - Total Initiatives
+  - Backlog / Under Review / Approved
+  - Recently decided Initiatives
+- Initiatives by department
+- Top categories
+- Projects overview:
+  - Active Projects
+  - Completed Projects
+  - Projects by department
+  - Optional high‑level risk indicators
+
+DESIGN INTENT:
+- Provide decision‑making insight, not execution noise.
+- Focus on trends, outcomes, and accountability.
+
+DO NOT:
+- Show tickets or operational task detail.
+- Require any team selection.
+- Expose execution‑level controls.
+
+────────────────────────────────────
+DESIGN PRINCIPLE
+────────────────────────────────────
+
+“Workspace dashboards answer:
+  ‘What are we working on right now?’
+
+Executive dashboards answer:
+  ‘Are we making the right decisions across the organization?’”
+
+Implement this structure without breaking existing data.
