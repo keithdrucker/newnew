@@ -295,7 +295,7 @@ export default function ExecutiveDashboard() {
         </div>
         <p className="text-sm text-muted-foreground">
           Cross-team portfolio view. Independent of the workspace team
-          selector — always shows the full organisation.
+          selector — always shows the full organization.
         </p>
       </header>
 
