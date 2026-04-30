@@ -1,0 +1,182 @@
+Update the Support Performance dashboard without duplicating or overlapping existing cards/charts.
+
+Current dashboard already includes:
+- Avg Response
+- Avg Resolution
+- SLA Score
+- Breached SLA
+- Open
+- Pending
+- Resolved
+- Closed
+- Created in scope
+- Resolved in scope
+- Backlog
+- At-Risk SLA
+- High-Priority Open
+- Unassigned
+- Stale > 7d
+- Tickets by Priority chart
+- Tickets opened vs resolved chart
+- Top agents
+
+Do NOT duplicate these.
+
+Add the following new analytics sections below the existing KPI cards and existing priority chart.
+
+--------------------------------------------------
+NEW CHARTS TO ADD
+--------------------------------------------------
+
+1. Tickets by Risk Level
+- Chart type: Bar Chart
+- Risk levels:
+  - Critical
+  - High
+  - Medium
+  - Low
+- Use ticket.risk_level
+- Missing value should display as “Uncategorized”
+- Respect existing filters: team, agent, date range
+- Place near “Tickets by Priority” but do not duplicate the same layout if space is limited
+
+2. Tickets by Category
+- Chart type: Donut Chart
+- Use existing ticket.category values
+- Missing value should display as “Uncategorized”
+- Purpose: show where ticket volume is coming from
+- Place near risk/priority analytics
+
+3. Root Cause Distribution
+- Chart type: Bar Chart
+- Use ticket.root_cause_category
+- Missing value should display as “Unknown / Not Categorized”
+- Purpose: identify training gaps, system issues, and recurring causes
+
+4. Resolution Distribution
+- Chart type: Bar Chart
+- Use ticket.resolution_category
+- Missing value should display as “Unknown / Not Categorized”
+- Purpose: show how tickets are typically being resolved
+
+--------------------------------------------------
+AI IMPACT SECTION
+--------------------------------------------------
+
+Add a new section called “AI Impact” below operational/support charts.
+
+Add KPI cards:
+- AI Resolved Interactions
+- AI Deflected Tickets
+- Human Escalations
+- Estimated Time Saved by AI
+
+Add charts:
+- AI Resolved vs Human Escalated → Donut Chart
+- AI Deflected vs Tickets Created → Bar Chart
+- AI Time Saved Trend → Line Chart
+
+If AI data does not exist yet:
+- Use safe placeholder/sample data clearly isolated in a helper file
+- Do not hardcode directly in the component
+- Add comments showing where backend integration should connect later
+
+--------------------------------------------------
+TIME INTELLIGENCE SECTION
+--------------------------------------------------
+
+Add a new section called “Time Intelligence” below AI Impact.
+
+Add KPI cards:
+- Avg Time per Ticket
+- Time Saved Before Team Assignment
+- Human Support Time
+- AI Handling Time
+
+Add charts:
+- Avg AI vs Human Resolution Time → Bar Chart
+- Support Time Trend → Line Chart
+
+Definitions:
+- Time Saved Before Team Assignment = estimated time saved by AI resolving interactions before they became assigned tickets
+- Estimated Time Saved by AI = AI Deflected Tickets × Avg Human Resolution Time
+- Avg Time per Ticket = resolved/closed ticket duration average
+
+--------------------------------------------------
+LAYOUT REQUIREMENTS
+--------------------------------------------------
+
+Avoid overcrowding:
+- Keep existing KPI cards as-is
+- Do not add more cards to the top KPI area unless replacing nothing
+- Add new content in clear sections:
+  1. Existing Performance KPIs
+  2. Existing Ticket Priority / Volume Charts
+  3. Risk & Category Analysis
+  4. Root Cause & Resolution Analysis
+  5. AI Impact
+  6. Time Intelligence
+
+Recommended layout:
+- Tickets by Risk Level and Tickets by Category side-by-side
+- Root Cause Distribution and Resolution Distribution side-by-side
+- AI charts grouped together
+- Time charts grouped together
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+- Use consistent card styling with existing dashboard
+- Use consistent spacing and section headers
+- Make charts responsive
+- Keep legends clear
+- Do not let charts overlap or stretch awkwardly
+- If there are too many charts, use collapsible sections or tabs:
+  - Overview
+  - Risk & Categories
+  - AI Impact
+  - Time Intelligence
+
+--------------------------------------------------
+DATA REQUIREMENTS
+--------------------------------------------------
+
+Use existing ticket fields where available:
+- priority
+- risk_level
+- category
+- root_cause_category
+- resolution_category
+- created_at
+- assigned_at
+- resolved_at
+- closed_at
+
+Fallbacks:
+- Missing risk_level → Uncategorized
+- Missing category → Uncategorized
+- Missing root_cause_category → Unknown / Not Categorized
+- Missing resolution_category → Unknown / Not Categorized
+
+Do not modify existing ticket records.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Confirm:
+- Existing Support Performance dashboard still loads
+- Existing KPI cards are not duplicated
+- Existing charts remain functional
+- New charts respect filters
+- No overlap or broken layout
+- Placeholder AI/time data is isolated and easy to replace later
+- No ticket workflow or ticket table behavior is changed
+
+Return:
+- Summary of changes
+- New components added
+- Existing components reused
+- Any placeholder AI/time data added
+- Any backend fields still needed

@@ -43,12 +43,36 @@ import {
   Cell,
   LineChart,
   Line,
+  PieChart,
+  Pie,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
   Legend,
 } from "recharts";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import {
+  RISK_LEVELS,
+  RISK_LEVEL_LABEL,
+  RISK_LEVEL_COLOR,
+  CATEGORY_PALETTE,
+  bucketCounts,
+  getTicketRiskBucket,
+  getTicketCategoryBucket,
+  getTicketRootCauseCategory,
+  getTicketResolutionCategory,
+} from "@/lib/ticket-categorization";
+import {
+  buildAiImpactSummary,
+  buildTimeIntelligenceSummary,
+  fmtMinutes,
+} from "@/lib/ai-impact-placeholder";
 import { format } from "date-fns";
 import {
   Clock,
@@ -717,6 +741,67 @@ function TicketsDashboardContent() {
       { name: "Medium", value: priorityCounts.medium, fill: "#eab308" },
       { name: "Low", value: priorityCounts.low, fill: "#10b981" },
     ];
+
+    // Risk Level distribution — uses ticket.riskLevel with fallback to
+    // "Uncategorized". Always render the full set of buckets so the
+    // chart axis is stable across re-renders.
+    const riskBucketCounts = bucketCounts(scopedTickets, getTicketRiskBucket);
+    const riskChart = RISK_LEVELS.map((k) => ({
+      name: RISK_LEVEL_LABEL[k] ?? k,
+      value: riskBucketCounts.get(k) ?? 0,
+      fill: RISK_LEVEL_COLOR[k] ?? "#94a3b8",
+    }));
+
+    // Category donut — derived from the free-text `category` field.
+    // Top 8 categories shown individually; everything else collapses
+    // into an "Other" slice so the donut stays legible.
+    const categoryEntries = Array.from(
+      bucketCounts(scopedTickets, getTicketCategoryBucket).entries(),
+    ).sort((a, b) => b[1] - a[1]);
+    const TOP_N_CATEGORIES = 8;
+    const topCats = categoryEntries.slice(0, TOP_N_CATEGORIES);
+    const restCats = categoryEntries.slice(TOP_N_CATEGORIES);
+    let restTotal = restCats.reduce((acc, [, v]) => acc + v, 0);
+    // If a real ticket category is literally named "Other" we must
+    // not render two identically-labelled slices — fold that real
+    // bucket into the synthetic remainder so the donut stays
+    // unambiguous and React keys stay unique.
+    const filteredTop = topCats.filter(([name, value]) => {
+      if (name === "Other") {
+        restTotal += value;
+        return false;
+      }
+      return true;
+    });
+    const categoryChart = [
+      ...filteredTop.map(([name, value], i) => ({
+        name,
+        value,
+        fill: CATEGORY_PALETTE[i % CATEGORY_PALETTE.length],
+      })),
+      ...(restTotal > 0
+        ? [{ name: "Other", value: restTotal, fill: "#cbd5e1" }]
+        : []),
+    ];
+
+    // Root cause + resolution distributions — derive at-read using the
+    // free-text notes until persisted category fields land. Sorted so
+    // the bar chart leads with the most common bucket.
+    const rootCauseEntries = Array.from(
+      bucketCounts(scopedTickets, getTicketRootCauseCategory).entries(),
+    ).sort((a, b) => b[1] - a[1]);
+    const rootCauseChart = rootCauseEntries.map(([name, value]) => ({
+      name,
+      value,
+    }));
+    const resolutionEntries = Array.from(
+      bucketCounts(scopedTickets, getTicketResolutionCategory).entries(),
+    ).sort((a, b) => b[1] - a[1]);
+    const resolutionChart = resolutionEntries.map(([name, value]) => ({
+      name,
+      value,
+    }));
+
     return {
       atRiskSla,
       highPriorityOpen,
@@ -726,8 +811,25 @@ function TicketsDashboardContent() {
       resolved,
       backlog,
       priorityChart,
+      riskChart,
+      categoryChart,
+      rootCauseChart,
+      resolutionChart,
     };
   }, [scopedTickets]);
+
+  // AI Impact + Time Intelligence summaries are placeholder-derived
+  // (see ai-impact-placeholder for the contract) but scoped against
+  // the same scopedTickets list, so they react to team/agent/range
+  // filters just like the real KPIs.
+  const aiSummary = useMemo(
+    () => buildAiImpactSummary(scopedTickets),
+    [scopedTickets],
+  );
+  const timeSummary = useMemo(
+    () => buildTimeIntelligenceSummary(scopedTickets),
+    [scopedTickets],
+  );
 
   const chartData = useMemo(() => {
     return (
@@ -803,7 +905,29 @@ function TicketsDashboardContent() {
           ))}
         </div>
       ) : (
-        <>
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="flex flex-wrap h-auto">
+            <TabsTrigger value="overview" data-testid="tab-overview">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="risk" data-testid="tab-risk-categories">
+              Risk &amp; Categories
+            </TabsTrigger>
+            <TabsTrigger value="root-cause" data-testid="tab-root-cause">
+              Root Cause &amp; Resolution
+            </TabsTrigger>
+            <TabsTrigger value="ai-impact" data-testid="tab-ai-impact">
+              AI Impact
+            </TabsTrigger>
+            <TabsTrigger
+              value="time-intelligence"
+              data-testid="tab-time-intelligence"
+            >
+              Time Intelligence
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6 mt-0">
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<Timer className="h-4 w-4 text-indigo-500" />}
@@ -1094,7 +1218,488 @@ function TicketsDashboardContent() {
               )}
             </CardContent>
           </Card>
-        </>
+          </TabsContent>
+
+          <TabsContent value="risk" className="space-y-6 mt-0">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card data-testid="card-risk-level">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-rose-500" />
+                    Tickets by risk level
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[280px]">
+                  {riskStats.created === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No tickets in scope.
+                    </p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={riskStats.riskChart}
+                        margin={{ top: 5, right: 20, left: -10, bottom: 0 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#e2e8f0"
+                        />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          allowDecimals={false}
+                        />
+                        <Tooltip />
+                        <Bar
+                          dataKey="value"
+                          name="Tickets"
+                          radius={[4, 4, 0, 0]}
+                        >
+                          {riskStats.riskChart.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-category-donut">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Inbox className="h-4 w-4 text-sky-500" />
+                    Tickets by category
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[280px]">
+                  {riskStats.categoryChart.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No tickets in scope.
+                    </p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Tooltip />
+                        <Legend
+                          layout="vertical"
+                          align="right"
+                          verticalAlign="middle"
+                          wrapperStyle={{ fontSize: 12 }}
+                        />
+                        <Pie
+                          data={riskStats.categoryChart}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={50}
+                          outerRadius={90}
+                          paddingAngle={2}
+                        >
+                          {riskStats.categoryChart.map((entry, i) => (
+                            <Cell
+                              key={`${entry.name}-${i}`}
+                              fill={entry.fill}
+                            />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="root-cause" className="space-y-6 mt-0">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card data-testid="card-root-cause">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Root cause distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[320px]">
+                  {riskStats.rootCauseChart.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No tickets in scope.
+                    </p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={riskStats.rootCauseChart}
+                        layout="vertical"
+                        margin={{ top: 5, right: 20, left: 30, bottom: 0 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#e2e8f0"
+                        />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          allowDecimals={false}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          width={170}
+                        />
+                        <Tooltip />
+                        <Bar
+                          dataKey="value"
+                          name="Tickets"
+                          fill="#6366f1"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-resolution">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    Resolution distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[320px]">
+                  {riskStats.resolutionChart.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No tickets in scope.
+                    </p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={riskStats.resolutionChart}
+                        layout="vertical"
+                        margin={{ top: 5, right: 20, left: 30, bottom: 0 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#e2e8f0"
+                        />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          allowDecimals={false}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          width={170}
+                        />
+                        <Tooltip />
+                        <Bar
+                          dataKey="value"
+                          name="Tickets"
+                          fill="#10b981"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Categories are derived from the tech&apos;s free-text root
+              cause and resolution notes via a rule-based classifier.
+              When the dedicated category fields ship they will replace
+              this derivation automatically.
+            </p>
+          </TabsContent>
+
+          <TabsContent value="ai-impact" className="space-y-6 mt-0">
+            <p className="text-xs text-muted-foreground">
+              AI Impact metrics are placeholder values derived from the
+              current ticket dataset until the AI handling backend lands.
+              They scale with your filters but should not be used for
+              capacity planning.
+            </p>
+            <div className="grid gap-4 md:grid-cols-4">
+              <KpiCard
+                icon={<TrendingUp className="h-4 w-4 text-indigo-500" />}
+                label="AI Resolved"
+                value={String(aiSummary.aiResolved)}
+                hint="Interactions handled by AI"
+              />
+              <KpiCard
+                icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                label="AI Deflected"
+                value={String(aiSummary.aiDeflected)}
+                hint="Avoided becoming tickets"
+              />
+              <KpiCard
+                icon={<AlertTriangle className="h-4 w-4 text-orange-500" />}
+                label="Human Escalations"
+                value={String(aiSummary.humanEscalated)}
+                hint="Routed to a human agent"
+              />
+              <KpiCard
+                icon={<Clock className="h-4 w-4 text-violet-500" />}
+                label="Time Saved by AI"
+                value={fmtMinutes(aiSummary.estimatedMinutesSaved)}
+                hint="Estimated, vs avg human time"
+              />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card data-testid="card-ai-resolved-vs-human">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">
+                    AI resolved vs human escalated
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Tooltip />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Pie
+                        data={aiSummary.donutData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={50}
+                        outerRadius={85}
+                        paddingAngle={2}
+                      >
+                        {aiSummary.donutData.map((e) => (
+                          <Cell key={e.name} fill={e.fill} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-ai-deflected-vs-created">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">
+                    AI deflected vs tickets created
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={aiSummary.deflectedVsCreated}
+                      margin={{ top: 5, right: 20, left: -10, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#e2e8f0"
+                      />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        allowDecimals={false}
+                      />
+                      <Tooltip />
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                        {aiSummary.deflectedVsCreated.map((e) => (
+                          <Cell key={e.name} fill={e.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card data-testid="card-ai-time-saved-trend">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-indigo-500" />
+                  AI time saved trend
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="h-[260px]">
+                {aiSummary.trend.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No tickets in scope.
+                  </p>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={aiSummary.trend}
+                      margin={{ top: 5, right: 20, left: -10, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#e2e8f0"
+                      />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        formatter={(v: number) => [
+                          fmtMinutes(v),
+                          "Time saved",
+                        ]}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="minutesSaved"
+                        name="Minutes saved"
+                        stroke="#6366f1"
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent
+            value="time-intelligence"
+            className="space-y-6 mt-0"
+          >
+            <p className="text-xs text-muted-foreground">
+              Time Intelligence metrics rely on per-stage timing
+              information that isn&apos;t yet captured per-ticket.
+              Values are placeholder estimates derived from the current
+              dataset and replace once the timing backend lands.
+            </p>
+            <div className="grid gap-4 md:grid-cols-4">
+              <KpiCard
+                icon={<Timer className="h-4 w-4 text-indigo-500" />}
+                label="Avg Time per Ticket"
+                value={fmtMinutes(timeSummary.avgMinutesPerTicket)}
+                hint="Resolved tickets, end-to-end"
+              />
+              <KpiCard
+                icon={<Clock className="h-4 w-4 text-emerald-500" />}
+                label="Saved Before Assignment"
+                value={fmtMinutes(timeSummary.minutesSavedBeforeAssignment)}
+                hint="AI handled pre-assignment"
+              />
+              <KpiCard
+                icon={<Clock className="h-4 w-4 text-orange-500" />}
+                label="Human Support Time"
+                value={fmtMinutes(timeSummary.humanSupportMinutes)}
+                hint="Across all human-handled work"
+              />
+              <KpiCard
+                icon={<Clock className="h-4 w-4 text-violet-500" />}
+                label="AI Handling Time"
+                value={fmtMinutes(timeSummary.aiHandlingMinutes)}
+                hint="Across AI-resolved interactions"
+              />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card data-testid="card-time-comparison">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">
+                    Avg AI vs human resolution time
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={timeSummary.comparisonChart}
+                      margin={{ top: 5, right: 20, left: -10, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#e2e8f0"
+                      />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        formatter={(v: number) => [fmtMinutes(v), "Time"]}
+                      />
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                        {timeSummary.comparisonChart.map((e) => (
+                          <Cell key={e.name} fill={e.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-support-time-trend">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    Support time trend
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[260px]">
+                  {timeSummary.trend.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No tickets in scope.
+                    </p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={timeSummary.trend}
+                        margin={{ top: 5, right: 20, left: -10, bottom: 0 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#e2e8f0"
+                        />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          allowDecimals={false}
+                        />
+                        <Tooltip
+                          formatter={(v: number) => [fmtMinutes(v), "Time"]}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Line
+                          type="monotone"
+                          dataKey="humanMinutes"
+                          name="Human"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="aiMinutes"
+                          name="AI"
+                          stroke="#6366f1"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );
