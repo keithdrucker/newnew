@@ -153,6 +153,11 @@ export function SideNav({ session }: { session: Session | null }) {
     location === "/tickets" || location.startsWith("/tickets/");
   const showProjectsTree =
     location === "/projects" || location.startsWith("/projects");
+  const showInitiativesTree =
+    location === "/initiatives" || location.startsWith("/initiatives/");
+  const showOperationalTasksTree =
+    location === "/operational-tasks" ||
+    location.startsWith("/operational-tasks/");
 
   return (
     <aside
@@ -202,6 +207,16 @@ export function SideNav({ session }: { session: Session | null }) {
                   />
                 );
               }
+              if (item.href === "/operational-tasks") {
+                return (
+                  <OperationalTasksNavItem
+                    key={item.href}
+                    item={item}
+                    location={location}
+                    expanded={showOperationalTasksTree}
+                  />
+                );
+              }
               return (
                 <NavRow
                   key={item.href}
@@ -228,6 +243,16 @@ export function SideNav({ session }: { session: Session | null }) {
                     item={item}
                     location={location}
                     expanded={showProjectsTree}
+                  />
+                );
+              }
+              if (item.href === "/initiatives") {
+                return (
+                  <InitiativesNavItem
+                    key={item.href}
+                    item={item}
+                    location={location}
+                    expanded={showInitiativesTree}
                   />
                 );
               }
@@ -538,6 +563,191 @@ function ProjectsNavItem({
                   : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
               )}
               data-testid={`nav-projects-dept-${dept.slug}`}
+            >
+              <span style={{ color: dept.color }} className="inline-flex">
+                <DeptIcon className="h-3.5 w-3.5" />
+              </span>
+              <span className="truncate flex-1">{dept.name}</span>
+            </Link>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function InitiativesNavItem({
+  item,
+  location,
+  expanded: defaultExpanded,
+}: {
+  item: NavItem;
+  location: string;
+  expanded: boolean;
+}) {
+  const [open, setOpen] = useState(defaultExpanded);
+  const Icon = item.icon;
+  const sectionActive =
+    location === "/initiatives" || location.startsWith("/initiatives/");
+  const allActive = location === "/initiatives";
+  const [, deptMatch] = useRoute("/initiatives/dept/:slug");
+  const activeDeptSlug = deptMatch?.slug;
+  const { data: departments } = useListDepartments({ scope: "accessible" });
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="relative">
+        <Link
+          href={item.href}
+          data-testid="nav-initiatives"
+          className={cn(
+            "relative flex items-center gap-2.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors pr-8",
+            sectionActive
+              ? "bg-white/10 text-white"
+              : "text-sidebar-foreground/75 hover:text-white hover:bg-white/5",
+          )}
+        >
+          {sectionActive && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sidebar-primary" />
+          )}
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className="truncate">{item.label}</span>
+        </Link>
+        <CollapsibleTrigger
+          className={cn(
+            "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md flex items-center justify-center transition-colors",
+            "text-sidebar-foreground/55 hover:bg-white/5 hover:text-white",
+          )}
+          aria-label={open ? "Collapse teams" : "Expand teams"}
+          data-testid="trigger-initiatives-tree"
+        >
+          <ChevronRight
+            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
+          />
+        </CollapsibleTrigger>
+      </div>
+
+      <CollapsibleContent className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
+        <Link
+          href="/initiatives"
+          data-testid="nav-initiatives-all"
+          className={cn(
+            "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+            allActive
+              ? "bg-white/10 text-white font-medium"
+              : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+          )}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          <span>All Initiatives</span>
+        </Link>
+        {Array.isArray(departments) && departments.map((dept) => {
+          const DeptIcon = DEPT_ICON_MAP[dept.icon] ?? Layers;
+          const active = activeDeptSlug === dept.slug;
+          return (
+            <Link
+              key={dept.id}
+              href={`/initiatives/dept/${dept.slug}`}
+              className={cn(
+                "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+                active
+                  ? "bg-white/10 text-white font-medium"
+                  : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+              )}
+              data-testid={`nav-initiatives-dept-${dept.slug}`}
+            >
+              <span style={{ color: dept.color }} className="inline-flex">
+                <DeptIcon className="h-3.5 w-3.5" />
+              </span>
+              <span className="truncate flex-1">{dept.name}</span>
+            </Link>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function OperationalTasksNavItem({
+  item,
+  location,
+  expanded: defaultExpanded,
+}: {
+  item: NavItem;
+  location: string;
+  expanded: boolean;
+}) {
+  const [open, setOpen] = useState(defaultExpanded);
+  const Icon = item.icon;
+  const sectionActive =
+    location === "/operational-tasks" ||
+    location.startsWith("/operational-tasks/");
+  const allActive = location === "/operational-tasks";
+  const [, deptMatch] = useRoute("/operational-tasks/dept/:slug");
+  const activeDeptSlug = deptMatch?.slug;
+  const { data: departments } = useListDepartments({ scope: "accessible" });
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="relative">
+        <Link
+          href={item.href}
+          data-testid="nav-operational-tasks"
+          className={cn(
+            "relative flex items-center gap-2.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors pr-8",
+            sectionActive
+              ? "bg-white/10 text-white"
+              : "text-sidebar-foreground/75 hover:text-white hover:bg-white/5",
+          )}
+        >
+          {sectionActive && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sidebar-primary" />
+          )}
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className="truncate">{item.label}</span>
+        </Link>
+        <CollapsibleTrigger
+          className={cn(
+            "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md flex items-center justify-center transition-colors",
+            "text-sidebar-foreground/55 hover:bg-white/5 hover:text-white",
+          )}
+          aria-label={open ? "Collapse teams" : "Expand teams"}
+          data-testid="trigger-operational-tasks-tree"
+        >
+          <ChevronRight
+            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
+          />
+        </CollapsibleTrigger>
+      </div>
+
+      <CollapsibleContent className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
+        <Link
+          href="/operational-tasks"
+          data-testid="nav-operational-tasks-all"
+          className={cn(
+            "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+            allActive
+              ? "bg-white/10 text-white font-medium"
+              : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+          )}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          <span>All Operational Tasks</span>
+        </Link>
+        {Array.isArray(departments) && departments.map((dept) => {
+          const DeptIcon = DEPT_ICON_MAP[dept.icon] ?? Layers;
+          const active = activeDeptSlug === dept.slug;
+          return (
+            <Link
+              key={dept.id}
+              href={`/operational-tasks/dept/${dept.slug}`}
+              className={cn(
+                "flex items-center gap-2 px-2.5 h-8 rounded-md text-[12.5px] transition-colors",
+                active
+                  ? "bg-white/10 text-white font-medium"
+                  : "text-sidebar-foreground/65 hover:text-white hover:bg-white/5",
+              )}
+              data-testid={`nav-operational-tasks-dept-${dept.slug}`}
             >
               <span style={{ color: dept.color }} className="inline-flex">
                 <DeptIcon className="h-3.5 w-3.5" />

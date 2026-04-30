@@ -36,14 +36,14 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Appearance preferences and ticket boards. Click into a board to edit
-          its portal, SLA, and notification settings.
+          Appearance preferences and teams. Click into a team to edit its
+          portal, SLA, and notification settings.
         </p>
       </div>
       <AppearanceCard />
-      <TeamCard />
+      <AgentsCard />
       <AutomationCard />
-      <TicketBoardsCard />
+      <TeamsCard />
     </div>
   );
 }
@@ -98,18 +98,18 @@ function AutomationCard() {
   );
 }
 
-function TeamCard() {
+function AgentsCard() {
   const { session } = useSession();
   if (session?.role !== "admin") return null;
 
   return (
-    <Card data-testid="card-team">
+    <Card data-testid="card-agents">
       <CardHeader>
-        <CardTitle className="text-base">Team</CardTitle>
+        <CardTitle className="text-base">Agents</CardTitle>
         <CardDescription>
           Browse all admins and agents, and add new teammates. To grant access
-          to specific boards (Full Control, Modify, or Read only), open a
-          board's settings.
+          to specific teams (Full Control, Modify, or Read only), open a team's
+          settings.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -134,7 +134,7 @@ function TeamCard() {
   );
 }
 
-function TicketBoardsCard() {
+function TeamsCard() {
   const { session } = useSession();
   const { data: departments } = useListDepartments();
   const [editing, setEditing] = useState<BoardViewModel | null>(null);
@@ -143,21 +143,22 @@ function TicketBoardsCard() {
   if (session?.role !== "admin") return null;
 
   return (
-    <Card data-testid="card-ticket-boards">
+    <Card data-testid="card-teams">
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
         <div>
-          <CardTitle className="text-base">Ticket boards</CardTitle>
+          <CardTitle className="text-base">Teams</CardTitle>
           <CardDescription>
-            Each board is a department with its own tickets, settings, and SLA.
-            Click a board to configure it, or use the actions on the right to
-            edit or delete.
+            A team owns its own slice of work — its own Tickets, Projects,
+            Initiatives, and Operational Tasks, plus its own SLA, portal, and
+            members. Click a team to configure it, or use the actions on the
+            right to edit or delete.
           </CardDescription>
         </div>
         <AddBoardDialog />
       </CardHeader>
       <CardContent>
         {!departments || departments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No boards yet.</p>
+          <p className="text-sm text-muted-foreground">No teams yet.</p>
         ) : (
           <ul
             className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"

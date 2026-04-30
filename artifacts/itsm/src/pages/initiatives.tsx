@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, Redirect, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListInitiatives,
@@ -7,6 +7,7 @@ import {
   useUpdateInitiative,
   useListDepartments,
   useListAgents,
+  useGetSession,
   type Initiative,
   type InitiativeStatus,
   type InitiativeAuditEvent,
@@ -227,9 +228,20 @@ const STATUS_CHIP_TONE: Record<InitiativeStatus, string> = {
 };
 
 export default function InitiativesPage() {
+  const { data: session, isLoading: sessionLoading } = useGetSession();
   const { data, isLoading } = useListInitiatives();
   const initiatives = (data ?? []) as Initiative[];
   const { data: agents } = useListAgents({});
+  const { data: departments } = useListDepartments({ scope: "accessible" });
+  const [, deptParams] = useRoute("/initiatives/dept/:slug");
+  const deptSlug = deptParams?.slug ?? null;
+  const activeDept = useMemo(
+    () =>
+      deptSlug && Array.isArray(departments)
+        ? departments.find((d) => d.slug === deptSlug) ?? null
+        : null,
+    [departments, deptSlug],
+  );
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -250,6 +262,13 @@ export default function InitiativesPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = initiatives.filter((i) => {
+      // Team-scoped view: hide everything if the slug didn't resolve to
+      // an accessible department (404-like behavior); otherwise only
+      // include initiatives that belong to that team's department.
+      if (deptSlug) {
+        if (!activeDept) return false;
+        if (i.departmentId !== activeDept.id) return false;
+      }
       if (q) {
         const hay = [
           i.title,
@@ -303,7 +322,7 @@ export default function InitiativesPage() {
       });
     }
     return list;
-  }, [initiatives, search, filters, sortKey]);
+  }, [initiatives, search, filters, sortKey, deptSlug, activeDept]);
 
   const grouped = useMemo(() => {
     const m = new Map<InitiativeStatus, Initiative[]>();
@@ -323,6 +342,15 @@ export default function InitiativesPage() {
     setSortKey("default");
   };
 
+  // Initiatives is hidden from end users in the sidebar; also block
+  // direct navigation so the route can't be reached by URL either.
+  if (sessionLoading) {
+    return <p className="p-6 text-sm text-muted-foreground">Loading…</p>;
+  }
+  if (!session || session.role === "end_user") {
+    return <Redirect to="/" />;
+  }
+
   return (
     <div
       className="p-6 space-y-6"
@@ -334,8 +362,17 @@ export default function InitiativesPage() {
             <div className="h-10 w-10 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
               <Lightbulb className="h-5 w-5" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1
+              className="text-2xl font-semibold tracking-tight"
+              data-testid="text-initiatives-title"
+            >
               Initiatives
+              {activeDept && (
+                <span className="text-muted-foreground font-normal">
+                  {" "}
+                  · {activeDept.name}
+                </span>
+              )}
             </h1>
             <div className="flex items-center gap-1.5 flex-wrap ml-1">
               {STATUS_ORDER.map((s) => (
@@ -351,9 +388,9 @@ export default function InitiativesPage() {
             </div>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Decide whether work should be done — no planning, no execution.
-            Approved initiatives automatically become Projects in the
-            Improvements section.
+            {activeDept
+              ? `Initiatives belonging to the ${activeDept.name} team. Approved initiatives become Projects.`
+              : "Decide whether work should be done — no planning, no execution. Approved initiatives automatically become Projects in the Improvements section."}
           </p>
         </div>
         <Button

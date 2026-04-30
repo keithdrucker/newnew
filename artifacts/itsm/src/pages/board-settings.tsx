@@ -72,7 +72,7 @@ export default function BoardSettings({
       <div className="space-y-3">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          You don't have permission to view board settings.
+          You don't have permission to view team settings.
         </p>
       </div>
     );
@@ -93,10 +93,10 @@ export default function BoardSettings({
           Back to Settings
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Board not found
+          Team not found
         </h1>
         <p className="text-sm text-muted-foreground">
-          No board with the slug "{slug}" exists. It may have been renamed or
+          No team with the slug "{slug}" exists. It may have been renamed or
           deleted.
         </p>
       </div>
@@ -125,7 +125,7 @@ export default function BoardSettings({
             </h1>
             <p className="text-sm text-muted-foreground truncate">
               {department.description ||
-                `Board configuration for ${department.name}.`}
+                `Team configuration for ${department.name}.`}
             </p>
           </div>
         </div>
@@ -185,7 +185,7 @@ function BoardActions({
         data-testid="button-edit-board"
       >
         <Pencil className="h-3.5 w-3.5 mr-1.5" />
-        Edit board
+        Edit team
       </Button>
       <Button
         variant="outline"
@@ -214,6 +214,9 @@ function BoardActions({
 }
 
 function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
+  // Note: this is the per-team configuration form (portal, SLA, business
+  // hours). The component name pre-dates the Boards → Teams rename and is
+  // kept as-is to avoid touching the underlying department settings API.
   const { data: settings, isLoading } = useGetDepartmentSettings(departmentId);
   const update = useUpdateDepartmentSettings();
   const { toast } = useToast();
@@ -276,7 +279,7 @@ function DepartmentSettingsForm({ departmentId }: { departmentId: number }) {
         onSuccess: () =>
           toast({
             title: "Settings saved",
-            description: "Board configuration updated.",
+            description: "Team configuration updated.",
           }),
         onError: () =>
           toast({

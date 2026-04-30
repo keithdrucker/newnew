@@ -99,8 +99,8 @@ export function AddBoardDialog() {
       {
         onSuccess: (created) => {
           toast({
-            title: "Board created",
-            description: `${created.name} is now in the Ticket Board.`,
+            title: "Team created",
+            description: `${created.name} is now available in Tickets, Projects, Initiatives, and Operational Tasks.`,
           });
           queryClient.invalidateQueries({
             queryKey: getListDepartmentsQueryKey(),
@@ -110,11 +110,11 @@ export function AddBoardDialog() {
         },
         onError: (err) => {
           toast({
-            title: "Could not create board",
+            title: "Could not create team",
             description:
               err instanceof Error
                 ? err.message
-                : "A board with this slug may already exist.",
+                : "A team with this slug may already exist.",
             variant: "destructive",
           });
         },
@@ -137,21 +137,22 @@ export function AddBoardDialog() {
           data-testid="button-add-board"
         >
           <Plus className="h-4 w-4" />
-          New board
+          New team
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>New ticket board</DialogTitle>
+          <DialogTitle>New team</DialogTitle>
           <DialogDescription>
-            Create a new department board. It will appear in the sidebar and
-            can receive its own tickets, settings, and SLAs.
+            Create a new team. It will appear in the sidebar under Tickets,
+            Projects, Initiatives, and Operational Tasks, and can receive its
+            own work, settings, and SLAs.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5 col-span-2">
-              <Label htmlFor="board-name">Board name</Label>
+              <Label htmlFor="board-name">Team name</Label>
               <Input
                 id="board-name"
                 value={form.name}
@@ -253,7 +254,7 @@ export function AddBoardDialog() {
                   <PreviewIcon className="h-4 w-4" />
                 </span>
                 <span className="font-medium">
-                  {form.name.trim() || "New board"}
+                  {form.name.trim() || "New team"}
                 </span>
               </div>
             </div>
@@ -272,7 +273,7 @@ export function AddBoardDialog() {
               disabled={!canSubmit}
               data-testid="button-submit-board"
             >
-              {create.isPending ? "Creating…" : "Create board"}
+              {create.isPending ? "Creating…" : "Create team"}
             </Button>
           </DialogFooter>
         </form>

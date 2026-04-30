@@ -37,7 +37,7 @@ export function DeleteBoardDialog({
       {
         onSuccess: () => {
           toast({
-            title: "Board deleted",
+            title: "Team deleted",
             description: `${boardName} has been removed.`,
           });
           queryClient.invalidateQueries({
@@ -48,11 +48,11 @@ export function DeleteBoardDialog({
         },
         onError: (err) => {
           toast({
-            title: "Could not delete board",
+            title: "Could not delete team",
             description:
               err instanceof Error
                 ? err.message
-                : "The board may still have tickets, agents, or other data attached.",
+                : "The team may still have tickets, agents, or other data attached.",
             variant: "destructive",
           });
         },
@@ -64,18 +64,18 @@ export function DeleteBoardDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete this board?</AlertDialogTitle>
+          <AlertDialogTitle>Delete this team?</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2">
               <p>
                 You're about to delete{" "}
                 <span className="font-medium text-foreground">{boardName}</span>
-                . This will remove the board from the sidebar and from the
-                department picker everywhere in the app.
+                . This will remove the team from the sidebar and from the team
+                picker everywhere in the app.
               </p>
               {ticketCount > 0 && (
                 <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-sm text-destructive">
-                  This board still has {ticketCount} ticket
+                  This team still has {ticketCount} ticket
                   {ticketCount === 1 ? "" : "s"}. Deletion will fail until those
                   tickets are reassigned or removed.
                 </p>
@@ -102,7 +102,7 @@ export function DeleteBoardDialog({
             disabled={del.isPending}
             data-testid="button-confirm-delete-board"
           >
-            {del.isPending ? "Deleting…" : "Delete board"}
+            {del.isPending ? "Deleting…" : "Delete team"}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

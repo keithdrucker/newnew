@@ -112,7 +112,7 @@ export function EditBoardDialog({
       {
         onSuccess: (updated) => {
           toast({
-            title: "Board updated",
+            title: "Team updated",
             description: `${updated.name} has been saved.`,
           });
           queryClient.invalidateQueries({
@@ -128,11 +128,11 @@ export function EditBoardDialog({
         },
         onError: (err) => {
           toast({
-            title: "Could not update board",
+            title: "Could not update team",
             description:
               err instanceof Error
                 ? err.message
-                : "A board with this slug may already exist.",
+                : "A team with this slug may already exist.",
             variant: "destructive",
           });
         },
@@ -144,15 +144,15 @@ export function EditBoardDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>Edit ticket board</DialogTitle>
+          <DialogTitle>Edit team</DialogTitle>
           <DialogDescription>
-            Update the board name, URL slug, icon, color, or description.
+            Update the team name, URL slug, icon, color, or description.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5 col-span-2">
-              <Label htmlFor="edit-board-name">Board name</Label>
+              <Label htmlFor="edit-board-name">Team name</Label>
               <Input
                 id="edit-board-name"
                 value={form.name}
@@ -248,7 +248,7 @@ export function EditBoardDialog({
                   <PreviewIcon className="h-4 w-4" />
                 </span>
                 <span className="font-medium">
-                  {form.name.trim() || "Board"}
+                  {form.name.trim() || "Team"}
                 </span>
               </div>
             </div>
@@ -267,7 +267,7 @@ export function EditBoardDialog({
               disabled={!canSubmit}
               data-testid="button-submit-edit-board"
             >
-              {update.isPending ? "Saving…" : "Save changes"}
+              {update.isPending ? "Saving…" : "Save team"}
             </Button>
           </DialogFooter>
         </form>

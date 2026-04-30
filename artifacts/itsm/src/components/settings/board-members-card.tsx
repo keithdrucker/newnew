@@ -123,9 +123,9 @@ export function BoardMembersCard({ departmentId }: { departmentId: number }) {
     <Card className="lg:col-span-2">
       <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
         <div>
-          <CardTitle className="text-base">Agents on this board</CardTitle>
+          <CardTitle className="text-base">Agents on this team</CardTitle>
           <CardDescription>
-            Control who can see and work tickets in this board. Admins always
+            Control who can see and work tickets on this team. Admins always
             have full access everywhere.
           </CardDescription>
         </div>
@@ -148,7 +148,7 @@ export function BoardMembersCard({ departmentId }: { departmentId: number }) {
               No agents have been added yet.
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Add agents to give them access to this board's tickets.
+              Add agents to give them access to this team's tickets.
             </p>
           </div>
         ) : (
@@ -199,7 +199,7 @@ function MemberRow({
           invalidate();
           toast({
             title: "Role updated",
-            description: `${member.userName} is now ${roleLabel(next)} on this board.`,
+            description: `${member.userName} is now ${roleLabel(next)} on this team.`,
           });
         },
         onError: () =>
@@ -218,7 +218,7 @@ function MemberRow({
         onSuccess: () => {
           invalidate();
           toast({
-            title: "Removed from board",
+            title: "Removed from team",
             description: `${member.userName} no longer has access.`,
           });
         },
@@ -349,7 +349,7 @@ function AddMemberDialog({
             queryKey: getListBoardMembersQueryKey(departmentId),
           });
           toast({
-            title: "Added to board",
+            title: "Added to team",
             description: "Access granted.",
           });
           reset();
@@ -374,9 +374,9 @@ function AddMemberDialog({
     >
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Add agent to board</DialogTitle>
+          <DialogTitle>Add agent to team</DialogTitle>
           <DialogDescription>
-            Pick an agent and choose what they can do on this board.
+            Pick an agent and choose what they can do on this team.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -449,7 +449,7 @@ function AddMemberDialog({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Role on this board</Label>
+            <Label className="text-xs">Role on this team</Label>
             <Select value={role} onValueChange={(v) => setRole(v as BoardRole)}>
               <SelectTrigger data-testid="select-new-member-role">
                 <SelectValue />
@@ -483,7 +483,7 @@ function AddMemberDialog({
             data-testid="button-confirm-add-member"
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" />
-            {add.isPending ? "Adding…" : "Add to board"}
+            {add.isPending ? "Adding…" : "Add to team"}
           </Button>
         </DialogFooter>
       </DialogContent>

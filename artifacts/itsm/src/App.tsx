@@ -54,7 +54,9 @@ function Router() {
         <Route path="/projects/dashboard" component={ProjectsDashboard} />
         <Route path="/projects/dept/:slug" component={Projects} />
         <Route path="/projects" component={Projects} />
+        <Route path="/operational-tasks/dept/:slug" component={OperationalTasks} />
         <Route path="/operational-tasks" component={OperationalTasks} />
+        <Route path="/initiatives/dept/:slug" component={Initiatives} />
         <Route path="/initiatives" component={Initiatives} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />
