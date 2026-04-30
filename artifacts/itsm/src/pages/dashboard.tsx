@@ -91,11 +91,11 @@ type DashboardView =
 const DASHBOARD_VIEW_KEY = "itsm.dashboard.view.v2";
 
 const DASHBOARD_VIEW_LABEL: Record<DashboardView, string> = {
-  team_health: "Team Health Dashboard",
-  tickets: "Tickets",
-  operational_tasks: "Operational Tasks",
-  initiatives: "Initiatives",
-  projects: "Projects",
+  team_health: "Team Health",
+  tickets: "Support Performance",
+  operational_tasks: "Operations Overview",
+  initiatives: "Initiative Pipeline",
+  projects: "Project Execution",
 };
 
 function isDashboardView(v: string): v is DashboardView {
@@ -666,7 +666,7 @@ function TicketsDashboardContent() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Tickets Dashboard
+            Support Performance
           </h1>
           <p
             className="text-sm text-muted-foreground mt-1"

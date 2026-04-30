@@ -112,7 +112,7 @@ const WORKSPACE_BOTTOM: NavItem[] = [];
 const GOVERNANCE: NavItem[] = [
   {
     href: "/executive-dashboard",
-    label: "Executive Dashboard",
+    label: "Team Health",
     icon: BarChart3,
     matchPrefix: "/executive-dashboard",
     adminOnly: true,

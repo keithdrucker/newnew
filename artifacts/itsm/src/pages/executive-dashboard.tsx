@@ -283,7 +283,7 @@ export default function ExecutiveDashboard() {
       <header className="space-y-1">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Executive Dashboard
+            Team Health
           </h1>
           <Badge
             variant="outline"
