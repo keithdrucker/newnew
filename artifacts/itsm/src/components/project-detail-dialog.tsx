@@ -59,6 +59,7 @@ import {
   CheckSquare,
   ChevronDown,
   CircleDashed,
+  FileDown,
   GripVertical,
   History,
   Pause,
@@ -72,6 +73,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { backlogSubStatus, startDateLabel } from "@/pages/projects";
+import { downloadClosedProjectReport } from "@/components/project-closeout-report";
 
 // ----- Constants -----------------------------------------------------------
 
@@ -1171,20 +1173,42 @@ function DetailInner({
                 <Section title="Actions" defaultOpen tone="default">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[12px] text-muted-foreground">
-                      Reopening sends this project back to In Progress and
-                      clears the active Completed and Closed signatures.
-                      The current values remain in the History below.
+                      Export the closeout as a PDF report for archives or
+                      stakeholder review. Reopening sends this project back
+                      to In Progress and clears the active Completed and
+                      Closed signatures; the current values remain in the
+                      History below.
                     </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openPhaseChange("in_progress")}
-                      data-testid="button-reopen-closed"
-                      className="shrink-0"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen
-                      Project
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await downloadClosedProjectReport(row);
+                            toast({ title: "Closeout report downloaded" });
+                          } catch (e) {
+                            toast({
+                              title: "Could not generate PDF",
+                              description: (e as Error).message,
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        data-testid="button-export-closeout-pdf"
+                      >
+                        <FileDown className="h-3.5 w-3.5 mr-1.5" /> Export PDF
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openPhaseChange("in_progress")}
+                        data-testid="button-reopen-closed"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen
+                        Project
+                      </Button>
+                    </div>
                   </div>
                 </Section>
               </>

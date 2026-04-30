@@ -81,5 +81,8 @@
     "vitest": "^3.2.4",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.5.1"
   }
 }
