@@ -57,6 +57,7 @@ import { Badge } from "@/components/ui/badge";
 import ProjectsDashboard from "@/pages/projects-dashboard";
 import InitiativesDashboard from "@/pages/initiatives-dashboard";
 import OperationalTasksDashboard from "@/pages/operational-tasks-dashboard";
+import TeamHealthDashboard from "@/pages/team-health-dashboard";
 import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import {
   TimeRangePicker,
@@ -74,14 +75,21 @@ function fmtDuration(seconds: number): string {
 }
 
 type DashboardView =
+  | "team_health"
   | "tickets"
   | "projects"
   | "initiatives"
   | "operational_tasks";
 
-const DASHBOARD_VIEW_KEY = "itsm.dashboard.view";
+// v2: bumped when Team Health Dashboard was introduced as the new
+// default. Existing users had "tickets" persisted purely because
+// tickets *was* the previous default — bumping the key lets the new
+// default land for everyone exactly once. Subsequent explicit picks
+// from the dropdown are still persisted under the v2 key.
+const DASHBOARD_VIEW_KEY = "itsm.dashboard.view.v2";
 
 const DASHBOARD_VIEW_LABEL: Record<DashboardView, string> = {
+  team_health: "Team Health Dashboard",
   tickets: "Tickets",
   operational_tasks: "Operational Tasks",
   initiatives: "Initiatives",
@@ -90,6 +98,7 @@ const DASHBOARD_VIEW_LABEL: Record<DashboardView, string> = {
 
 function isDashboardView(v: string): v is DashboardView {
   return (
+    v === "team_health" ||
     v === "tickets" ||
     v === "projects" ||
     v === "initiatives" ||
@@ -99,33 +108,89 @@ function isDashboardView(v: string): v is DashboardView {
 
 export default function Dashboard() {
   const { data: session } = useGetSession();
-  // End-users only see Tickets — Projects, Initiatives and Operational
-  // Tasks are agent/admin surfaces. Until the session resolves, treat
-  // the user as restricted so we don't briefly render an agent-only
-  // view (and fire its API calls) for someone who isn't entitled.
+  // End-users only see Tickets — Team Health, Projects, Initiatives,
+  // and Operational Tasks are agent/admin surfaces. Until the session
+  // resolves we treat the user as restricted for *render-gating*
+  // purposes, but defaulting waits for the session to actually
+  // resolve so we never lock an agent into the end-user default.
   const showAgentViews = session !== undefined && session.role !== "end_user";
 
-  // Persist the active view across reloads so a user landing back on
-  // the dashboard sees what they were last looking at.
-  const [view, setView] = useState<DashboardView>(() => {
-    if (typeof window === "undefined") return "tickets";
-    const raw = window.localStorage.getItem(DASHBOARD_VIEW_KEY);
-    return raw && isDashboardView(raw) ? raw : "tickets";
-  });
+  // The active view stays `null` until the session resolves. This is
+  // critical: if we picked a default at first render we'd capture
+  // "tickets" (because `session` is briefly undefined) for everyone
+  // — including agents/admins — and persist that to localStorage,
+  // defeating the new Team Health default. Once the session is
+  // known, the post-resolution effect below applies the saved
+  // preference if present, otherwise the role-appropriate default.
+  const [view, setView] = useState<DashboardView | null>(null);
 
-  // If the role changes (e.g. switching session) and the agent-only
-  // views are no longer visible, snap back to the tickets view so we
-  // don't render a hidden state.
+  // Default landing view differs by role: agents/admins land on the
+  // Team Health overview, end-users on Tickets (the only view they
+  // can see). A user's explicit dropdown selection is persisted to
+  // localStorage under the v2 key and respected on subsequent loads
+  // regardless of team scope, so changing teams or reloading never
+  // resets the dropdown unless the user picks something else.
   useEffect(() => {
+    if (session === undefined) return;
+    const stored =
+      typeof window === "undefined"
+        ? null
+        : window.localStorage.getItem(DASHBOARD_VIEW_KEY);
+    const persisted =
+      stored && isDashboardView(stored) ? (stored as DashboardView) : null;
+    const roleDefault: DashboardView = showAgentViews
+      ? "team_health"
+      : "tickets";
+
+    if (persisted == null) {
+      setView(roleDefault);
+      return;
+    }
+    // Persisted preference is honoured, but agent-only views must
+    // never be rendered for end-users (handled here on first apply
+    // and by the snap-back effect below for live role changes).
+    if (!showAgentViews && persisted !== "tickets") {
+      setView("tickets");
+      return;
+    }
+    setView(persisted);
+    // We deliberately depend on session identity (via session?.role)
+    // rather than just `showAgentViews` so the effect re-runs when
+    // session resolves from undefined → defined.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.role, session === undefined]);
+
+  // Live snap-back: if the role changes mid-session (e.g. session
+  // switch) and the agent-only views are no longer visible, force
+  // the dropdown back to the only entry the user can see.
+  useEffect(() => {
+    if (view == null) return;
     if (!showAgentViews && view !== "tickets") {
       setView("tickets");
     }
   }, [showAgentViews, view]);
 
+  // Only persist *real* selections — never the transient null state,
+  // and never overwrite the saved preference before the session has
+  // resolved.
   useEffect(() => {
+    if (view == null) return;
     if (typeof window === "undefined") return;
     window.localStorage.setItem(DASHBOARD_VIEW_KEY, view);
   }, [view]);
+
+  // Don't render the dropdown until the session resolves and we know
+  // which default to apply — otherwise the radix Select would briefly
+  // commit to whatever transient value we passed it.
+  if (view == null) {
+    return (
+      <div
+        className="space-y-6"
+        data-testid="dashboard-page"
+        aria-busy="true"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="dashboard-page">
@@ -137,12 +202,17 @@ export default function Dashboard() {
           }}
         >
           <SelectTrigger
-            className="w-[200px]"
+            className="w-[240px]"
             data-testid="select-dashboard-view"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            {showAgentViews && (
+              <SelectItem value="team_health">
+                {DASHBOARD_VIEW_LABEL.team_health}
+              </SelectItem>
+            )}
             <SelectItem value="tickets">
               {DASHBOARD_VIEW_LABEL.tickets}
             </SelectItem>
@@ -163,6 +233,7 @@ export default function Dashboard() {
         </Select>
       </div>
 
+      {view === "team_health" && showAgentViews && <TeamHealthDashboard />}
       {view === "tickets" && <TicketsDashboardContent />}
       {view === "projects" && <ProjectsDashboard />}
       {view === "initiatives" && <InitiativesDashboard />}
