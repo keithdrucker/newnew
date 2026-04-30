@@ -1,0 +1,163 @@
+Enhance the ticketing system to standardize, categorize, and visualize Root Cause and Resolution data for continuous improvement and training insights.
+
+Context:
+Each ticket already includes Root Cause and Resolution fields. We want to:
+- Standardize these into controlled categories
+- Enable reporting and analytics
+- Identify trends for training, system improvements, and process changes
+
+--------------------------------------------------
+DATA MODEL ENHANCEMENT
+--------------------------------------------------
+
+1. Add structured fields to tickets:
+
+- root_cause_category (enum)
+- resolution_category (enum)
+
+2. Keep existing free-text fields:
+- root_cause_notes
+- resolution_notes
+
+3. Ensure backward compatibility:
+- Existing tickets without categories should default to:
+  "Unknown / Not Categorized"
+
+--------------------------------------------------
+ROOT CAUSE CATEGORIES (ENUM)
+--------------------------------------------------
+
+Use the following controlled list:
+
+- User Error / Training Gap
+- Software Issue / Bug
+- Configuration Issue
+- Access / Permissions
+- Network / Connectivity
+- Hardware Failure
+- Data Issue
+- External Vendor Issue
+- Security / Policy Block
+- Unknown / Not Categorized
+
+--------------------------------------------------
+RESOLUTION CATEGORIES (ENUM)
+--------------------------------------------------
+
+Use the following controlled list:
+
+- User Training / Guidance
+- Configuration Change
+- Software Fix / Patch
+- Access Granted / Modified
+- System Restart / Reset
+- Hardware Replacement
+- Escalated to Vendor
+- Process Change
+- Documentation Updated
+- No Issue Found
+
+--------------------------------------------------
+UI / UX REQUIREMENTS
+--------------------------------------------------
+
+1. Ticket Form:
+- Add dropdowns for:
+  - Root Cause Category
+  - Resolution Category
+- Keep free-text notes for additional context
+
+2. Make category selection:
+- Required when closing a ticket (optional for initial save)
+
+3. Provide tooltips or descriptions for categories if needed
+
+--------------------------------------------------
+DASHBOARD METRICS (SUPPORT PERFORMANCE)
+--------------------------------------------------
+
+Add new sections:
+
+1. Root Cause Analysis
+
+Metrics:
+- Tickets by Root Cause Category
+- % of each root cause
+- Top Root Causes
+
+Charts:
+- Root Cause Distribution → Bar Chart
+- Root Cause Trend Over Time → Line Chart
+
+2. Resolution Analysis
+
+Metrics:
+- Tickets by Resolution Category
+- % of each resolution type
+
+Charts:
+- Resolution Distribution → Bar Chart
+
+3. Root Cause vs Resolution Mapping
+
+Metrics:
+- Most common resolution per root cause
+
+Charts:
+- Grouped Bar Chart or Matrix (if supported)
+
+--------------------------------------------------
+TEAM HEALTH INSIGHTS
+--------------------------------------------------
+
+Add:
+
+- % Tickets caused by User Error
+- % Tickets caused by System Issues (software + config + network)
+- Top recurring root causes
+
+Add messaging:
+
+- “High User Error rates may indicate training opportunities.”
+- “Frequent configuration issues may indicate system setup improvements.”
+
+--------------------------------------------------
+OPERATIONS INSIGHTS
+--------------------------------------------------
+
+Add:
+
+- Recurring root causes over time
+- Repeat issues by category
+- Trends in system-related issues
+
+--------------------------------------------------
+AI / FUTURE INTEGRATION (IMPORTANT)
+--------------------------------------------------
+
+Prepare for future:
+
+- Allow AI to suggest:
+  - Root Cause Category
+  - Resolution Category
+
+- Store AI confidence score (optional field)
+
+--------------------------------------------------
+DATA VALIDATION
+--------------------------------------------------
+
+Ensure:
+- No breaking changes to existing tickets
+- Default category applied if missing
+- Charts render even with partial data
+
+--------------------------------------------------
+RETURN
+--------------------------------------------------
+
+- Summary of changes
+- Fields added
+- UI updates
+- Dashboard components added
+- Any placeholder logic used
