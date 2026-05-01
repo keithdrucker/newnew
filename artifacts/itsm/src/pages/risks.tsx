@@ -2039,11 +2039,26 @@ function RiskDetailContent({
         </ScrollArea>
       </Tabs>
 
-      {isAnyDirty && (
+      {(isAnyDirty || (activeTab === "analysis" && canMoveToTreatment)) && (
         <div className="px-6 py-3 border-t bg-muted/40 flex items-center justify-end gap-2">
-          <span className="text-xs text-muted-foreground mr-auto">
-            You have unsaved changes.
-          </span>
+          {isAnyDirty && (
+            <span className="text-xs text-muted-foreground mr-auto">
+              You have unsaved changes.
+            </span>
+          )}
+          {activeTab === "analysis" && canMoveToTreatment && (
+            <Button
+              size="sm"
+              onClick={() => {
+                void launchTreatmentPhase();
+              }}
+              disabled={updateRisk.isPending}
+              data-testid="button-footer-continue-to-treatment"
+            >
+              <ArrowRight className="h-4 w-4 mr-1.5" />
+              Continue to Treatment
+            </Button>
+          )}
         </div>
       )}
     </>
@@ -2684,7 +2699,7 @@ function AnalysisTab({
               data-testid="button-move-to-treatment"
             >
               <ArrowRight className="h-4 w-4 mr-1.5" />
-              Move to Treatment
+              Continue to Treatment
             </Button>
           )}
         </div>
