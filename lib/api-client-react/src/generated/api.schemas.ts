@@ -2337,6 +2337,15 @@ export interface RiskAuditEvent {
   changedAt: string;
 }
 
+export type RiskMitigationControlType =
+  (typeof RiskMitigationControlType)[keyof typeof RiskMitigationControlType];
+
+export const RiskMitigationControlType = {
+  "": "",
+  security_control: "security_control",
+  compensating_control: "compensating_control",
+} as const;
+
 export interface Risk {
   id: number;
   title: string;
@@ -2379,6 +2388,8 @@ export interface Risk {
   mitigationSummary: string;
   mitigationProsCons: string;
   mitigationEstimatedCost: string;
+  mitigationControlType: RiskMitigationControlType;
+  mitigationControlDescription: string;
   /** @nullable */
   createdProjectId?: number | null;
   createdAt: string;
@@ -2397,6 +2408,15 @@ export interface CreateRiskInput {
   /** @nullable */
   riskOwnerUserId?: number | null;
 }
+
+export type UpdateRiskInputMitigationControlType =
+  (typeof UpdateRiskInputMitigationControlType)[keyof typeof UpdateRiskInputMitigationControlType];
+
+export const UpdateRiskInputMitigationControlType = {
+  "": "",
+  security_control: "security_control",
+  compensating_control: "compensating_control",
+} as const;
 
 /**
  * Patch the risk and/or transition its status. Treatment-outcome
@@ -2439,6 +2459,8 @@ export interface UpdateRiskInput {
   mitigationSummary?: string;
   mitigationProsCons?: string;
   mitigationEstimatedCost?: string;
+  mitigationControlType?: UpdateRiskInputMitigationControlType;
+  mitigationControlDescription?: string;
   transitionReason?: string;
 }
 

@@ -118,6 +118,15 @@ export const risksTable = pgTable(
     mitigationEstimatedCost: text("mitigation_estimated_cost")
       .notNull()
       .default(""),
+    // Security control vs Compensating control. Stored as plain text:
+    // "security_control" | "compensating_control" | "" (unset). Required
+    // at mitigation approval time alongside summary/pros-cons/cost.
+    mitigationControlType: text("mitigation_control_type")
+      .notNull()
+      .default(""),
+    mitigationControlDescription: text("mitigation_control_description")
+      .notNull()
+      .default(""),
 
     // Set when treatment = mitigation is approved — the project that
     // was atomically created. SET NULL on project deletion (mirrors

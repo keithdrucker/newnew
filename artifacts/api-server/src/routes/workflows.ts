@@ -821,12 +821,16 @@ router.post(
           !risk.mitigationProsCons ||
           risk.mitigationProsCons.trim().length === 0 ||
           !risk.mitigationEstimatedCost ||
-          risk.mitigationEstimatedCost.trim().length === 0)
+          risk.mitigationEstimatedCost.trim().length === 0 ||
+          !risk.mitigationControlType ||
+          risk.mitigationControlType.trim().length === 0 ||
+          !risk.mitigationControlDescription ||
+          risk.mitigationControlDescription.trim().length === 0)
       ) {
         return {
           kind: "missing_field",
           message:
-            "Mitigation summary, pros & cons, and estimated cost are required before approval.",
+            "Mitigation summary, pros & cons, estimated cost, control type, and control description are required before approval.",
         };
       }
       if (
@@ -1156,10 +1160,14 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
             !risk.mitigationProsCons ||
             risk.mitigationProsCons.trim().length === 0 ||
             !risk.mitigationEstimatedCost ||
-            risk.mitigationEstimatedCost.trim().length === 0)
+            risk.mitigationEstimatedCost.trim().length === 0 ||
+            !risk.mitigationControlType ||
+            risk.mitigationControlType.trim().length === 0 ||
+            !risk.mitigationControlDescription ||
+            risk.mitigationControlDescription.trim().length === 0)
         ) {
           throw new FinalizeError(
-            "Mitigation summary, pros & cons, and estimated cost are all required to approve this risk.",
+            "Mitigation summary, pros & cons, estimated cost, control type, and control description are all required to approve this risk.",
           );
         }
 
@@ -1167,10 +1175,19 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
         if (decision === "mitigation" && createdProjectId == null) {
           // Auto-create a Project for the mitigation work. Owner
           // falls back to the deciding admin when the risk has no
-          // explicit owner; suggester is the original reporter.
+          // explicit owner; suggester is the original reporter. The
+          // control selected on the risk is carried into the project
+          // description so the project team can implement it.
+          const controlTypeLabel =
+            risk.mitigationControlType === "security_control"
+              ? "Security Control"
+              : risk.mitigationControlType === "compensating_control"
+                ? "Compensating Control"
+                : risk.mitigationControlType;
           const projectDescription = [
             risk.description || risk.title,
             `\n\nMitigation approved for risk: ${risk.title}.`,
+            `\n\n${controlTypeLabel} to implement:\n${risk.mitigationControlDescription}`,
             resolutionReason
               ? `\n\nDecision notes:\n${resolutionReason}`
               : "",
@@ -1196,7 +1213,13 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
             projectId: createdProject.id,
             action: "created_from_risk",
             reason: `Created from approved risk-mitigation decision (risk #${risk.id}).`,
-            detail: { riskId: risk.id, riskTitle: risk.title },
+            detail: {
+              riskId: risk.id,
+              riskTitle: risk.title,
+              mitigationControlType: risk.mitigationControlType,
+              mitigationControlDescription:
+                risk.mitigationControlDescription,
+            },
             changedById: user.id,
           });
         }

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RiskAuditEvent } from "./riskAuditEvent";
+import type { RiskMitigationControlType } from "./riskMitigationControlType";
 import type { RiskStatus } from "./riskStatus";
 import type { WorkflowRun } from "./workflowRun";
 
@@ -51,6 +52,8 @@ export interface Risk {
   mitigationSummary: string;
   mitigationProsCons: string;
   mitigationEstimatedCost: string;
+  mitigationControlType: RiskMitigationControlType;
+  mitigationControlDescription: string;
   /** @nullable */
   createdProjectId?: number | null;
   createdAt: Date;

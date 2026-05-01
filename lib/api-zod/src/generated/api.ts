@@ -3921,6 +3921,12 @@ export const ListRisksResponseItem = zod.object({
   mitigationSummary: zod.string(),
   mitigationProsCons: zod.string(),
   mitigationEstimatedCost: zod.string(),
+  mitigationControlType: zod.enum([
+    "",
+    "security_control",
+    "compensating_control",
+  ]),
+  mitigationControlDescription: zod.string(),
   createdProjectId: zod.number().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -4058,6 +4064,12 @@ export const GetRiskResponse = zod.object({
   mitigationSummary: zod.string(),
   mitigationProsCons: zod.string(),
   mitigationEstimatedCost: zod.string(),
+  mitigationControlType: zod.enum([
+    "",
+    "security_control",
+    "compensating_control",
+  ]),
+  mitigationControlDescription: zod.string(),
   createdProjectId: zod.number().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -4196,6 +4208,10 @@ export const UpdateRiskBody = zod
     mitigationSummary: zod.string().optional(),
     mitigationProsCons: zod.string().optional(),
     mitigationEstimatedCost: zod.string().optional(),
+    mitigationControlType: zod
+      .enum(["", "security_control", "compensating_control"])
+      .optional(),
+    mitigationControlDescription: zod.string().optional(),
     transitionReason: zod.string().optional(),
   })
   .describe(
@@ -4248,6 +4264,12 @@ export const UpdateRiskResponse = zod.object({
   mitigationSummary: zod.string(),
   mitigationProsCons: zod.string(),
   mitigationEstimatedCost: zod.string(),
+  mitigationControlType: zod.enum([
+    "",
+    "security_control",
+    "compensating_control",
+  ]),
+  mitigationControlDescription: zod.string(),
   createdProjectId: zod.number().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),

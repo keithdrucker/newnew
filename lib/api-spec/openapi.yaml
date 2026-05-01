@@ -4672,6 +4672,10 @@ components:
         mitigationSummary: { type: string }
         mitigationProsCons: { type: string }
         mitigationEstimatedCost: { type: string }
+        mitigationControlType:
+          type: string
+          enum: ["", "security_control", "compensating_control"]
+        mitigationControlDescription: { type: string }
         # Linked work
         createdProjectId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
@@ -4714,6 +4718,8 @@ components:
         - mitigationSummary
         - mitigationProsCons
         - mitigationEstimatedCost
+        - mitigationControlType
+        - mitigationControlDescription
         - auditEvents
         - workflowRuns
         - createdAt
@@ -4773,6 +4779,10 @@ components:
         mitigationSummary: { type: string }
         mitigationProsCons: { type: string }
         mitigationEstimatedCost: { type: string }
+        mitigationControlType:
+          type: string
+          enum: ["", "security_control", "compensating_control"]
+        mitigationControlDescription: { type: string }
         # Reason captured on the audit event for close transitions.
         transitionReason: { type: string }
 

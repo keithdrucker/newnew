@@ -310,6 +310,8 @@ async function hydrate(rows: RiskRow[]): Promise<unknown[]> {
     mitigationSummary: r.mitigationSummary,
     mitigationProsCons: r.mitigationProsCons,
     mitigationEstimatedCost: r.mitigationEstimatedCost,
+    mitigationControlType: r.mitigationControlType,
+    mitigationControlDescription: r.mitigationControlDescription,
     createdProjectId: r.createdProjectId ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
@@ -455,6 +457,8 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
       "mitigationSummary",
       "mitigationProsCons",
       "mitigationEstimatedCost",
+      "mitigationControlType",
+      "mitigationControlDescription",
     ] as const;
     const wantsTreatmentEdit = treatmentLockFields.some((f) => {
       const v = (body.data as Record<string, unknown>)[f];
@@ -600,6 +604,31 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
       patch.mitigationProsCons = b.mitigationProsCons;
     if (b.mitigationEstimatedCost !== undefined)
       patch.mitigationEstimatedCost = b.mitigationEstimatedCost;
+    if (b.mitigationControlType !== undefined) {
+      // Defense-in-depth: even though the OpenAPI contract enforces the
+      // enum, the server independently rejects unknown values so the DB
+      // can never end up with junk control labels that break downstream
+      // filters/reports or the project-description rendering.
+      const ALLOWED_CONTROL_TYPES = [
+        "",
+        "security_control",
+        "compensating_control",
+      ] as const;
+      if (
+        !ALLOWED_CONTROL_TYPES.includes(
+          b.mitigationControlType as (typeof ALLOWED_CONTROL_TYPES)[number],
+        )
+      ) {
+        const err: Error & { status?: number } = new Error(
+          "mitigationControlType must be 'security_control' or 'compensating_control'.",
+        );
+        err.status = 400;
+        throw err;
+      }
+      patch.mitigationControlType = b.mitigationControlType;
+    }
+    if (b.mitigationControlDescription !== undefined)
+      patch.mitigationControlDescription = b.mitigationControlDescription;
 
     let auditReason = "";
     if (incomingStatus && incomingStatus !== currentStatus && rule) {

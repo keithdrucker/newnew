@@ -1373,6 +1373,8 @@ function RiskDetailContent({
     mitigationSummary: r.mitigationSummary || "",
     mitigationProsCons: r.mitigationProsCons || "",
     mitigationEstimatedCost: r.mitigationEstimatedCost || "",
+    mitigationControlType: r.mitigationControlType || "",
+    mitigationControlDescription: r.mitigationControlDescription || "",
   });
 
   // Overview / Identified-phase fields
@@ -1452,6 +1454,11 @@ function RiskDetailContent({
   const [mitigationEstimatedCost, setMitigationEstimatedCost] = useState(
     treatmentBaseline.mitigationEstimatedCost,
   );
+  const [mitigationControlType, setMitigationControlType] = useState(
+    treatmentBaseline.mitigationControlType,
+  );
+  const [mitigationControlDescription, setMitigationControlDescription] =
+    useState(treatmentBaseline.mitigationControlDescription);
 
   const overviewDirty =
     title !== overviewBaseline.title ||
@@ -1484,7 +1491,10 @@ function RiskDetailContent({
     avoidanceActionNotes !== treatmentBaseline.avoidanceActionNotes ||
     mitigationSummary !== treatmentBaseline.mitigationSummary ||
     mitigationProsCons !== treatmentBaseline.mitigationProsCons ||
-    mitigationEstimatedCost !== treatmentBaseline.mitigationEstimatedCost;
+    mitigationEstimatedCost !== treatmentBaseline.mitigationEstimatedCost ||
+    mitigationControlType !== treatmentBaseline.mitigationControlType ||
+    mitigationControlDescription !==
+      treatmentBaseline.mitigationControlDescription;
 
   const isAnyDirty = overviewDirty || analysisDirty || treatmentDirty;
 
@@ -1565,6 +1575,8 @@ function RiskDetailContent({
       setMitigationSummary(next.mitigationSummary);
       setMitigationProsCons(next.mitigationProsCons);
       setMitigationEstimatedCost(next.mitigationEstimatedCost);
+      setMitigationControlType(next.mitigationControlType);
+      setMitigationControlDescription(next.mitigationControlDescription);
       setTreatmentBaseline(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1577,6 +1589,8 @@ function RiskDetailContent({
     risk.mitigationSummary,
     risk.mitigationProsCons,
     risk.mitigationEstimatedCost,
+    risk.mitigationControlType,
+    risk.mitigationControlDescription,
   ]);
 
   function refresh() {
@@ -1686,6 +1700,9 @@ function RiskDetailContent({
           mitigationSummary,
           mitigationProsCons,
           mitigationEstimatedCost,
+          mitigationControlType:
+            mitigationControlType as "" | "security_control" | "compensating_control",
+          mitigationControlDescription,
         },
       });
       setTreatmentBaseline({
@@ -1697,6 +1714,8 @@ function RiskDetailContent({
         mitigationSummary,
         mitigationProsCons,
         mitigationEstimatedCost,
+        mitigationControlType,
+        mitigationControlDescription,
       });
       refresh();
       toast.success("Treatment proposal saved.");
@@ -1760,6 +1779,8 @@ function RiskDetailContent({
     mitigationSummary,
     mitigationProsCons,
     mitigationEstimatedCost,
+    mitigationControlType,
+    mitigationControlDescription,
   ]);
 
   const canMoveToTreatment =
@@ -1989,6 +2010,8 @@ function RiskDetailContent({
                 mitigationSummary={mitigationSummary}
                 mitigationProsCons={mitigationProsCons}
                 mitigationEstimatedCost={mitigationEstimatedCost}
+                mitigationControlType={mitigationControlType}
+                mitigationControlDescription={mitigationControlDescription}
                 onDecisionChange={setDecision}
                 onAcceptanceJustificationChange={setAcceptanceJustification}
                 onTransferMethodChange={setTransferMethod}
@@ -1997,6 +2020,10 @@ function RiskDetailContent({
                 onMitigationSummaryChange={setMitigationSummary}
                 onMitigationProsConsChange={setMitigationProsCons}
                 onMitigationEstimatedCostChange={setMitigationEstimatedCost}
+                onMitigationControlTypeChange={setMitigationControlType}
+                onMitigationControlDescriptionChange={
+                  setMitigationControlDescription
+                }
                 onSave={saveTreatment}
                 saving={updateRisk.isPending}
               />
@@ -2667,6 +2694,8 @@ function TreatmentTab({
   mitigationSummary,
   mitigationProsCons,
   mitigationEstimatedCost,
+  mitigationControlType,
+  mitigationControlDescription,
   onDecisionChange,
   onAcceptanceJustificationChange,
   onTransferMethodChange,
@@ -2675,6 +2704,8 @@ function TreatmentTab({
   onMitigationSummaryChange,
   onMitigationProsConsChange,
   onMitigationEstimatedCostChange,
+  onMitigationControlTypeChange,
+  onMitigationControlDescriptionChange,
   onSave,
   saving,
 }: {
@@ -2687,6 +2718,8 @@ function TreatmentTab({
   mitigationSummary: string;
   mitigationProsCons: string;
   mitigationEstimatedCost: string;
+  mitigationControlType: string;
+  mitigationControlDescription: string;
   onDecisionChange: (v: string) => void;
   onAcceptanceJustificationChange: (v: string) => void;
   onTransferMethodChange: (v: string) => void;
@@ -2695,6 +2728,8 @@ function TreatmentTab({
   onMitigationSummaryChange: (v: string) => void;
   onMitigationProsConsChange: (v: string) => void;
   onMitigationEstimatedCostChange: (v: string) => void;
+  onMitigationControlTypeChange: (v: string) => void;
+  onMitigationControlDescriptionChange: (v: string) => void;
   onSave: () => Promise<boolean>;
   saving: boolean;
 }) {
@@ -2722,7 +2757,9 @@ function TreatmentTab({
     decision === "mitigation" &&
     (!mitigationSummary.trim() ||
       !mitigationProsCons.trim() ||
-      !mitigationEstimatedCost.trim());
+      !mitigationEstimatedCost.trim() ||
+      !mitigationControlType.trim() ||
+      !mitigationControlDescription.trim());
 
   return (
     <>
@@ -2759,6 +2796,10 @@ function TreatmentTab({
           <p className="text-sm text-muted-foreground">
             On approval, a Project will be auto-created for the mitigation work
             (named “Risk Mitigation: {risk.title}”), inheriting team and owner.
+            The selected <strong>Control Type</strong> and{" "}
+            <strong>Control Description</strong> below are carried into that
+            project so the team knows which security or compensating control to
+            implement.
           </p>
           <div className="space-y-1.5">
             <Label>Mitigation Summary</Label>
@@ -2792,6 +2833,44 @@ function TreatmentTab({
               placeholder="$ amount or range"
               disabled={!editable}
               data-testid="input-mitigation-estimated-cost"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Control Type</Label>
+            <Select
+              value={mitigationControlType}
+              onValueChange={onMitigationControlTypeChange}
+              disabled={!editable}
+            >
+              <SelectTrigger data-testid="select-mitigation-control-type">
+                <SelectValue placeholder="Pick a control type…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="security_control">
+                  Security Control
+                </SelectItem>
+                <SelectItem value="compensating_control">
+                  Compensating Control
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              A <strong>Security Control</strong> directly addresses the risk
+              (e.g. MFA, encryption, IDS). A <strong>Compensating Control</strong>{" "}
+              is an alternative when the primary control isn’t feasible.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Control Description</Label>
+            <Textarea
+              rows={3}
+              value={mitigationControlDescription}
+              onChange={(e) =>
+                onMitigationControlDescriptionChange(e.target.value)
+              }
+              placeholder="Specific control to be put in place — carried into the auto-created Project on approval."
+              disabled={!editable}
+              data-testid="input-mitigation-control-description"
             />
           </div>
         </>
@@ -2874,8 +2953,9 @@ function TreatmentTab({
             className="text-xs text-amber-700"
             data-testid="hint-mitigation-incomplete"
           >
-            Mitigation Summary, Pros &amp; Cons, and Estimated Cost are all
-            required before approval can be requested.
+            Mitigation Summary, Pros &amp; Cons, Estimated Cost, Control Type,
+            and Control Description are all required before approval can be
+            requested.
           </p>
         )}
         <RiskWorkflowApproval row={risk} />

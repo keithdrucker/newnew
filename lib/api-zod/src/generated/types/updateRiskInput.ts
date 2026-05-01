@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RiskStatus } from "./riskStatus";
+import type { UpdateRiskInputMitigationControlType } from "./updateRiskInputMitigationControlType";
 
 /**
  * Patch the risk and/or transition its status. Treatment-outcome
@@ -48,5 +49,7 @@ export interface UpdateRiskInput {
   mitigationSummary?: string;
   mitigationProsCons?: string;
   mitigationEstimatedCost?: string;
+  mitigationControlType?: UpdateRiskInputMitigationControlType;
+  mitigationControlDescription?: string;
   transitionReason?: string;
 }
