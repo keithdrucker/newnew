@@ -1333,7 +1333,18 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
     });
 
     return { kind: "ok", runId: run.id };
-  });
+    });
+  } catch (err) {
+    if (err instanceof FinalizeError) {
+      // Subject couldn't be finalized — the entire transaction
+      // (including this approver's vote) was rolled back so the run
+      // stays pending and the approver can re-decide once the issue
+      // is fixed.
+      res.status(409).json({ error: err.userMessage });
+      return;
+    }
+    throw err;
+  }
 
   if (outcome.kind === "not_found") {
     res.status(404).json({ error: "Run not found" });

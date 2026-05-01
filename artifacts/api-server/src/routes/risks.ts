@@ -413,7 +413,8 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
     | { kind: "ok"; row: RiskRow }
     | { kind: "not_found" }
     | { kind: "illegal_transition"; from: string; to: string }
-    | { kind: "needs_field"; field: string; message: string };
+    | { kind: "needs_field"; field: string; message: string }
+    | { kind: "locked"; message: string };
 
   const outcome: TxOutcome = await db.transaction(async (tx) => {
     const [existing] = await tx
@@ -423,6 +424,47 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
       .for("update")
       .limit(1);
     if (!existing) return { kind: "not_found" };
+
+    // Lock the treatment-decision proposal while an approval run is
+    // pending. Approvers must vote on the SAME proposal that was
+    // submitted; allowing the proposer to silently rewrite the
+    // treatment fields mid-run would let an "approve mitigation"
+    // vote actually authorize a transfer/acceptance/avoidance
+    // outcome (or invalid state). If the proposal needs changes,
+    // the pending run must be cancelled first.
+    const treatmentLockFields = [
+      "treatmentDecision",
+      "acceptanceJustification",
+      "transferMethod",
+      "transferResponsibleParty",
+      "avoidanceActionNotes",
+    ] as const;
+    const wantsTreatmentEdit = treatmentLockFields.some((f) => {
+      const v = (body.data as Record<string, unknown>)[f];
+      if (v === undefined) return false;
+      const current = (existing as Record<string, unknown>)[f] ?? "";
+      return v !== current;
+    });
+    if (wantsTreatmentEdit) {
+      const [pendingRun] = await tx
+        .select({ id: workflowRunsTable.id })
+        .from(workflowRunsTable)
+        .where(
+          and(
+            eq(workflowRunsTable.subjectType, "risk"),
+            eq(workflowRunsTable.subjectId, existing.id),
+            eq(workflowRunsTable.status, "pending"),
+          ),
+        )
+        .limit(1);
+      if (pendingRun) {
+        return {
+          kind: "locked",
+          message:
+            "Treatment proposal is locked while an approval is pending. Cancel the pending run before editing the treatment decision or its required fields.",
+        };
+      }
+    }
 
     const currentStatus = existing.status as RiskStatus;
     const incomingStatus = body.data.status as RiskStatus | undefined;
@@ -565,6 +607,10 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: outcome.message });
     return;
   }
+  if (outcome.kind === "locked") {
+    res.status(409).json({ error: outcome.message });
+    return;
+  }
 
   const [hydrated] = await hydrate([outcome.row]);
   res.json(hydrated);
@@ -594,6 +640,5 @@ router.delete("/risks/:id", async (req, res): Promise<void> => {
 // workflows decision cascade (project creation lives there).
 void projectsTable;
 void projectAuditEventsTable;
-void workflowRunsTable;
 
 export default router;

@@ -45,6 +45,8 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   ShieldAlert,
   Plus,
@@ -52,6 +54,12 @@ import {
   ArrowRight,
   ExternalLink,
   History as HistoryIcon,
+  Search,
+  Filter as FilterIcon,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  X,
 } from "lucide-react";
 import { RiskWorkflowApproval } from "@/components/risk-workflow-approval";
 
@@ -68,6 +76,120 @@ const STATUS_TABS: { value: string; label: string }[] = [
   { value: "avoided", label: "Avoided" },
   { value: "closed", label: "Closed" },
 ];
+
+// Kanban lane order — drives both the count chips in the header and
+// the column layout below the filter bar. "all" is intentionally
+// excluded from the lanes (the chips already total to it).
+type RiskLane =
+  | "identified"
+  | "under_analysis"
+  | "under_treatment"
+  | "mitigation"
+  | "accepted"
+  | "transferred"
+  | "avoided"
+  | "closed";
+
+const LANE_ORDER: RiskLane[] = [
+  "identified",
+  "under_analysis",
+  "under_treatment",
+  "mitigation",
+  "accepted",
+  "transferred",
+  "avoided",
+  "closed",
+];
+
+const LANE_LABEL: Record<RiskLane, string> = {
+  identified: "Identified",
+  under_analysis: "Under Analysis",
+  under_treatment: "Under Treatment",
+  mitigation: "Mitigation",
+  accepted: "Accepted",
+  transferred: "Transferred",
+  avoided: "Avoided",
+  closed: "Closed",
+};
+
+const LANE_HINT: Record<RiskLane, string> = {
+  identified: "Logged — needs analysis",
+  under_analysis: "Score likelihood × impact",
+  under_treatment: "Pick a treatment + approve",
+  mitigation: "Approved — became a Project",
+  accepted: "Approved — accept the risk",
+  transferred: "Approved — transferred out",
+  avoided: "Approved — avoidance plan",
+  closed: "Resolved — no longer tracked",
+};
+
+const LANE_TONE: Record<
+  RiskLane,
+  { header: string; ring: string; chip: string }
+> = {
+  identified: {
+    header: "bg-slate-100 text-slate-700",
+    ring: "ring-slate-200",
+    chip: "bg-slate-100 text-slate-700 border-slate-200",
+  },
+  under_analysis: {
+    header: "bg-sky-50 text-sky-800",
+    ring: "ring-sky-200",
+    chip: "bg-sky-50 text-sky-800 border-sky-200",
+  },
+  under_treatment: {
+    header: "bg-violet-50 text-violet-800",
+    ring: "ring-violet-200",
+    chip: "bg-violet-50 text-violet-800 border-violet-200",
+  },
+  mitigation: {
+    header: "bg-emerald-50 text-emerald-800",
+    ring: "ring-emerald-200",
+    chip: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  },
+  accepted: {
+    header: "bg-amber-50 text-amber-800",
+    ring: "ring-amber-200",
+    chip: "bg-amber-50 text-amber-800 border-amber-200",
+  },
+  transferred: {
+    header: "bg-indigo-50 text-indigo-800",
+    ring: "ring-indigo-200",
+    chip: "bg-indigo-50 text-indigo-800 border-indigo-200",
+  },
+  avoided: {
+    header: "bg-teal-50 text-teal-800",
+    ring: "ring-teal-200",
+    chip: "bg-teal-50 text-teal-800 border-teal-200",
+  },
+  closed: {
+    header: "bg-zinc-100 text-zinc-700",
+    ring: "ring-zinc-200",
+    chip: "bg-zinc-100 text-zinc-700 border-zinc-200",
+  },
+};
+
+const RATING_FILTERS = ["critical", "high", "medium", "low"] as const;
+type RatingFilter = (typeof RATING_FILTERS)[number];
+
+function initials(name: string | null | undefined) {
+  if (!name) return "?";
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function ageLabel(iso: string) {
+  const d = new Date(iso);
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days}d ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
 
 const RISK_TYPES = [
   "Security",
@@ -135,22 +257,46 @@ export default function RisksPage() {
   const { session } = useSession();
   const isAgentOrAdmin =
     session?.role === "admin" || session?.role === "agent";
-  const [tab, setTab] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
+  // Filter state
+  const [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [ratingFilter, setRatingFilter] = useState<RatingFilter | "all">("all");
+
   const { data: risks = [], isLoading } = useListRisks(undefined);
 
-  const filtered = useMemo(() => {
-    if (tab === "all") return risks;
-    return risks.filter((r) => r.status === tab);
-  }, [risks, tab]);
+  const filteredRisks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return risks.filter((r) => {
+      if (typeFilter !== "all" && r.riskType !== typeFilter) return false;
+      if (ratingFilter !== "all" && r.riskRating !== ratingFilter) return false;
+      if (q) {
+        const hay = `${r.title} ${r.description ?? ""} ${
+          r.owningDepartmentName ?? ""
+        } ${r.riskOwnerName ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [risks, search, typeFilter, ratingFilter]);
 
-  const counts = useMemo(() => {
-    const m: Record<string, number> = { all: risks.length };
-    for (const r of risks) m[r.status] = (m[r.status] ?? 0) + 1;
+  const grouped = useMemo(() => {
+    const m = new Map<RiskLane, Risk[]>();
+    for (const lane of LANE_ORDER) m.set(lane, []);
+    for (const r of filteredRisks) {
+      const lane = LANE_ORDER.includes(r.status as RiskLane)
+        ? (r.status as RiskLane)
+        : null;
+      if (lane) m.get(lane)!.push(r);
+    }
     return m;
-  }, [risks]);
+  }, [filteredRisks]);
+
+  const activeFilterCount =
+    (typeFilter !== "all" ? 1 : 0) + (ratingFilter !== "all" ? 1 : 0);
 
   if (!isAgentOrAdmin) {
     return (
@@ -164,16 +310,37 @@ export default function RisksPage() {
 
   return (
     <div className="p-6 space-y-4" data-testid="page-risks">
-      <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <ShieldAlert className="h-6 w-6 text-rose-600" />
-          <div>
-            <h1 className="text-2xl font-semibold">Risk Register</h1>
-            <p className="text-sm text-muted-foreground">
-              Track risks through identification, analysis, treatment, and
-              closure. Treatment decisions go through the approval workflow.
-            </p>
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="h-10 w-10 rounded-md bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <h1
+              className="text-2xl font-semibold tracking-tight m-0"
+              data-testid="text-risks-title"
+            >
+              Risk Register
+            </h1>
+            {/* Status counts chips */}
+            <div className="flex items-center gap-1.5 flex-wrap ml-1">
+              {LANE_ORDER.map((lane) => (
+                <Badge
+                  key={lane}
+                  variant="outline"
+                  className={`text-[11.5px] font-medium px-2 py-0.5 ${LANE_TONE[lane].chip}`}
+                  data-testid={`chip-count-${lane}`}
+                >
+                  {grouped.get(lane)?.length ?? 0} {LANE_LABEL[lane]}
+                </Badge>
+              ))}
+            </div>
           </div>
+          <p className="text-sm text-muted-foreground max-w-3xl">
+            Track risks through identification, analysis, treatment, and
+            closure. Treatment decisions go through the approval workflow;
+            approved mitigations automatically become Projects.
+          </p>
         </div>
         <Button
           onClick={() => setCreateOpen(true)}
@@ -184,44 +351,130 @@ export default function RisksPage() {
         </Button>
       </header>
 
-      <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="flex flex-wrap h-auto justify-start">
-          {STATUS_TABS.map((t) => (
-            <TabsTrigger
-              key={t.value}
-              value={t.value}
-              className="gap-1.5"
-              data-testid={`tab-${t.value}`}
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              data-testid="button-risks-filters"
             >
-              {t.label}
-              <span className="text-[11px] rounded bg-muted px-1.5 py-0.5">
-                {counts[t.value] ?? 0}
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <TabsContent value={tab} className="mt-4">
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading risks…</p>
-          ) : filtered.length === 0 ? (
-            <Card>
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                No risks in this view yet.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-3">
-              {filtered.map((r) => (
-                <RiskCard
-                  key={r.id}
-                  risk={r}
-                  onOpen={() => setSelectedId(r.id)}
-                />
-              ))}
+              <FilterIcon className="h-3.5 w-3.5 mr-1.5" />
+              Filters
+              {activeFilterCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="ml-1.5 h-5 px-1.5 text-[10.5px] font-semibold"
+                >
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[280px] p-3 space-y-3" align="start">
+            <div className="space-y-1.5">
+              <Label className="text-[11.5px] uppercase tracking-wide text-muted-foreground">
+                Risk Type
+              </Label>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="h-8" data-testid="select-filter-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  {RISK_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </TabsContent>
-      </Tabs>
+            <div className="space-y-1.5">
+              <Label className="text-[11.5px] uppercase tracking-wide text-muted-foreground">
+                Risk Rating
+              </Label>
+              <Select
+                value={ratingFilter}
+                onValueChange={(v) =>
+                  setRatingFilter(v as RatingFilter | "all")
+                }
+              >
+                <SelectTrigger className="h-8" data-testid="select-filter-rating">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All ratings</SelectItem>
+                  {RATING_FILTERS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTypeFilter("all");
+                setRatingFilter("all");
+              }}
+              className="text-[11.5px] text-muted-foreground hover:text-foreground"
+              data-testid="button-clear-risk-filters"
+            >
+              Clear all
+            </button>
+          </PopoverContent>
+        </Popover>
+
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search risks..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-9"
+            data-testid="input-risk-search"
+          />
+        </div>
+
+        {(activeFilterCount > 0 || search) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 text-[12px]"
+            onClick={() => {
+              setTypeFilter("all");
+              setRatingFilter("all");
+              setSearch("");
+            }}
+            data-testid="button-reset-risk-filters"
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Reset
+          </Button>
+        )}
+      </div>
+
+      {/* Kanban board: 8 lanes, horizontally scrollable to keep all
+          columns visible without cramping on smaller screens */}
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : (
+        <div className="overflow-x-auto pb-2">
+          <div className="flex gap-4 min-w-max">
+            {LANE_ORDER.map((lane) => (
+              <Lane
+                key={lane}
+                lane={lane}
+                items={grouped.get(lane) ?? []}
+                onPick={setSelectedId}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {createOpen && (
         <CreateRiskDialog
@@ -244,45 +497,126 @@ export default function RisksPage() {
   );
 }
 
-// ---------- Risk card ----------
+// ---------- Kanban lane + card ----------
 
-function RiskCard({ risk, onOpen }: { risk: Risk; onOpen: () => void }) {
+function Lane({
+  lane,
+  items,
+  onPick,
+}: {
+  lane: RiskLane;
+  items: Risk[];
+  onPick: (id: number) => void;
+}) {
+  const tone = LANE_TONE[lane];
   return (
-    <Card
-      className="hover:bg-muted/40 cursor-pointer transition-colors"
-      onClick={onOpen}
+    <div
+      className={`w-[280px] shrink-0 rounded-lg ring-1 ${tone.ring} bg-white flex flex-col`}
+      data-testid={`lane-${lane}`}
+    >
+      <div
+        className={`${tone.header} px-3 py-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide rounded-t-lg`}
+      >
+        <span>{LANE_LABEL[lane]}</span>
+        <span data-testid={`count-${lane}`}>{items.length}</span>
+      </div>
+      <div className="px-3 py-1 text-[11.5px] text-muted-foreground border-b border-zinc-100">
+        {LANE_HINT[lane]}
+      </div>
+      <div className="p-3 space-y-2 min-h-[120px]">
+        {items.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic px-1 py-2">
+            Nothing here yet.
+          </p>
+        ) : (
+          items.map((r) => (
+            <RiskCard key={r.id} risk={r} onPick={onPick} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RiskCard({
+  risk,
+  onPick,
+}: {
+  risk: Risk;
+  onPick: (id: number) => void;
+}) {
+  const summary = (risk.description ?? "").trim() || "—";
+  const isResolved =
+    risk.status === "mitigation" ||
+    risk.status === "accepted" ||
+    risk.status === "transferred" ||
+    risk.status === "avoided";
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(risk.id)}
+      className="w-full text-left rounded-md border border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm transition p-3 space-y-2"
       data-testid={`card-risk-${risk.id}`}
     >
-      <CardContent className="py-3 flex items-center gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="font-medium truncate" data-testid="risk-title">
-              {risk.title}
-            </p>
-            <Badge variant="outline" className="text-xs">
-              {risk.riskType}
-            </Badge>
-            {risk.createdProjectId && (
-              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">
-                Project P-{risk.createdProjectId}
-              </Badge>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground truncate">
-            {risk.owningDepartmentName ?? "—"} · Owner:{" "}
-            {risk.riskOwnerName ?? "Unassigned"}
-          </p>
-        </div>
+      <div className="text-[13.5px] font-medium leading-snug line-clamp-2">
+        {risk.title}
+      </div>
+      <div className="text-[12px] text-muted-foreground line-clamp-2">
+        {summary}
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Avatar className="h-5 w-5 text-[10px]">
+          <AvatarFallback>
+            {initials(risk.riskOwnerName ?? risk.reporterName)}
+          </AvatarFallback>
+        </Avatar>
+        <Badge
+          variant="outline"
+          className="text-[10.5px] py-0 h-5 font-normal"
+        >
+          {risk.riskType}
+        </Badge>
+        {risk.owningDepartmentName && (
+          <Badge
+            variant="outline"
+            className="text-[10.5px] py-0 h-5 font-normal"
+          >
+            {risk.owningDepartmentName}
+          </Badge>
+        )}
         {risk.riskRating && (
-          <Badge className={`${ratingBadgeClass(risk.riskRating)} text-xs`}>
+          <Badge
+            variant="outline"
+            className={`text-[10.5px] py-0 h-5 font-normal ${ratingBadgeClass(risk.riskRating)}`}
+            data-testid={`badge-rating-${risk.id}`}
+          >
             {risk.riskRating.toUpperCase()}
           </Badge>
         )}
-        <Badge variant="outline" className={statusBadgeClass(risk.status)}>
-          {statusLabel(risk.status)}
-        </Badge>
-      </CardContent>
-    </Card>
+        <span className="ml-auto text-[11px] text-muted-foreground inline-flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          {ageLabel(risk.createdAt)}
+        </span>
+      </div>
+      {risk.status === "mitigation" && risk.createdProjectId && (
+        <div className="text-[11.5px] text-emerald-700 inline-flex items-center gap-1">
+          <CheckCircle2 className="h-3 w-3" />
+          Project P-{risk.createdProjectId}
+        </div>
+      )}
+      {isResolved && risk.status !== "mitigation" && (
+        <div className="text-[11.5px] text-zinc-600 inline-flex items-center gap-1">
+          <CheckCircle2 className="h-3 w-3" />
+          {LANE_LABEL[risk.status as RiskLane]}
+        </div>
+      )}
+      {risk.status === "closed" && (
+        <div className="text-[11.5px] text-zinc-500 inline-flex items-center gap-1">
+          <XCircle className="h-3 w-3" />
+          Closed
+        </div>
+      )}
+    </button>
   );
 }
 
