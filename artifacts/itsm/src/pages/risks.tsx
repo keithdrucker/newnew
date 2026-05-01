@@ -1359,6 +1359,8 @@ function RiskDetailContent({
     assetType: r.assetType || "",
     assetValue: r.assetValue || "",
     assetCriticality: r.assetCriticality || "",
+    exposureFactor: r.exposureFactor || "",
+    annualRateOfOccurrence: r.annualRateOfOccurrence || "",
     threats: r.threats || "",
     vulnerabilities: r.vulnerabilities || "",
   });
@@ -1413,6 +1415,12 @@ function RiskDetailContent({
   const [assetCriticality, setAssetCriticality] = useState(
     analysisBaseline.assetCriticality,
   );
+  const [exposureFactor, setExposureFactor] = useState(
+    analysisBaseline.exposureFactor,
+  );
+  const [annualRateOfOccurrence, setAnnualRateOfOccurrence] = useState(
+    analysisBaseline.annualRateOfOccurrence,
+  );
   const [threats, setThreats] = useState(analysisBaseline.threats);
   const [vulnerabilities, setVulnerabilities] = useState(
     analysisBaseline.vulnerabilities,
@@ -1463,6 +1471,8 @@ function RiskDetailContent({
     assetType !== analysisBaseline.assetType ||
     assetValue !== analysisBaseline.assetValue ||
     assetCriticality !== analysisBaseline.assetCriticality ||
+    exposureFactor !== analysisBaseline.exposureFactor ||
+    annualRateOfOccurrence !== analysisBaseline.annualRateOfOccurrence ||
     threats !== analysisBaseline.threats ||
     vulnerabilities !== analysisBaseline.vulnerabilities;
 
@@ -1520,6 +1530,8 @@ function RiskDetailContent({
       setAssetType(next.assetType);
       setAssetValue(next.assetValue);
       setAssetCriticality(next.assetCriticality);
+      setExposureFactor(next.exposureFactor);
+      setAnnualRateOfOccurrence(next.annualRateOfOccurrence);
       setThreats(next.threats);
       setVulnerabilities(next.vulnerabilities);
       setAnalysisBaseline(next);
@@ -1536,6 +1548,8 @@ function RiskDetailContent({
     risk.assetType,
     risk.assetValue,
     risk.assetCriticality,
+    risk.exposureFactor,
+    risk.annualRateOfOccurrence,
     risk.threats,
     risk.vulnerabilities,
   ]);
@@ -1626,6 +1640,8 @@ function RiskDetailContent({
           assetType,
           assetValue,
           assetCriticality,
+          exposureFactor,
+          annualRateOfOccurrence,
           threats,
           vulnerabilities,
         },
@@ -1641,6 +1657,8 @@ function RiskDetailContent({
         assetType,
         assetValue,
         assetCriticality,
+        exposureFactor,
+        annualRateOfOccurrence,
         threats,
         vulnerabilities,
       });
@@ -1730,6 +1748,8 @@ function RiskDetailContent({
     assetType,
     assetValue,
     assetCriticality,
+    exposureFactor,
+    annualRateOfOccurrence,
     threats,
     vulnerabilities,
     decision,
@@ -1930,6 +1950,8 @@ function RiskDetailContent({
                 assetType={assetType}
                 assetValue={assetValue}
                 assetCriticality={assetCriticality}
+                exposureFactor={exposureFactor}
+                annualRateOfOccurrence={annualRateOfOccurrence}
                 threats={threats}
                 vulnerabilities={vulnerabilities}
                 onLikelihoodChange={setLikelihood}
@@ -1942,6 +1964,8 @@ function RiskDetailContent({
                 onAssetTypeChange={setAssetType}
                 onAssetValueChange={setAssetValue}
                 onAssetCriticalityChange={setAssetCriticality}
+                onExposureFactorChange={setExposureFactor}
+                onAnnualRateOfOccurrenceChange={setAnnualRateOfOccurrence}
                 onThreatsChange={setThreats}
                 onVulnerabilitiesChange={setVulnerabilities}
                 onSave={saveAnalysis}
@@ -2192,6 +2216,52 @@ function AnalysisSection({
   );
 }
 
+function parseNumber(input: string): number | null {
+  const s = (input ?? "").trim();
+  if (!s) return null;
+  let cleaned = s.replace(/[\s,$]/g, "");
+  let multiplier = 1;
+  if (/[kK]$/.test(cleaned)) {
+    multiplier = 1_000;
+    cleaned = cleaned.slice(0, -1);
+  } else if (/[mM]$/.test(cleaned)) {
+    multiplier = 1_000_000;
+    cleaned = cleaned.slice(0, -1);
+  } else if (/[bB]$/.test(cleaned)) {
+    multiplier = 1_000_000_000;
+    cleaned = cleaned.slice(0, -1);
+  }
+  const n = Number(cleaned);
+  if (!Number.isFinite(n)) return null;
+  return n * multiplier;
+}
+
+function parseMoney(input: string): number | null {
+  return parseNumber(input);
+}
+
+function parseFraction(input: string): number | null {
+  const s = (input ?? "").trim();
+  if (!s) return null;
+  if (s.endsWith("%")) {
+    const n = parseNumber(s.slice(0, -1));
+    return n == null ? null : n / 100;
+  }
+  return parseNumber(s);
+}
+
+function formatCurrency(n: number): string {
+  try {
+    return n.toLocaleString(undefined, {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    });
+  } catch {
+    return `$${Math.round(n).toLocaleString()}`;
+  }
+}
+
 function AnalysisTab({
   risk,
   likelihood,
@@ -2204,6 +2274,8 @@ function AnalysisTab({
   assetType,
   assetValue,
   assetCriticality,
+  exposureFactor,
+  annualRateOfOccurrence,
   threats,
   vulnerabilities,
   onLikelihoodChange,
@@ -2216,6 +2288,8 @@ function AnalysisTab({
   onAssetTypeChange,
   onAssetValueChange,
   onAssetCriticalityChange,
+  onExposureFactorChange,
+  onAnnualRateOfOccurrenceChange,
   onThreatsChange,
   onVulnerabilitiesChange,
   onSave,
@@ -2234,6 +2308,8 @@ function AnalysisTab({
   assetType: string;
   assetValue: string;
   assetCriticality: string;
+  exposureFactor: string;
+  annualRateOfOccurrence: string;
   threats: string;
   vulnerabilities: string;
   onLikelihoodChange: (v: string) => void;
@@ -2246,6 +2322,8 @@ function AnalysisTab({
   onAssetTypeChange: (v: string) => void;
   onAssetValueChange: (v: string) => void;
   onAssetCriticalityChange: (v: string) => void;
+  onExposureFactorChange: (v: string) => void;
+  onAnnualRateOfOccurrenceChange: (v: string) => void;
   onThreatsChange: (v: string) => void;
   onVulnerabilitiesChange: (v: string) => void;
   onSave: () => Promise<boolean>;
@@ -2449,6 +2527,65 @@ function AnalysisTab({
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1.5">
+            <Label>Exposure Factor (EF)</Label>
+            <Input
+              value={exposureFactor}
+              onChange={(e) => onExposureFactorChange(e.target.value)}
+              placeholder='e.g. "25%" or "0.25"'
+              disabled={!editable}
+              data-testid="input-exposure-factor"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Annual Rate of Occurrence (ARO)</Label>
+            <Input
+              value={annualRateOfOccurrence}
+              onChange={(e) =>
+                onAnnualRateOfOccurrenceChange(e.target.value)
+              }
+              placeholder="events per year (e.g. 0.5)"
+              disabled={!editable}
+              data-testid="input-annual-rate-of-occurrence"
+            />
+          </div>
+          {(() => {
+            const av = parseMoney(assetValue);
+            const ef = parseFraction(exposureFactor);
+            const aro = parseNumber(annualRateOfOccurrence);
+            if (av == null || ef == null || aro == null) return null;
+            const sle = av * ef;
+            const ale = sle * aro;
+            return (
+              <div
+                className="col-span-2 rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                data-testid="text-sle-ale"
+              >
+                <div className="flex flex-wrap gap-x-6 gap-y-1">
+                  <span>
+                    <span className="text-muted-foreground">SLE</span>{" "}
+                    <span className="font-medium">
+                      {formatCurrency(sle)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      = Asset Value × EF
+                    </span>
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground">ALE</span>{" "}
+                    <span className="font-medium">
+                      {formatCurrency(ale)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      = SLE × ARO
+                    </span>
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </AnalysisSection>
 

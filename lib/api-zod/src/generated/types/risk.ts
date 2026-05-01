@@ -39,6 +39,8 @@ export interface Risk {
   assetType: string;
   assetValue: string;
   assetCriticality: string;
+  exposureFactor: string;
+  annualRateOfOccurrence: string;
   threats: string;
   vulnerabilities: string;
   treatmentDecision: string;

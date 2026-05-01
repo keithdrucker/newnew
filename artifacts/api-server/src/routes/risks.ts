@@ -298,6 +298,8 @@ async function hydrate(rows: RiskRow[]): Promise<unknown[]> {
     assetType: r.assetType,
     assetValue: r.assetValue,
     assetCriticality: r.assetCriticality,
+    exposureFactor: r.exposureFactor,
+    annualRateOfOccurrence: r.annualRateOfOccurrence,
     threats: r.threats,
     vulnerabilities: r.vulnerabilities,
     treatmentDecision: r.treatmentDecision,
@@ -562,6 +564,10 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
     if (b.assetValue !== undefined) patch.assetValue = b.assetValue;
     if (b.assetCriticality !== undefined)
       patch.assetCriticality = b.assetCriticality;
+    if (b.exposureFactor !== undefined)
+      patch.exposureFactor = b.exposureFactor;
+    if (b.annualRateOfOccurrence !== undefined)
+      patch.annualRateOfOccurrence = b.annualRateOfOccurrence;
     // Risk Factors
     if (b.threats !== undefined) patch.threats = b.threats;
     if (b.vulnerabilities !== undefined)

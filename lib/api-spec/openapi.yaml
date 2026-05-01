@@ -4658,6 +4658,8 @@ components:
         assetType: { type: string }
         assetValue: { type: string }
         assetCriticality: { type: string }
+        exposureFactor: { type: string }
+        annualRateOfOccurrence: { type: string }
         # Risk Factors (one bullet per line)
         threats: { type: string }
         vulnerabilities: { type: string }
@@ -4700,6 +4702,8 @@ components:
         - assetType
         - assetValue
         - assetCriticality
+        - exposureFactor
+        - annualRateOfOccurrence
         - threats
         - vulnerabilities
         - treatmentDecision
@@ -4755,6 +4759,8 @@ components:
         assetType: { type: string }
         assetValue: { type: string }
         assetCriticality: { type: string }
+        exposureFactor: { type: string }
+        annualRateOfOccurrence: { type: string }
         # Risk Factors (one bullet per line)
         threats: { type: string }
         vulnerabilities: { type: string }

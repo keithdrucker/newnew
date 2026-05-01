@@ -87,6 +87,13 @@ export const risksTable = pgTable(
     assetValue: text("asset_value").notNull().default(""),
     // low | medium | high | very_high
     assetCriticality: text("asset_criticality").notNull().default(""),
+    // Quantitative risk inputs. Stored as text for input flexibility
+    // ("25%", "0.25", "2 per year"); parsed leniently on the client to
+    // compute SLE = AssetValue × ExposureFactor and ALE = SLE × ARO.
+    exposureFactor: text("exposure_factor").notNull().default(""),
+    annualRateOfOccurrence: text("annual_rate_of_occurrence")
+      .notNull()
+      .default(""),
 
     // -- Risk Factors (one item per line, free-form short bullets)
     threats: text("threats").notNull().default(""),
