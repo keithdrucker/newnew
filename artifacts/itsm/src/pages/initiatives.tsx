@@ -124,9 +124,16 @@ const STATUS_ORDER: InitiativeStatus[] = [
 // emerald (completed), the current phase is amber, and tabs to the right
 // are grey/default. The third tab ("decision") covers both Approved and
 // Rejected/Deferred since they share the same content surface.
-type InitiativePhaseTab = "backlog" | "under_review" | "decision";
+// Phase tabs are coloured (emerald/amber/grey) by `phaseTabClass`.
+type InitiativePhasePhaseTab = "backlog" | "under_review" | "decision";
+// Full set of tabs in the dialog. The trailing two ("linked", "history")
+// are uncoloured, mirroring the Risks dialog (Linked Work + History).
+type InitiativePhaseTab =
+  | InitiativePhasePhaseTab
+  | "linked"
+  | "history";
 
-const PHASE_TAB_ORDER: InitiativePhaseTab[] = [
+const PHASE_TAB_ORDER: InitiativePhasePhaseTab[] = [
   "backlog",
   "under_review",
   "decision",
@@ -151,7 +158,7 @@ function phaseIndexForStatus(status: InitiativeStatus): number {
 // of the initiative's current phase. Identical pattern to the Risks dialog.
 function phaseTabClass(
   status: InitiativeStatus,
-  tabValue: InitiativePhaseTab,
+  tabValue: InitiativePhasePhaseTab,
 ): string {
   const idx = PHASE_TAB_ORDER.indexOf(tabValue);
   const current = phaseIndexForStatus(status);
@@ -1648,6 +1655,11 @@ function DetailDialog({
 
   const status = row.status as InitiativeStatus;
   const tone = STATUS_COLORS[status];
+  // Once an initiative is approved it has been converted into a Project,
+  // so the initiative record itself becomes read-only — all edits should
+  // happen on the project. The Reopen flow stays available (it lives in
+  // the Decision tab and is intentionally NOT inside the locked fieldset).
+  const isLocked = status === "approved";
 
   // ---- Field-only patch (no status change) ----
   const fieldPatch = () => ({
@@ -2002,6 +2014,14 @@ function DetailDialog({
                   ? "Approved"
                   : "Decision"}
             </TabsTrigger>
+            {/* Trailing untyped tabs — same pattern as the Risks dialog
+                (Overview/Analysis/Treatment + Linked Work + History). */}
+            <TabsTrigger value="linked" data-testid="tab-linked">
+              Linked Work
+            </TabsTrigger>
+            <TabsTrigger value="history" data-testid="tab-history">
+              History
+            </TabsTrigger>
           </TabsList>
 
           {/* ---------- Backlog tab ---------- */}
@@ -2016,12 +2036,23 @@ function DetailDialog({
             className="space-y-4 pt-2 mt-0 data-[state=inactive]:hidden"
             data-testid="tabpanel-backlog"
           >
+            {isLocked && <LockedBanner createdProjectId={row.createdProjectId} />}
+            {/* `fieldset disabled` is the cleanest way to lock every
+                interactive form control inside the locked initiative
+                without touching each input call site. `min-w-0 border-0
+                p-0 m-0` strips the default fieldset chrome. */}
+            <fieldset
+              disabled={isLocked}
+              className="min-w-0 border-0 p-0 m-0 space-y-4 disabled:opacity-70"
+              data-testid="fieldset-backlog"
+            >
             {/* Intake summary — read-only reference data captured at
                 creation time. Lives under Backlog because that's the
                 phase the user fills it in. */}
             <Section
               title="Intake"
             defaultOpen
+            forceOpen={isLocked}
             tone={status === "backlog" ? "default" : "done"}
           >
             <ReadField
@@ -2054,6 +2085,7 @@ function DetailDialog({
           <Section
             title="Backlog Triage"
             defaultOpen={status === "backlog"}
+            forceOpen={isLocked}
             tone={
               status === "backlog"
                 ? "active"
@@ -2075,35 +2107,33 @@ function DetailDialog({
               ) : null
             }
           >
-            {status === "backlog" ? (
-              <BacklogTriageEditor
-                category={category}
-                setCategory={setCategory}
-                initialPriority={initialPriority}
-                setInitialPriority={setInitialPriority}
-                initialEffort={initialEffort}
-                setInitialEffort={setInitialEffort}
-                businessAlignment={businessAlignment}
-                setBusinessAlignment={setBusinessAlignment}
-                investigationDecision={investigationDecision}
-                setInvestigationDecision={setInvestigationDecision}
-                backlogNotes={backlogNotes}
-                setBacklogNotes={setBacklogNotes}
-                reviewStartDate={reviewStartDate}
-                setReviewStartDate={setReviewStartDate}
-                anticipatedApprovalDate={anticipatedApprovalDate}
-                setAnticipatedApprovalDate={setAnticipatedApprovalDate}
-                plannedStartYear={plannedStartYear}
-                setPlannedStartYear={setPlannedStartYear}
-              />
-            ) : (
-              <BacklogTriageView
-                row={row}
-                plannedStartYear={plannedStartYear}
-                setPlannedStartYear={setPlannedStartYear}
-              />
-            )}
+            {/* Editor renders regardless of status so users can refine
+                previously-completed phase fields (mirrors the Risks
+                dialog pattern). When the initiative is approved, the
+                surrounding <fieldset disabled> below makes everything
+                read-only via native form-control disabling. */}
+            <BacklogTriageEditor
+              category={category}
+              setCategory={setCategory}
+              initialPriority={initialPriority}
+              setInitialPriority={setInitialPriority}
+              initialEffort={initialEffort}
+              setInitialEffort={setInitialEffort}
+              businessAlignment={businessAlignment}
+              setBusinessAlignment={setBusinessAlignment}
+              investigationDecision={investigationDecision}
+              setInvestigationDecision={setInvestigationDecision}
+              backlogNotes={backlogNotes}
+              setBacklogNotes={setBacklogNotes}
+              reviewStartDate={reviewStartDate}
+              setReviewStartDate={setReviewStartDate}
+              anticipatedApprovalDate={anticipatedApprovalDate}
+              setAnticipatedApprovalDate={setAnticipatedApprovalDate}
+              plannedStartYear={plannedStartYear}
+              setPlannedStartYear={setPlannedStartYear}
+            />
           </Section>
+            </fieldset>
           </TabsContent>
 
           {/* ---------- Under Review tab ---------- */}
@@ -2113,10 +2143,17 @@ function DetailDialog({
             className="space-y-4 pt-2 mt-0 data-[state=inactive]:hidden"
             data-testid="tabpanel-under-review"
           >
+            {isLocked && <LockedBanner createdProjectId={row.createdProjectId} />}
+            <fieldset
+              disabled={isLocked}
+              className="min-w-0 border-0 p-0 m-0 space-y-4 disabled:opacity-70"
+              data-testid="fieldset-under-review"
+            >
           {/* Under Review analysis */}
           <Section
             title="Under Review — Analysis"
             defaultOpen={status === "under_review"}
+            forceOpen={isLocked}
             tone={
               status === "under_review"
                 ? "active"
@@ -2125,32 +2162,29 @@ function DetailDialog({
                   : "default"
             }
           >
-            {status === "under_review" ? (
-              <UnderReviewEditor
-                benefits={benefits}
-                setBenefits={setBenefits}
-                tradeoffs={tradeoffs}
-                setTradeoffs={setTradeoffs}
-                businessValueLevel={businessValueLevel}
-                setBusinessValueLevel={setBusinessValueLevel}
-                businessValueSummary={businessValueSummary}
-                setBusinessValueSummary={setBusinessValueSummary}
-                costLevel={costLevel}
-                setCostLevel={setCostLevel}
-                estimatedCost={estimatedCost}
-                setEstimatedCost={setEstimatedCost}
-                riskLevel={riskLevel}
-                setRiskLevel={setRiskLevel}
-                riskNotes={riskNotes}
-                setRiskNotes={setRiskNotes}
-                validationStatus={validationStatus}
-                setValidationStatus={setValidationStatus}
-                impactedTeams={impactedTeams}
-                setImpactedTeams={setImpactedTeams}
-              />
-            ) : (
-              <UnderReviewView row={row} />
-            )}
+            {/* Always render the editor — see comment in Backlog tab. */}
+            <UnderReviewEditor
+              benefits={benefits}
+              setBenefits={setBenefits}
+              tradeoffs={tradeoffs}
+              setTradeoffs={setTradeoffs}
+              businessValueLevel={businessValueLevel}
+              setBusinessValueLevel={setBusinessValueLevel}
+              businessValueSummary={businessValueSummary}
+              setBusinessValueSummary={setBusinessValueSummary}
+              costLevel={costLevel}
+              setCostLevel={setCostLevel}
+              estimatedCost={estimatedCost}
+              setEstimatedCost={setEstimatedCost}
+              riskLevel={riskLevel}
+              setRiskLevel={setRiskLevel}
+              riskNotes={riskNotes}
+              setRiskNotes={setRiskNotes}
+              validationStatus={validationStatus}
+              setValidationStatus={setValidationStatus}
+              impactedTeams={impactedTeams}
+              setImpactedTeams={setImpactedTeams}
+            />
           </Section>
 
           {/* Approval workflow runs (Initiatives module) */}
@@ -2163,6 +2197,7 @@ function DetailDialog({
                 status === "under_review" &&
                 ((row.workflowRuns ?? []).length > 0)
               }
+              forceOpen={isLocked}
               tone={status === "under_review" ? "active" : "done"}
               badge={
                 (row.workflowRuns ?? []).length > 0 ? (
@@ -2181,6 +2216,7 @@ function DetailDialog({
               <InitiativeWorkflowApproval row={row} />
             </Section>
           )}
+            </fieldset>
           </TabsContent>
 
           {/* ---------- Decision tab (Approved / Rejected-Deferred) ---------- */}
@@ -2354,29 +2390,76 @@ function DetailDialog({
             </Section>
           )}
           </TabsContent>
-        </Tabs>
 
-        {/* Audit / history — global, mirrors the Risks dialog where the
-            history tab sits outside any phase. We render it as a Section
-            below the tab strip so it's always reachable regardless of
-            which phase tab is active. */}
-        <Section
-          title="Previous Review History"
-          defaultOpen={false}
-          badge={
-            row.auditEvents && row.auditEvents.length > 0 ? (
-              <Badge
-                variant="outline"
-                className="text-[10.5px] font-normal"
+          {/* ---------- Linked Work tab ---------- */}
+          <TabsContent
+            value="linked"
+            className="space-y-4 pt-2 mt-0"
+            data-testid="tabpanel-linked"
+          >
+            {row.createdProjectId ? (
+              <div
+                className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-3 flex items-start gap-2"
+                data-testid="linked-project-card"
               >
-                {row.auditEvents.length}{" "}
-                {row.auditEvents.length === 1 ? "event" : "events"}
-              </Badge>
-            ) : null
-          }
-        >
-          <AuditTimeline events={row.auditEvents ?? []} />
-        </Section>
+                <CheckCircle2 className="h-4 w-4 text-emerald-700 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-[13px] font-medium text-emerald-900">
+                    Approved → Project P-{row.createdProjectId}
+                  </p>
+                  <p className="text-[11.5px] text-emerald-800 mt-0.5">
+                    This initiative was approved and converted into a
+                    project. Edits should be made on the project record.
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="border-emerald-300 shrink-0"
+                >
+                  <Link href={`/projects`} data-testid="link-view-project-from-linked">
+                    View Project
+                    <ExternalLink className="h-3 w-3 ml-1" />
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div
+                className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-6 text-center"
+                data-testid="linked-empty"
+              >
+                <p className="text-[12.5px] text-zinc-600">
+                  No linked work yet. A project will be linked here once
+                  this initiative is approved.
+                </p>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ---------- History tab ---------- */}
+          <TabsContent
+            value="history"
+            className="space-y-4 pt-2 mt-0"
+            data-testid="tabpanel-history"
+          >
+            <div className="flex items-center gap-2">
+              <h3 className="text-[13px] font-medium text-zinc-800">
+                Previous Review History
+              </h3>
+              {row.auditEvents && row.auditEvents.length > 0 ? (
+                <Badge
+                  variant="outline"
+                  className="text-[10.5px] font-normal"
+                >
+                  {row.auditEvents.length}{" "}
+                  {row.auditEvents.length === 1 ? "event" : "events"}
+                </Badge>
+              ) : null}
+            </div>
+            <AuditTimeline events={row.auditEvents ?? []} />
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2">
           <Button variant="ghost" onClick={requestClose}>
@@ -2557,72 +2640,64 @@ function Section({
   title,
   badge,
   defaultOpen,
-  tone = "default",
+  // `tone` is accepted for back-compat with existing call sites but is
+  // intentionally a no-op now. Per the May 2026 redesign mirroring the
+  // Risks dialog: the active phase is communicated by the amber TabsTrigger
+  // colour alone — no per-Section "Current step" amber wrap or "done"
+  // muted greyout. Previously-completed phases are EDITABLE (you can
+  // refine an earlier phase's content), so we don't grey them out either.
+  tone: _tone = "default",
+  // When `forceOpen` is true, the section renders statically (no toggle
+  // button) and is always expanded. This is used inside the approved-
+  // initiative <fieldset disabled> wrapper, where a real CollapsibleTrigger
+  // <button> would be disabled by the fieldset and the user could no
+  // longer expand previously-collapsed sections to view their contents.
+  forceOpen,
   children,
 }: {
   title: string;
   badge?: React.ReactNode;
   defaultOpen?: boolean;
-  // active = the phase the user needs to fill in right now
-  // done   = data already entered in a previous phase (muted, read-only)
-  // default = neutral
   tone?: "active" | "done" | "default";
+  forceOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(!!defaultOpen);
-  const wrapClass =
-    tone === "active"
-      ? "rounded-md border-2 border-amber-300 bg-amber-50/60 ring-1 ring-amber-200/60 shadow-sm"
-      : tone === "done"
-        ? "rounded-md border border-zinc-200 bg-zinc-50"
-        : "rounded-md border border-zinc-200 bg-white";
-  const titleClass =
-    tone === "active"
-      ? "flex items-center gap-2 text-[13px] font-semibold text-amber-900"
-      : tone === "done"
-        ? "flex items-center gap-2 text-[13px] font-medium text-zinc-500"
-        : "flex items-center gap-2 text-[13px] font-medium text-zinc-800";
-  const chevronClass =
-    tone === "done" ? "h-4 w-4 text-zinc-400 transition" : "h-4 w-4 text-zinc-500 transition";
+  void _tone;
+  const [open, setOpen] = useState(!!defaultOpen || !!forceOpen);
+  if (forceOpen) {
+    return (
+      <div className="rounded-md border border-zinc-200 bg-white">
+        <div className="w-full flex items-center justify-between px-3 py-2 text-left">
+          <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-800">
+            {title}
+            {badge}
+          </div>
+        </div>
+        <Separator />
+        <div className="p-3 space-y-3">{children}</div>
+      </div>
+    );
+  }
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className={wrapClass}>
+      <div className="rounded-md border border-zinc-200 bg-white">
         <CollapsibleTrigger asChild>
           <button
             type="button"
             className="w-full flex items-center justify-between px-3 py-2 text-left"
           >
-            <div className={titleClass}>
-              {tone === "active" && (
-                <span
-                  className="inline-flex items-center text-[10px] uppercase tracking-wide font-semibold text-amber-800 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5"
-                  data-testid="section-active-pill"
-                >
-                  Current step
-                </span>
-              )}
-              {tone === "done" && (
-                <CheckCircle2 className="h-3.5 w-3.5 text-zinc-400" />
-              )}
+            <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-800">
               {title}
               {badge}
             </div>
             <ChevronDown
-              className={`${chevronClass} ${open ? "rotate-180" : ""}`}
+              className={`h-4 w-4 text-zinc-500 transition ${open ? "rotate-180" : ""}`}
             />
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <Separator />
-          <div
-            className={
-              tone === "done"
-                ? "p-3 space-y-3 text-zinc-500 [&_*]:text-inherit"
-                : "p-3 space-y-3"
-            }
-          >
-            {children}
-          </div>
+          <div className="p-3 space-y-3">{children}</div>
         </CollapsibleContent>
       </div>
     </Collapsible>
@@ -3250,5 +3325,35 @@ function AuditTimeline({ events }: { events: InitiativeAuditEvent[] }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+// ----- LockedBanner -------------------------------------------------------
+// Rendered at the top of the editable phase tabs (Backlog, Under Review)
+// when the initiative has been approved. Mirrors the Risks dialog's
+// approach of communicating "this record is now downstream — edit there".
+function LockedBanner({
+  createdProjectId,
+}: {
+  createdProjectId?: number | null;
+}) {
+  return (
+    <div
+      className="rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2.5 flex items-start gap-2"
+      data-testid="banner-locked"
+    >
+      <CheckCircle2 className="h-4 w-4 text-zinc-600 mt-0.5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[12.5px] font-medium text-zinc-800">
+          This initiative has been approved and converted into a project.
+        </p>
+        <p className="text-[11.5px] text-zinc-600 mt-0.5">
+          The initiative record is read-only.
+          {createdProjectId
+            ? ` Make further changes on Project P-${createdProjectId}.`
+            : ""}
+        </p>
+      </div>
+    </div>
   );
 }

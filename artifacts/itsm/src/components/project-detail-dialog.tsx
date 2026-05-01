@@ -113,14 +113,18 @@ const PHASES: ProjectPhase[] = [
 // are grey/default. We expose 5 tabs for the linear flow and surface
 // off-track phases (on_hold, cancelled) via the existing banner above
 // the tab strip; clicking still lands the user on the closest in-flow tab.
-type ProjectPhaseTab =
+// Phase-coloured tabs (emerald/amber/grey) live in PHASE_TAB_ORDER. The
+// trailing two tab values ("linked", "history") sit at the end of the
+// strip uncoloured, mirroring the Risks dialog (Linked Work + History).
+type ProjectPhasePhaseTab =
   | "backlog_needs_assignment"
   | "planning"
   | "in_progress"
   | "completed"
   | "closed";
+type ProjectPhaseTab = ProjectPhasePhaseTab | "linked" | "history";
 
-const PHASE_TAB_ORDER: ProjectPhaseTab[] = [
+const PHASE_TAB_ORDER: ProjectPhasePhaseTab[] = [
   "backlog_needs_assignment",
   "planning",
   "in_progress",
@@ -133,10 +137,10 @@ const PHASE_TAB_ORDER: ProjectPhaseTab[] = [
 // "paused implementation" → in_progress; cancelled jumps to whichever
 // phase the project was in when it died, but lacking that data we land
 // the user on Backlog as the safest read-only entry point.
-function defaultTabForPhase(phase: ProjectPhase): ProjectPhaseTab {
+function defaultTabForPhase(phase: ProjectPhase): ProjectPhasePhaseTab {
   if (phase === "on_hold") return "in_progress";
   if (phase === "cancelled") return "backlog_needs_assignment";
-  return phase as ProjectPhaseTab;
+  return phase as ProjectPhasePhaseTab;
 }
 
 // Index of the current phase in the linear tab order. on_hold + cancelled
@@ -150,7 +154,7 @@ function phaseIndexForPhase(phase: ProjectPhase): number {
 // project's current phase. Identical pattern to the Risks dialog.
 function phaseTabClass(
   phase: ProjectPhase,
-  tabValue: ProjectPhaseTab,
+  tabValue: ProjectPhasePhaseTab,
 ): string {
   const idx = PHASE_TAB_ORDER.indexOf(tabValue);
   const current = phaseIndexForPhase(phase);
@@ -943,7 +947,7 @@ function DetailInner({
               onValueChange={(v) => setActiveTab(v as ProjectPhaseTab)}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-7">
                 {PHASE_TAB_ORDER.map((t) => (
                   <TabsTrigger
                     key={t}
@@ -957,6 +961,22 @@ function DetailInner({
                     {PHASE_LABEL[t]}
                   </TabsTrigger>
                 ))}
+                {/* Trailing untyped tabs — same pattern as the Risks dialog
+                    (5 phases + Linked Work + History). */}
+                <TabsTrigger
+                  value="linked"
+                  className="text-xs sm:text-sm"
+                  data-testid="tab-linked"
+                >
+                  Linked Work
+                </TabsTrigger>
+                <TabsTrigger
+                  value="history"
+                  className="text-xs sm:text-sm"
+                  data-testid="tab-history"
+                >
+                  History
+                </TabsTrigger>
               </TabsList>
 
               {/* ---- Backlog tab ---- */}
@@ -1052,12 +1072,14 @@ function DetailInner({
                   </Select>
                 </Field>
                 <Field label="Start">
+                  {/* Editable in any phase — May 2026 redesign mirrors the
+                      Risks dialog where previous phases stay editable so
+                      a triage date can be corrected after launch. */}
                   <Input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     data-testid="input-start-date"
-                    disabled={phase !== "backlog_needs_assignment"}
                   />
                 </Field>
                 <Field label="Anticipated completion">
@@ -1066,7 +1088,6 @@ function DetailInner({
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     data-testid="input-end-date"
-                    disabled={phase !== "backlog_needs_assignment"}
                   />
                 </Field>
                 <Field label="Planning year">
@@ -1582,13 +1603,53 @@ function DetailInner({
               </>
             )}
               </TabsContent>
-            </Tabs>
 
-            {/* History sits BELOW the tab strip — it's a global audit
-                trail, not phase-specific. */}
-            <Section title="History" defaultOpen={false} tone="default">
-              <AuditTimeline events={row.auditEvents} />
-            </Section>
+              {/* ---- Linked Work tab ---- */}
+              <TabsContent
+                value="linked"
+                className="space-y-4 pt-2"
+                data-testid="tabpanel-linked"
+              >
+                {row.linkedInitiativeId ? (
+                  <div
+                    className="rounded-md border border-zinc-200 bg-white px-3 py-3 flex items-start gap-2"
+                    data-testid="linked-initiative-card"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12.5px] uppercase tracking-wide text-zinc-500 mb-0.5">
+                        Originating Initiative
+                      </p>
+                      <p className="text-[13px] font-medium text-zinc-800">
+                        {row.linkedInitiativeTitle ?? `Initiative #${row.linkedInitiativeId}`}
+                      </p>
+                      <p className="text-[11.5px] text-zinc-600 mt-0.5">
+                        This project was created when the initiative above
+                        was approved.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-6 text-center"
+                    data-testid="linked-empty"
+                  >
+                    <p className="text-[12.5px] text-zinc-600">
+                      No linked work. This project was not created from an
+                      initiative.
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ---- History tab ---- */}
+              <TabsContent
+                value="history"
+                className="space-y-4 pt-2"
+                data-testid="tabpanel-history"
+              >
+                <AuditTimeline events={row.auditEvents} />
+              </TabsContent>
+            </Tabs>
           </div>
 
           <DialogFooter>
@@ -2301,13 +2362,18 @@ function labelPhase(p: string) {
 }
 
 // ----- Section / Field / ReadField primitives -----------------------------
-// Mirrored from initiatives.tsx so the project dialog has the same
-// "current step / done / default" tone vocabulary without coupling.
+// Mirrored from initiatives.tsx so the project dialog has the same shape.
+// `tone` is a no-op as of the May 2026 redesign (Risks parity).
 
 function Section({
   title,
   defaultOpen,
-  tone = "default",
+  // `tone` is accepted for back-compat with existing call sites but is
+  // intentionally a no-op now. Per the May 2026 redesign mirroring the
+  // Risks dialog: the active phase is communicated by the amber TabsTrigger
+  // colour alone — no per-Section "Current step" amber wrap or "done"
+  // muted greyout. Previously-completed phases are EDITABLE.
+  tone: _tone = "default",
   children,
 }: {
   title: string;
@@ -2315,36 +2381,17 @@ function Section({
   tone?: "active" | "done" | "default";
   children: React.ReactNode;
 }) {
+  void _tone;
   const [open, setOpen] = useState(!!defaultOpen);
-  const wrapClass =
-    tone === "active"
-      ? "rounded-md border-2 border-amber-300 bg-amber-50/60 ring-1 ring-amber-200/60 shadow-sm"
-      : tone === "done"
-        ? "rounded-md border border-zinc-200 bg-zinc-50"
-        : "rounded-md border border-zinc-200 bg-white";
-  const titleClass =
-    tone === "active"
-      ? "flex items-center gap-2 text-[13px] font-semibold text-amber-900"
-      : tone === "done"
-        ? "flex items-center gap-2 text-[13px] font-medium text-zinc-500"
-        : "flex items-center gap-2 text-[13px] font-medium text-zinc-800";
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className={wrapClass}>
+      <div className="rounded-md border border-zinc-200 bg-white">
         <CollapsibleTrigger asChild>
           <button
             type="button"
             className="w-full flex items-center justify-between px-3 py-2 text-left"
           >
-            <div className={titleClass}>
-              {tone === "active" && (
-                <span className="inline-flex items-center text-[10px] uppercase tracking-wide font-semibold text-amber-800 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
-                  Current step
-                </span>
-              )}
-              {tone === "done" && (
-                <CheckCircle2 className="h-3.5 w-3.5 text-zinc-400" />
-              )}
+            <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-800">
               {title}
             </div>
             <ChevronDown
