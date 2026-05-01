@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -52,6 +52,7 @@ import {
   Plus,
   Trash2,
   ArrowRight,
+  ChevronRight,
   ExternalLink,
   History as HistoryIcon,
   Search,
@@ -463,14 +464,23 @@ export default function RisksPage() {
         <div className="text-sm text-muted-foreground">Loading…</div>
       ) : (
         <div className="overflow-x-auto pb-2">
-          <div className="flex gap-4 min-w-max">
-            {LANE_ORDER.map((lane) => (
-              <Lane
-                key={lane}
-                lane={lane}
-                items={grouped.get(lane) ?? []}
-                onPick={setSelectedId}
-              />
+          <div className="flex items-stretch gap-2 min-w-max">
+            {LANE_ORDER.map((lane, idx) => (
+              <Fragment key={lane}>
+                <Lane
+                  lane={lane}
+                  items={grouped.get(lane) ?? []}
+                  onPick={setSelectedId}
+                />
+                {idx < LANE_ORDER.length - 1 && (
+                  <div
+                    className="flex items-center justify-center shrink-0 w-5 text-zinc-300"
+                    aria-hidden
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </div>
+                )}
+              </Fragment>
             ))}
           </div>
         </div>

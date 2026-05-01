@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { Fragment, useEffect, useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListProjects,
@@ -965,18 +965,27 @@ export default function ProjectsPage() {
 
       {!isLoading && filtered.length > 0 && (
         <div
-          className="flex gap-3 overflow-x-auto pb-4"
+          className="flex items-stretch gap-2 overflow-x-auto pb-4"
           data-testid="phase-board"
         >
-          {PHASE_COLUMNS.map((col) => (
-            <PhaseColumn
-              key={col.key}
-              phaseKey={col.key}
-              label={col.label}
-              projects={byPhase[col.key]}
-              onCardClick={(p) => setOpenProjectId(p.id)}
-              testId={`column-${col.key}`}
-            />
+          {PHASE_COLUMNS.map((col, idx) => (
+            <Fragment key={col.key}>
+              <PhaseColumn
+                phaseKey={col.key}
+                label={col.label}
+                projects={byPhase[col.key]}
+                onCardClick={(p) => setOpenProjectId(p.id)}
+                testId={`column-${col.key}`}
+              />
+              {idx < PHASE_COLUMNS.length - 1 && (
+                <div
+                  className="flex items-center justify-center shrink-0 w-5 text-zinc-300"
+                  aria-hidden
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </div>
+              )}
+            </Fragment>
           ))}
         </div>
       )}

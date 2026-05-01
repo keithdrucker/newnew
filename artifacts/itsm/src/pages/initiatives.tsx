@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Redirect, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -930,15 +930,26 @@ export default function InitiativesPage() {
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {STATUS_ORDER.map((status) => (
-            <Column
-              key={status}
-              status={status}
-              items={grouped.get(status) ?? []}
-              onPick={setSelectedId}
-            />
-          ))}
+        <div className="overflow-x-auto pb-2">
+          <div className="flex items-stretch gap-2 min-w-max">
+            {STATUS_ORDER.map((status, idx) => (
+              <Fragment key={status}>
+                <Column
+                  status={status}
+                  items={grouped.get(status) ?? []}
+                  onPick={setSelectedId}
+                />
+                {idx < STATUS_ORDER.length - 1 && (
+                  <div
+                    className="flex items-center justify-center shrink-0 w-5 text-zinc-300"
+                    aria-hidden
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </div>
+                )}
+              </Fragment>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1034,7 +1045,7 @@ function Column({
   const tone = STATUS_COLORS[status];
   return (
     <div
-      className={`rounded-lg ring-1 ${tone.ring} bg-white flex flex-col`}
+      className={`w-[280px] shrink-0 rounded-lg ring-1 ${tone.ring} bg-white flex flex-col`}
       data-testid={`column-${status}`}
     >
       <div
