@@ -64,7 +64,6 @@ import {
   Building2,
   Check,
   CheckCircle2,
-  CircleDashed,
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
@@ -2329,41 +2328,30 @@ function PhaseProgress({
         isFinalApproved || isFinalRejected ? "active" : "future",
     },
   ];
+  // Visually mirrors the phase tab strip on the Risks dialog: a single
+  // muted pill bar containing rounded "tab" chips. Done phases use the
+  // same emerald-100 / emerald-800 tone as Risks' completed tabs;
+  // the current phase uses amber-100 / amber-900 with a soft shadow
+  // (the same affordance the Radix TabsTrigger active state uses).
   return (
     <div
-      className="flex items-center gap-2"
+      className="inline-flex items-center gap-1 rounded-md bg-muted p-1"
       data-testid="phase-progress"
     >
-      {stages.map((s, idx) => {
+      {stages.map((s) => {
         const clickable =
           !!onStageClick && s.state === "done" && s.key === "backlog";
         const baseChip =
           s.state === "active"
-            ? "flex items-center gap-1.5 text-[11.5px] font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 flex-1 justify-center"
+            ? "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium bg-amber-100 text-amber-900 shadow-sm"
             : s.state === "done"
-              ? "flex items-center gap-1.5 text-[11.5px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 flex-1 justify-center"
-              : "flex items-center gap-1.5 text-[11.5px] text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-full px-2.5 py-1 flex-1 justify-center";
+              ? "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium bg-emerald-100 text-emerald-800"
+              : "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground";
         const interactiveChip = clickable
-          ? `${baseChip} cursor-pointer hover:bg-emerald-100 hover:border-emerald-300 transition`
+          ? `${baseChip} cursor-pointer hover:bg-emerald-200 transition`
           : baseChip;
-        const inner = (
-          <>
-            {s.state === "done" ? (
-              <CheckCircle2 className="h-3 w-3" />
-            ) : s.state === "active" ? (
-              <CircleDashed className="h-3 w-3" />
-            ) : null}
-            {s.label}
-            {clickable && (
-              <Undo2
-                className="h-3 w-3 ml-0.5 opacity-70"
-                aria-hidden
-              />
-            )}
-          </>
-        );
         return (
-          <div key={s.key} className="flex items-center gap-2 flex-1">
+          <div key={s.key}>
             {clickable ? (
               <button
                 type="button"
@@ -2376,24 +2364,16 @@ function PhaseProgress({
                 data-testid={`phase-${s.key}-${s.state}-button`}
                 title="Move this initiative back to Backlog"
               >
-                {inner}
+                {s.label}
+                <Undo2 className="h-3 w-3 ml-1 opacity-70" aria-hidden />
               </button>
             ) : (
               <div
                 className={baseChip}
                 data-testid={`phase-${s.key}-${s.state}`}
               >
-                {inner}
+                {s.label}
               </div>
-            )}
-            {idx < stages.length - 1 && (
-              <div
-                className={
-                  s.state === "done"
-                    ? "h-px flex-1 bg-emerald-300"
-                    : "h-px flex-1 bg-zinc-200"
-                }
-              />
             )}
           </div>
         );
