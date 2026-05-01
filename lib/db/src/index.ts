@@ -1,3 +1,11 @@
+import { config } from "dotenv";
+import { fileURLToPath } from "url";
+import path from "path";
+
+// Resolve .env from the repo root regardless of cwd or bundling depth.
+// Both lib/db/src/ and artifacts/api-server/dist/ are 3 levels below root.
+config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.env") });
+
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";

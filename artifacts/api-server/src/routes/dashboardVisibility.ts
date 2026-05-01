@@ -2,9 +2,9 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, dashboardSectionVisibilityTable } from "@workspace/db";
 import {
-  DashboardVisibilityResponse,
-  DashboardVisibilityRow as DashboardVisibilityRowZ,
-  SetDashboardVisibilityInput,
+  ListDashboardVisibilityResponse,
+  SetDashboardSectionVisibilityBody,
+  SetDashboardSectionVisibilityResponse,
 } from "@workspace/api-zod";
 import { getCurrentUser } from "../lib/session";
 
@@ -27,7 +27,7 @@ router.get("/dashboard-visibility", async (req, res): Promise<void> => {
   await getCurrentUser(req);
   const rows = await db.select().from(dashboardSectionVisibilityTable);
   res.json(
-    DashboardVisibilityResponse.parse({ items: rows.map(toDto) }),
+    ListDashboardVisibilityResponse.parse({ items: rows.map(toDto) }),
   );
 });
 
@@ -45,7 +45,7 @@ router.put(
       res.status(400).json({ error: "dashboardKey and sectionKey required" });
       return;
     }
-    const parsed = SetDashboardVisibilityInput.safeParse(req.body);
+    const parsed = SetDashboardSectionVisibilityBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
@@ -68,7 +68,7 @@ router.put(
         set: { isVisible: parsed.data.isVisible },
       })
       .returning();
-    res.json(DashboardVisibilityRowZ.parse(toDto(row)));
+    res.json(SetDashboardSectionVisibilityResponse.parse(toDto(row)));
   },
 );
 
