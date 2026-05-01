@@ -46,6 +46,7 @@ import {
   useBeforeUnloadGuard,
 } from "@/components/unsaved-changes-dialog";
 import { useIsDirty } from "@/lib/use-dirty-tracking";
+import { formatMoneyOnBlur } from "@/lib/format-input";
 import {
   Collapsible,
   CollapsibleContent,
@@ -2841,6 +2842,9 @@ function UnderReviewEditor(props: {
           <Input
             value={props.estimatedCost}
             onChange={(e) => props.setEstimatedCost(e.target.value)}
+            onBlur={(e) =>
+              props.setEstimatedCost(formatMoneyOnBlur(e.target.value))
+            }
             placeholder="Optional"
             data-testid="input-estimated-cost"
           />

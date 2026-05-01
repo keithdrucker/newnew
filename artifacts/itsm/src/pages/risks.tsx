@@ -53,6 +53,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { formatMoneyOnBlur, formatPercentOnBlur } from "@/lib/format-input";
 import {
   Select,
   SelectContent,
@@ -2289,31 +2290,6 @@ function formatCurrency(n: number): string {
   }
 }
 
-// Normalize a money input on blur: if the user typed a single number
-// (e.g. "100", "1,000", "$1k"), reformat as "$100.00". If the value
-// contains a range separator (-, –, —, /, "to") or otherwise can't be
-// parsed as a single number, leave it alone so estimates like
-// "$50K–$100K" survive verbatim.
-function formatMoneyOnBlur(input: string): string {
-  const s = (input ?? "").trim();
-  if (!s) return s;
-  if (/[–—\/]|\bto\b/i.test(s)) return s;
-  const stripped = s.replace(/[\s,$]/g, "");
-  if (/-/.test(stripped.replace(/^-/, ""))) return s;
-  const n = parseNumber(s);
-  if (n == null) return s;
-  try {
-    return n.toLocaleString(undefined, {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  } catch {
-    return `$${n.toFixed(2)}`;
-  }
-}
-
 function AnalysisTab({
   risk,
   likelihood,
@@ -2580,6 +2556,9 @@ function AnalysisTab({
             <Input
               value={exposureFactor}
               onChange={(e) => onExposureFactorChange(e.target.value)}
+              onBlur={(e) =>
+                onExposureFactorChange(formatPercentOnBlur(e.target.value))
+              }
               placeholder='e.g. "25%" or "0.25"'
               disabled={!editable}
               data-testid="input-exposure-factor"
