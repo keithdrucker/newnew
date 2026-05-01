@@ -2564,6 +2564,29 @@ function AnalysisTab({
               data-testid="input-exposure-factor"
             />
           </div>
+          {(() => {
+            // Auto-compute Single Loss Expectancy: SLE = Asset Value × EF.
+            // Always render the field so users can see the formula even when
+            // inputs are missing — empty inputs render as an em-dash.
+            const av = parseMoney(assetValue);
+            const ef = parseFraction(exposureFactor);
+            const sle = av != null && ef != null ? av * ef : null;
+            return (
+              <div className="space-y-1.5">
+                <Label>Single Loss Expectancy (SLE)</Label>
+                <Input
+                  readOnly
+                  tabIndex={-1}
+                  value={sle == null ? "—" : formatCurrency(sle)}
+                  className="bg-muted/40"
+                  data-testid="text-sle"
+                />
+                <p className="text-xs text-muted-foreground">
+                  = Asset Value × Exposure Factor
+                </p>
+              </div>
+            );
+          })()}
           <div className="space-y-1.5">
             <Label>Annual Rate of Occurrence (ARO)</Label>
             <Input
@@ -2577,39 +2600,25 @@ function AnalysisTab({
             />
           </div>
           {(() => {
+            // Auto-compute Annualized Loss Expectancy: ALE = SLE × ARO.
             const av = parseMoney(assetValue);
             const ef = parseFraction(exposureFactor);
             const aro = parseNumber(annualRateOfOccurrence);
-            if (av == null || ef == null || aro == null) return null;
-            const sle = av * ef;
-            const ale = sle * aro;
+            const sle = av != null && ef != null ? av * ef : null;
+            const ale = sle != null && aro != null ? sle * aro : null;
             return (
-              <div
-                className="col-span-2 rounded-md border bg-muted/40 px-3 py-2 text-sm"
-                data-testid="text-sle-ale"
-              >
-                <div className="flex flex-wrap gap-x-6 gap-y-1">
-                  <span>
-                    <span className="text-muted-foreground">SLE</span>{" "}
-                    <span className="font-medium">
-                      {formatCurrency(sle)}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      = Asset Value × EF
-                    </span>
-                  </span>
-                  <span>
-                    <span className="text-muted-foreground">ALE</span>{" "}
-                    <span className="font-medium">
-                      {formatCurrency(ale)}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      = SLE × ARO
-                    </span>
-                  </span>
-                </div>
+              <div className="space-y-1.5">
+                <Label>Annualized Loss Expectancy (ALE)</Label>
+                <Input
+                  readOnly
+                  tabIndex={-1}
+                  value={ale == null ? "—" : formatCurrency(ale)}
+                  className="bg-muted/40"
+                  data-testid="text-ale"
+                />
+                <p className="text-xs text-muted-foreground">
+                  = SLE × Annual Rate of Occurrence
+                </p>
               </div>
             );
           })()}
