@@ -1,6 +1,8 @@
 // Section registry for the Customize Dashboard feature. Keys are
 // stable identifiers persisted to the database — never change a key
-// without writing a migration that rewrites the existing rows.
+// without writing a migration that rewrites the existing rows. When
+// adding a new section, register it here first so the customize sheet
+// picks it up automatically.
 //
 // Locked sections always render and cannot be hidden, even if a stale
 // row in the database says otherwise. Optional sections render by
