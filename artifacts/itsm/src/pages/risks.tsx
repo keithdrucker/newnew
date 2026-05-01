@@ -296,7 +296,15 @@ export default function RisksPage() {
       const dept = scope.accessible.find((d) => d.id === scope.singleId);
       return dept?.name ?? "1 team";
     }
-    return `${scope.selectedIds.length} teams`;
+    // Multi-select: list the actual team names so the header reads
+    // like a real breadcrumb. Cap at 3 to keep the title from
+    // wrapping on small screens.
+    const names = scope.selectedIds
+      .map((id) => scope.accessible.find((d) => d.id === id)?.name)
+      .filter((n): n is string => Boolean(n));
+    if (names.length === 0) return `${scope.selectedIds.length} teams`;
+    if (names.length <= 3) return names.join(", ");
+    return `${names.slice(0, 3).join(", ")} +${names.length - 3}`;
   }, [
     scope.loading,
     scope.accessible,
