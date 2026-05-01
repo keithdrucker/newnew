@@ -115,7 +115,15 @@ export const risksTable = pgTable(
     // -- Mitigation-decision required fields. Required at approval-run-
     // start time when treatmentDecision === "mitigation".
     mitigationSummary: text("mitigation_summary").notNull().default(""),
-    mitigationProsCons: text("mitigation_pros_cons").notNull().default(""),
+    // Pros and Cons of the mitigation approach. Split into two columns
+    // (instead of a single combined `mitigation_pros_cons`) so the UI
+    // can render them as a side-by-side green/red comparison and so
+    // each side can be required independently at approval time.
+    mitigationPros: text("mitigation_pros").notNull().default(""),
+    mitigationCons: text("mitigation_cons").notNull().default(""),
+    // The estimated cost to *implement the mitigation* (i.e. the
+    // expected spend on the controls/work), not the cost of the risk
+    // itself. Stored as text so ranges like "$50K–$100K" are allowed.
     mitigationEstimatedCost: text("mitigation_estimated_cost")
       .notNull()
       .default(""),

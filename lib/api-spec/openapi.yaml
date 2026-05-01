@@ -4698,7 +4698,8 @@ components:
         transferResponsibleParty: { type: string }
         avoidanceActionNotes: { type: string }
         mitigationSummary: { type: string }
-        mitigationProsCons: { type: string }
+        mitigationPros: { type: string }
+        mitigationCons: { type: string }
         mitigationEstimatedCost: { type: string }
         mitigationControlType:
           type: string
@@ -4743,7 +4744,8 @@ components:
         - transferResponsibleParty
         - avoidanceActionNotes
         - mitigationSummary
-        - mitigationProsCons
+        - mitigationPros
+        - mitigationCons
         - mitigationEstimatedCost
         - mitigationControlType
         - mitigationControlDescription
@@ -4809,7 +4811,8 @@ components:
         transferResponsibleParty: { type: string }
         avoidanceActionNotes: { type: string }
         mitigationSummary: { type: string }
-        mitigationProsCons: { type: string }
+        mitigationPros: { type: string }
+        mitigationCons: { type: string }
         mitigationEstimatedCost: { type: string }
         mitigationControlType:
           type: string

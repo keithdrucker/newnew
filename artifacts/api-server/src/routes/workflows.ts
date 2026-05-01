@@ -814,12 +814,30 @@ router.post(
       // Outcome-specific required fields must be populated before
       // the approval run is opened — keeps approvers from voting on
       // an incomplete proposal.
+      //
+      // Approval is *only* required when the treatment has Financial
+      // or Operational impact. If both are "no" (or unset), the
+      // treatment must be finalized via POST /risks/:id/finalize-
+      // treatment instead — keeping the two paths mutually exclusive
+      // so the audit trail stays clean.
+      if (
+        risk.financialImpact !== "yes" &&
+        risk.operationalImpact !== "yes"
+      ) {
+        return {
+          kind: "missing_field",
+          message:
+            "Approval is not required for this risk (Financial and Operational impact are both 'No'). Use the Finalize Treatment action instead.",
+        };
+      }
       if (
         risk.treatmentDecision === "mitigation" &&
         (!risk.mitigationSummary ||
           risk.mitigationSummary.trim().length === 0 ||
-          !risk.mitigationProsCons ||
-          risk.mitigationProsCons.trim().length === 0 ||
+          !risk.mitigationPros ||
+          risk.mitigationPros.trim().length === 0 ||
+          !risk.mitigationCons ||
+          risk.mitigationCons.trim().length === 0 ||
           !risk.mitigationEstimatedCost ||
           risk.mitigationEstimatedCost.trim().length === 0 ||
           !risk.mitigationControlType ||
@@ -830,7 +848,7 @@ router.post(
         return {
           kind: "missing_field",
           message:
-            "Mitigation summary, pros & cons, estimated cost, control type, and control description are required before approval.",
+            "Mitigation summary, pros, cons, estimated cost, control type, and control description are required before approval.",
         };
       }
       if (
@@ -1157,8 +1175,10 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
           decision === "mitigation" &&
           (!risk.mitigationSummary ||
             risk.mitigationSummary.trim().length === 0 ||
-            !risk.mitigationProsCons ||
-            risk.mitigationProsCons.trim().length === 0 ||
+            !risk.mitigationPros ||
+            risk.mitigationPros.trim().length === 0 ||
+            !risk.mitigationCons ||
+            risk.mitigationCons.trim().length === 0 ||
             !risk.mitigationEstimatedCost ||
             risk.mitigationEstimatedCost.trim().length === 0 ||
             !risk.mitigationControlType ||
@@ -1167,7 +1187,7 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
             risk.mitigationControlDescription.trim().length === 0)
         ) {
           throw new FinalizeError(
-            "Mitigation summary, pros & cons, estimated cost, control type, and control description are all required to approve this risk.",
+            "Mitigation summary, pros, cons, estimated cost, control type, and control description are all required to approve this risk.",
           );
         }
 

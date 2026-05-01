@@ -6,6 +6,7 @@ import {
   useGetRisk,
   useCreateRisk,
   useUpdateRisk,
+  useFinalizeRiskTreatment,
   useDeleteRisk,
   useListAgents,
   useListBoardViews,
@@ -240,19 +241,6 @@ const TREATMENT_DECISIONS = [
   { value: "acceptance", label: "Acceptance" },
   { value: "transfer", label: "Transfer" },
   { value: "avoidance", label: "Avoidance" },
-];
-
-const NLMH_LEVELS = [
-  { value: "none", label: "None" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-];
-
-const LMH_LEVELS = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
 ];
 
 const YN_OPTIONS = [
@@ -647,8 +635,9 @@ export default function RisksPage() {
           </div>
           <p className="text-sm text-muted-foreground max-w-3xl">
             Track risks through identification, analysis, treatment, and
-            closure. Treatment decisions go through the approval workflow;
-            approved mitigations automatically become Projects.
+            closure. Treatment decisions require Team Manager approval when
+            Financial or Operational impact is "Yes" — otherwise they can be
+            finalized directly. Mitigations automatically become Projects.
           </p>
           {/* Status counts chips — mirror the per-phase chip set on the
               Projects/Initiatives boards so users can see the lifecycle
@@ -1352,7 +1341,6 @@ function RiskDetailContent({
     likelihood: r.likelihood || "",
     impact: r.impact || "",
     analysisNotes: r.analysisNotes || "",
-    employeeImpact: r.employeeImpact || "",
     financialImpact: r.financialImpact || "",
     operationalImpact: r.operationalImpact || "",
     complianceImpact: r.complianceImpact || "",
@@ -1371,7 +1359,8 @@ function RiskDetailContent({
     transferResponsibleParty: r.transferResponsibleParty || "",
     avoidanceActionNotes: r.avoidanceActionNotes || "",
     mitigationSummary: r.mitigationSummary || "",
-    mitigationProsCons: r.mitigationProsCons || "",
+    mitigationPros: r.mitigationPros || "",
+    mitigationCons: r.mitigationCons || "",
     mitigationEstimatedCost: r.mitigationEstimatedCost || "",
     mitigationControlType: r.mitigationControlType || "",
     mitigationControlDescription: r.mitigationControlDescription || "",
@@ -1399,9 +1388,6 @@ function RiskDetailContent({
   const [impact, setImpact] = useState(analysisBaseline.impact);
   const [analysisNotes, setAnalysisNotes] = useState(
     analysisBaseline.analysisNotes,
-  );
-  const [employeeImpact, setEmployeeImpact] = useState(
-    analysisBaseline.employeeImpact,
   );
   const [financialImpact, setFinancialImpact] = useState(
     analysisBaseline.financialImpact,
@@ -1448,8 +1434,11 @@ function RiskDetailContent({
   const [mitigationSummary, setMitigationSummary] = useState(
     treatmentBaseline.mitigationSummary,
   );
-  const [mitigationProsCons, setMitigationProsCons] = useState(
-    treatmentBaseline.mitigationProsCons,
+  const [mitigationPros, setMitigationPros] = useState(
+    treatmentBaseline.mitigationPros,
+  );
+  const [mitigationCons, setMitigationCons] = useState(
+    treatmentBaseline.mitigationCons,
   );
   const [mitigationEstimatedCost, setMitigationEstimatedCost] = useState(
     treatmentBaseline.mitigationEstimatedCost,
@@ -1471,7 +1460,6 @@ function RiskDetailContent({
     likelihood !== analysisBaseline.likelihood ||
     impact !== analysisBaseline.impact ||
     analysisNotes !== analysisBaseline.analysisNotes ||
-    employeeImpact !== analysisBaseline.employeeImpact ||
     financialImpact !== analysisBaseline.financialImpact ||
     operationalImpact !== analysisBaseline.operationalImpact ||
     complianceImpact !== analysisBaseline.complianceImpact ||
@@ -1490,7 +1478,8 @@ function RiskDetailContent({
     transferResponsibleParty !== treatmentBaseline.transferResponsibleParty ||
     avoidanceActionNotes !== treatmentBaseline.avoidanceActionNotes ||
     mitigationSummary !== treatmentBaseline.mitigationSummary ||
-    mitigationProsCons !== treatmentBaseline.mitigationProsCons ||
+    mitigationPros !== treatmentBaseline.mitigationPros ||
+    mitigationCons !== treatmentBaseline.mitigationCons ||
     mitigationEstimatedCost !== treatmentBaseline.mitigationEstimatedCost ||
     mitigationControlType !== treatmentBaseline.mitigationControlType ||
     mitigationControlDescription !==
@@ -1533,7 +1522,6 @@ function RiskDetailContent({
       setLikelihood(next.likelihood);
       setImpact(next.impact);
       setAnalysisNotes(next.analysisNotes);
-      setEmployeeImpact(next.employeeImpact);
       setFinancialImpact(next.financialImpact);
       setOperationalImpact(next.operationalImpact);
       setComplianceImpact(next.complianceImpact);
@@ -1551,7 +1539,6 @@ function RiskDetailContent({
     risk.likelihood,
     risk.impact,
     risk.analysisNotes,
-    risk.employeeImpact,
     risk.financialImpact,
     risk.operationalImpact,
     risk.complianceImpact,
@@ -1573,7 +1560,8 @@ function RiskDetailContent({
       setTransferResponsibleParty(next.transferResponsibleParty);
       setAvoidanceActionNotes(next.avoidanceActionNotes);
       setMitigationSummary(next.mitigationSummary);
-      setMitigationProsCons(next.mitigationProsCons);
+      setMitigationPros(next.mitigationPros);
+      setMitigationCons(next.mitigationCons);
       setMitigationEstimatedCost(next.mitigationEstimatedCost);
       setMitigationControlType(next.mitigationControlType);
       setMitigationControlDescription(next.mitigationControlDescription);
@@ -1587,7 +1575,8 @@ function RiskDetailContent({
     risk.transferResponsibleParty,
     risk.avoidanceActionNotes,
     risk.mitigationSummary,
-    risk.mitigationProsCons,
+    risk.mitigationPros,
+    risk.mitigationCons,
     risk.mitigationEstimatedCost,
     risk.mitigationControlType,
     risk.mitigationControlDescription,
@@ -1647,10 +1636,9 @@ function RiskDetailContent({
           likelihood,
           impact,
           analysisNotes,
-          employeeImpact,
-          financialImpact,
-          operationalImpact,
-          complianceImpact,
+          financialImpact: financialImpact as "" | "yes" | "no",
+          operationalImpact: operationalImpact as "" | "yes" | "no",
+          complianceImpact: complianceImpact as "" | "yes" | "no",
           assetType,
           assetValue,
           assetCriticality,
@@ -1664,7 +1652,6 @@ function RiskDetailContent({
         likelihood,
         impact,
         analysisNotes,
-        employeeImpact,
         financialImpact,
         operationalImpact,
         complianceImpact,
@@ -1698,7 +1685,8 @@ function RiskDetailContent({
           transferResponsibleParty,
           avoidanceActionNotes,
           mitigationSummary,
-          mitigationProsCons,
+          mitigationPros,
+          mitigationCons,
           mitigationEstimatedCost,
           mitigationControlType:
             mitigationControlType as "" | "security_control" | "compensating_control",
@@ -1712,7 +1700,8 @@ function RiskDetailContent({
         transferResponsibleParty,
         avoidanceActionNotes,
         mitigationSummary,
-        mitigationProsCons,
+        mitigationPros,
+        mitigationCons,
         mitigationEstimatedCost,
         mitigationControlType,
         mitigationControlDescription,
@@ -1760,7 +1749,6 @@ function RiskDetailContent({
     likelihood,
     impact,
     analysisNotes,
-    employeeImpact,
     financialImpact,
     operationalImpact,
     complianceImpact,
@@ -1777,7 +1765,8 @@ function RiskDetailContent({
     transferResponsibleParty,
     avoidanceActionNotes,
     mitigationSummary,
-    mitigationProsCons,
+    mitigationPros,
+    mitigationCons,
     mitigationEstimatedCost,
     mitigationControlType,
     mitigationControlDescription,
@@ -1785,6 +1774,14 @@ function RiskDetailContent({
 
   const canMoveToTreatment =
     risk.status === "under_analysis" && !!likelihood && !!impact;
+
+  // Treatment approval is required only when the risk has Financial OR
+  // Operational impact. We compute this from the *server-saved* risk
+  // values (not local edits) because that's what the server gates the
+  // approval and finalize endpoints on — keeping the UI in lockstep
+  // with what the API will actually accept.
+  const treatmentRequiresApproval =
+    risk.financialImpact === "yes" || risk.operationalImpact === "yes";
 
   async function launchTreatmentPhase() {
     // Persist any pending analysis edits first, then transition. Only switch
@@ -1964,7 +1961,6 @@ function RiskDetailContent({
                 likelihood={likelihood}
                 impact={impact}
                 analysisNotes={analysisNotes}
-                employeeImpact={employeeImpact}
                 financialImpact={financialImpact}
                 operationalImpact={operationalImpact}
                 complianceImpact={complianceImpact}
@@ -1978,7 +1974,6 @@ function RiskDetailContent({
                 onLikelihoodChange={setLikelihood}
                 onImpactChange={setImpact}
                 onAnalysisNotesChange={setAnalysisNotes}
-                onEmployeeImpactChange={setEmployeeImpact}
                 onFinancialImpactChange={setFinancialImpact}
                 onOperationalImpactChange={setOperationalImpact}
                 onComplianceImpactChange={setComplianceImpact}
@@ -2008,17 +2003,22 @@ function RiskDetailContent({
                 transferResponsibleParty={transferResponsibleParty}
                 avoidanceActionNotes={avoidanceActionNotes}
                 mitigationSummary={mitigationSummary}
-                mitigationProsCons={mitigationProsCons}
+                mitigationPros={mitigationPros}
+                mitigationCons={mitigationCons}
                 mitigationEstimatedCost={mitigationEstimatedCost}
                 mitigationControlType={mitigationControlType}
                 mitigationControlDescription={mitigationControlDescription}
+                requiresApproval={treatmentRequiresApproval}
+                treatmentDirty={treatmentDirty}
+                onRefresh={refresh}
                 onDecisionChange={setDecision}
                 onAcceptanceJustificationChange={setAcceptanceJustification}
                 onTransferMethodChange={setTransferMethod}
                 onTransferResponsiblePartyChange={setTransferResponsibleParty}
                 onAvoidanceActionNotesChange={setAvoidanceActionNotes}
                 onMitigationSummaryChange={setMitigationSummary}
-                onMitigationProsConsChange={setMitigationProsCons}
+                onMitigationProsChange={setMitigationPros}
+                onMitigationConsChange={setMitigationCons}
                 onMitigationEstimatedCostChange={setMitigationEstimatedCost}
                 onMitigationControlTypeChange={setMitigationControlType}
                 onMitigationControlDescriptionChange={
@@ -2294,7 +2294,6 @@ function AnalysisTab({
   likelihood,
   impact,
   analysisNotes,
-  employeeImpact,
   financialImpact,
   operationalImpact,
   complianceImpact,
@@ -2308,7 +2307,6 @@ function AnalysisTab({
   onLikelihoodChange,
   onImpactChange,
   onAnalysisNotesChange,
-  onEmployeeImpactChange,
   onFinancialImpactChange,
   onOperationalImpactChange,
   onComplianceImpactChange,
@@ -2328,7 +2326,6 @@ function AnalysisTab({
   likelihood: string;
   impact: string;
   analysisNotes: string;
-  employeeImpact: string;
   financialImpact: string;
   operationalImpact: string;
   complianceImpact: string;
@@ -2342,7 +2339,6 @@ function AnalysisTab({
   onLikelihoodChange: (v: string) => void;
   onImpactChange: (v: string) => void;
   onAnalysisNotesChange: (v: string) => void;
-  onEmployeeImpactChange: (v: string) => void;
   onFinancialImpactChange: (v: string) => void;
   onOperationalImpactChange: (v: string) => void;
   onComplianceImpactChange: (v: string) => void;
@@ -2433,35 +2429,32 @@ function AnalysisTab({
       </AnalysisSection>
 
       <AnalysisSection title="Impact Assessment">
-        <div className="grid grid-cols-2 gap-3">
+        <p className="text-xs text-muted-foreground">
+          Financial and Operational impact drive treatment approval gating:
+          if either is <strong>Yes</strong>, the treatment decision must be
+          approved by a Team Manager before it can be finalized. If both are{" "}
+          <strong>No</strong>, the treatment can be finalized directly without
+          an approval workflow. Compliance impact is informational.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1.5">
-            <Label>Employee Impact</Label>
+            <Label>Financial Impact</Label>
             <Select
-              value={employeeImpact}
-              onValueChange={onEmployeeImpactChange}
+              value={financialImpact}
+              onValueChange={onFinancialImpactChange}
               disabled={!editable}
             >
-              <SelectTrigger data-testid="select-employee-impact">
+              <SelectTrigger data-testid="select-financial-impact">
                 <SelectValue placeholder="Pick…" />
               </SelectTrigger>
               <SelectContent>
-                {NLMH_LEVELS.map((l) => (
+                {YN_OPTIONS.map((l) => (
                   <SelectItem key={l.value} value={l.value}>
                     {l.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Financial Impact</Label>
-            <Input
-              value={financialImpact}
-              onChange={(e) => onFinancialImpactChange(e.target.value)}
-              placeholder="$ amount or range"
-              disabled={!editable}
-              data-testid="input-financial-impact"
-            />
           </div>
           <div className="space-y-1.5">
             <Label>Operational Impact</Label>
@@ -2474,7 +2467,7 @@ function AnalysisTab({
                 <SelectValue placeholder="Pick…" />
               </SelectTrigger>
               <SelectContent>
-                {LMH_LEVELS.map((l) => (
+                {YN_OPTIONS.map((l) => (
                   <SelectItem key={l.value} value={l.value}>
                     {l.label}
                   </SelectItem>
@@ -2701,17 +2694,22 @@ function TreatmentTab({
   transferResponsibleParty,
   avoidanceActionNotes,
   mitigationSummary,
-  mitigationProsCons,
+  mitigationPros,
+  mitigationCons,
   mitigationEstimatedCost,
   mitigationControlType,
   mitigationControlDescription,
+  requiresApproval,
+  treatmentDirty,
+  onRefresh,
   onDecisionChange,
   onAcceptanceJustificationChange,
   onTransferMethodChange,
   onTransferResponsiblePartyChange,
   onAvoidanceActionNotesChange,
   onMitigationSummaryChange,
-  onMitigationProsConsChange,
+  onMitigationProsChange,
+  onMitigationConsChange,
   onMitigationEstimatedCostChange,
   onMitigationControlTypeChange,
   onMitigationControlDescriptionChange,
@@ -2725,23 +2723,29 @@ function TreatmentTab({
   transferResponsibleParty: string;
   avoidanceActionNotes: string;
   mitigationSummary: string;
-  mitigationProsCons: string;
+  mitigationPros: string;
+  mitigationCons: string;
   mitigationEstimatedCost: string;
   mitigationControlType: string;
   mitigationControlDescription: string;
+  requiresApproval: boolean;
+  treatmentDirty: boolean;
+  onRefresh: () => void;
   onDecisionChange: (v: string) => void;
   onAcceptanceJustificationChange: (v: string) => void;
   onTransferMethodChange: (v: string) => void;
   onTransferResponsiblePartyChange: (v: string) => void;
   onAvoidanceActionNotesChange: (v: string) => void;
   onMitigationSummaryChange: (v: string) => void;
-  onMitigationProsConsChange: (v: string) => void;
+  onMitigationProsChange: (v: string) => void;
+  onMitigationConsChange: (v: string) => void;
   onMitigationEstimatedCostChange: (v: string) => void;
   onMitigationControlTypeChange: (v: string) => void;
   onMitigationControlDescriptionChange: (v: string) => void;
   onSave: () => Promise<boolean>;
   saving: boolean;
 }) {
+  const finalizeTreatment = useFinalizeRiskTreatment();
   // Editable in any phase from Under Treatment onward — including post-
   // approval statuses (Mitigation/Accepted/Transferred/Avoided), where the
   // user can refine the recorded treatment details after the fact.
@@ -2765,20 +2769,49 @@ function TreatmentTab({
   const mitigationIncomplete =
     decision === "mitigation" &&
     (!mitigationSummary.trim() ||
-      !mitigationProsCons.trim() ||
+      !mitigationPros.trim() ||
+      !mitigationCons.trim() ||
       !mitigationEstimatedCost.trim() ||
       !mitigationControlType.trim() ||
       !mitigationControlDescription.trim());
 
+  // Per-decision required-fields gate — must mirror the server's
+  // finalize/approval preconditions exactly so the Finalize button is
+  // only enabled when the request will actually succeed.
+  const decisionFieldsComplete =
+    (decision === "mitigation" && !mitigationIncomplete) ||
+    (decision === "acceptance" && !!acceptanceJustification.trim()) ||
+    (decision === "transfer" &&
+      !!transferMethod.trim() &&
+      !!transferResponsibleParty.trim()) ||
+    (decision === "avoidance" && !!avoidanceActionNotes.trim());
+
   return (
     <>
-      <div
-        className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        data-testid="banner-treatment-approval"
-      >
-        <Info className="h-4 w-4 mt-0.5 shrink-0" />
-        <span>This decision requires Team Manager approval.</span>
-      </div>
+      {requiresApproval ? (
+        <div
+          className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          data-testid="banner-treatment-approval"
+        >
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            This treatment has Financial or Operational impact, so the
+            decision requires Team Manager approval before it can be
+            finalized.
+          </span>
+        </div>
+      ) : (
+        <div
+          className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+          data-testid="banner-treatment-no-approval"
+        >
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            This treatment has no Financial or Operational impact, so it can
+            be finalized directly without an approval workflow.
+          </span>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label>Treatment Decision</Label>
@@ -2803,8 +2836,9 @@ function TreatmentTab({
       {decision === "mitigation" && (
         <>
           <p className="text-sm text-muted-foreground">
-            On approval, a Project will be auto-created for the mitigation work
-            (named “Risk Mitigation: {risk.title}”), inheriting team and owner.
+            On {requiresApproval ? "approval" : "finalization"}, a Project will
+            be auto-created for the mitigation work (named “Risk Mitigation:{" "}
+            {risk.title}”), inheriting team and owner.
             The selected <strong>Control Type</strong> and{" "}
             <strong>Control Description</strong> below are carried into that
             project so the team knows which security or compensating control to
@@ -2821,19 +2855,34 @@ function TreatmentTab({
               data-testid="input-mitigation-summary"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Pros &amp; Cons</Label>
-            <Textarea
-              rows={4}
-              value={mitigationProsCons}
-              onChange={(e) => onMitigationProsConsChange(e.target.value)}
-              placeholder="Trade-offs the approver should weigh"
-              disabled={!editable}
-              data-testid="input-mitigation-pros-cons"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-emerald-700">Pros</Label>
+              <Textarea
+                rows={5}
+                value={mitigationPros}
+                onChange={(e) => onMitigationProsChange(e.target.value)}
+                placeholder="Benefits and upsides of this mitigation approach"
+                disabled={!editable}
+                className="border-emerald-200 bg-emerald-50/40 focus-visible:ring-emerald-300"
+                data-testid="input-mitigation-pros"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-rose-700">Cons</Label>
+              <Textarea
+                rows={5}
+                value={mitigationCons}
+                onChange={(e) => onMitigationConsChange(e.target.value)}
+                placeholder="Drawbacks, risks, and trade-offs"
+                disabled={!editable}
+                className="border-rose-200 bg-rose-50/40 focus-visible:ring-rose-300"
+                data-testid="input-mitigation-cons"
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Estimated Cost</Label>
+            <Label>Estimated cost to mitigate the risk</Label>
             <Input
               value={mitigationEstimatedCost}
               onChange={(e) =>
@@ -2843,6 +2892,10 @@ function TreatmentTab({
               disabled={!editable}
               data-testid="input-mitigation-estimated-cost"
             />
+            <p className="text-xs text-muted-foreground">
+              The expected spend to <strong>implement the mitigation</strong>{" "}
+              (controls, work, tooling) — not the cost of the risk itself.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label>Control Type</Label>
@@ -2877,7 +2930,7 @@ function TreatmentTab({
               onChange={(e) =>
                 onMitigationControlDescriptionChange(e.target.value)
               }
-              placeholder="Specific control to be put in place — carried into the auto-created Project on approval."
+              placeholder="Specific control to be put in place — carried into the auto-created Project."
               disabled={!editable}
               data-testid="input-mitigation-control-description"
             />
@@ -2955,19 +3008,73 @@ function TreatmentTab({
 
       <div className="pt-4 border-t space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Approval
+          {requiresApproval ? "Approval" : "Finalize"}
         </p>
         {mitigationIncomplete && (
           <p
             className="text-xs text-amber-700"
             data-testid="hint-mitigation-incomplete"
           >
-            Mitigation Summary, Pros &amp; Cons, Estimated Cost, Control Type,
-            and Control Description are all required before approval can be
-            requested.
+            Mitigation Summary, Pros, Cons, Estimated Cost, Control Type, and
+            Control Description are all required before this treatment can be{" "}
+            {requiresApproval ? "submitted for approval" : "finalized"}.
           </p>
         )}
-        <RiskWorkflowApproval row={risk} />
+        {requiresApproval ? (
+          <RiskWorkflowApproval row={risk} />
+        ) : risk.status === "under_treatment" ? (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Finalizing applies the treatment decision to this risk
+              immediately. For mitigation decisions a Project will be
+              auto-created exactly as if the approval flow had completed.
+            </p>
+            <Button
+              size="sm"
+              data-testid="button-finalize-treatment"
+              disabled={
+                finalizeTreatment.isPending ||
+                saving ||
+                !decision ||
+                !decisionFieldsComplete ||
+                treatmentDirty
+              }
+              onClick={async () => {
+                if (treatmentDirty) {
+                  toast.error(
+                    "Save the treatment proposal before finalizing.",
+                  );
+                  return;
+                }
+                try {
+                  await finalizeTreatment.mutateAsync({ id: risk.id });
+                  onRefresh();
+                  toast.success("Treatment finalized.");
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error
+                      ? err.message
+                      : "Couldn't finalize the treatment.",
+                  );
+                }
+              }}
+            >
+              {finalizeTreatment.isPending
+                ? "Finalizing…"
+                : "Finalize Treatment"}
+            </Button>
+            {treatmentDirty && (
+              <p className="text-xs text-amber-700">
+                Save the treatment proposal first — the Finalize action uses
+                the saved values.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            This risk's treatment has already been finalized.
+          </p>
+        )}
       </div>
     </>
   );

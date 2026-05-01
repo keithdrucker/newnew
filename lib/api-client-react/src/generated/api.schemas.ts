@@ -2412,7 +2412,8 @@ export interface Risk {
   transferResponsibleParty: string;
   avoidanceActionNotes: string;
   mitigationSummary: string;
-  mitigationProsCons: string;
+  mitigationPros: string;
+  mitigationCons: string;
   mitigationEstimatedCost: string;
   mitigationControlType: RiskMitigationControlType;
   mitigationControlDescription: string;
@@ -2509,7 +2510,8 @@ export interface UpdateRiskInput {
   transferResponsibleParty?: string;
   avoidanceActionNotes?: string;
   mitigationSummary?: string;
-  mitigationProsCons?: string;
+  mitigationPros?: string;
+  mitigationCons?: string;
   mitigationEstimatedCost?: string;
   mitigationControlType?: UpdateRiskInputMitigationControlType;
   mitigationControlDescription?: string;

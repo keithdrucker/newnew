@@ -307,7 +307,8 @@ async function hydrate(rows: RiskRow[]): Promise<unknown[]> {
     transferResponsibleParty: r.transferResponsibleParty,
     avoidanceActionNotes: r.avoidanceActionNotes,
     mitigationSummary: r.mitigationSummary,
-    mitigationProsCons: r.mitigationProsCons,
+    mitigationPros: r.mitigationPros,
+    mitigationCons: r.mitigationCons,
     mitigationEstimatedCost: r.mitigationEstimatedCost,
     mitigationControlType: r.mitigationControlType,
     mitigationControlDescription: r.mitigationControlDescription,
@@ -454,7 +455,8 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
       "transferResponsibleParty",
       "avoidanceActionNotes",
       "mitigationSummary",
-      "mitigationProsCons",
+      "mitigationPros",
+      "mitigationCons",
       "mitigationEstimatedCost",
       "mitigationControlType",
       "mitigationControlDescription",
@@ -553,15 +555,33 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
     if (b.impactScope !== undefined) patch.impactScope = b.impactScope;
     if (b.businessImpact !== undefined) patch.businessImpact = b.businessImpact;
     if (b.analysisNotes !== undefined) patch.analysisNotes = b.analysisNotes;
-    // Structured Impact Assessment
-    if (b.employeeImpact !== undefined)
-      patch.employeeImpact = b.employeeImpact;
-    if (b.financialImpact !== undefined)
+    // Structured Impact Assessment — three strict yes/no flags. The
+    // OpenAPI contract enforces the enum at the contract layer, but
+    // we re-validate here so the DB can never end up holding values
+    // outside the allow-list (which would break the approval-gating
+    // helper and the treatment-tab two-path branch).
+    const ALLOWED_YN = ["", "yes", "no"] as const;
+    function assertYn(field: string, value: unknown): void {
+      if (!ALLOWED_YN.includes(value as (typeof ALLOWED_YN)[number])) {
+        const err: Error & { status?: number } = new Error(
+          `${field} must be 'yes' or 'no'.`,
+        );
+        err.status = 400;
+        throw err;
+      }
+    }
+    if (b.financialImpact !== undefined) {
+      assertYn("financialImpact", b.financialImpact);
       patch.financialImpact = b.financialImpact;
-    if (b.operationalImpact !== undefined)
+    }
+    if (b.operationalImpact !== undefined) {
+      assertYn("operationalImpact", b.operationalImpact);
       patch.operationalImpact = b.operationalImpact;
-    if (b.complianceImpact !== undefined)
+    }
+    if (b.complianceImpact !== undefined) {
+      assertYn("complianceImpact", b.complianceImpact);
       patch.complianceImpact = b.complianceImpact;
+    }
     // Asset Context
     if (b.assetType !== undefined) patch.assetType = b.assetType;
     if (b.assetValue !== undefined) patch.assetValue = b.assetValue;
@@ -599,8 +619,8 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
       patch.avoidanceActionNotes = b.avoidanceActionNotes;
     if (b.mitigationSummary !== undefined)
       patch.mitigationSummary = b.mitigationSummary;
-    if (b.mitigationProsCons !== undefined)
-      patch.mitigationProsCons = b.mitigationProsCons;
+    if (b.mitigationPros !== undefined) patch.mitigationPros = b.mitigationPros;
+    if (b.mitigationCons !== undefined) patch.mitigationCons = b.mitigationCons;
     if (b.mitigationEstimatedCost !== undefined)
       patch.mitigationEstimatedCost = b.mitigationEstimatedCost;
     if (b.mitigationControlType !== undefined) {
@@ -688,6 +708,245 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
   const [hydrated] = await hydrate([outcome.row]);
   res.json(hydrated);
 });
+
+// ---- POST /risks/:id/finalize-treatment ----
+//
+// Direct (no-approval) finalization path. Used when the risk has no
+// Financial OR Operational impact — the spec says approval is only
+// required for risks that actually impact those areas. This endpoint
+// performs the same under_treatment → terminal status transition as
+// the workflow-decision approval handler in workflows.ts, including
+// auto-creating the mitigation Project and writing the same audit
+// events, so the "no approval needed" path is observably identical
+// to the approved path apart from skipping the workflow run itself.
+router.post(
+  "/risks/:id/finalize-treatment",
+  async (req, res): Promise<void> => {
+    const user = await getCurrentUser(req);
+    assertAgentOrAdmin(user);
+    const params = GetRiskParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const riskId = params.data.id;
+
+    type Outcome =
+      | { kind: "not_found" }
+      | { kind: "wrong_status" }
+      | { kind: "approval_required"; message: string }
+      | { kind: "missing_decision" }
+      | { kind: "missing_field"; message: string }
+      | { kind: "pending_run" }
+      | { kind: "ok"; row: RiskRow };
+
+    const outcome: Outcome = await db.transaction(async (tx) => {
+      const [risk] = await tx
+        .select()
+        .from(risksTable)
+        .where(eq(risksTable.id, riskId))
+        .for("update")
+        .limit(1);
+      if (!risk) return { kind: "not_found" };
+      if (risk.status !== "under_treatment") return { kind: "wrong_status" };
+      if (
+        risk.financialImpact === "yes" ||
+        risk.operationalImpact === "yes"
+      ) {
+        return {
+          kind: "approval_required",
+          message:
+            "This treatment has Financial or Operational impact and requires Team Manager approval. Start an approval workflow instead.",
+        };
+      }
+      if (!risk.treatmentDecision) return { kind: "missing_decision" };
+
+      // Refuse if there is already a pending approval run, just in
+      // case the impact flags were edited mid-flight.
+      const existingPending = await tx
+        .select({ id: workflowRunsTable.id })
+        .from(workflowRunsTable)
+        .where(
+          and(
+            eq(workflowRunsTable.subjectType, "risk"),
+            eq(workflowRunsTable.subjectId, riskId),
+            eq(workflowRunsTable.status, "pending"),
+          ),
+        )
+        .limit(1);
+      if (existingPending.length > 0) return { kind: "pending_run" };
+
+      const decision = risk.treatmentDecision;
+      let nextStatus:
+        | "mitigation"
+        | "accepted"
+        | "transferred"
+        | "avoided"
+        | null = null;
+      if (decision === "mitigation") nextStatus = "mitigation";
+      else if (decision === "acceptance") nextStatus = "accepted";
+      else if (decision === "transfer") nextStatus = "transferred";
+      else if (decision === "avoidance") nextStatus = "avoided";
+      if (!nextStatus) return { kind: "missing_decision" };
+
+      // Same per-decision required-field set the workflow finalize
+      // handler enforces. Keeps the two paths in lockstep.
+      if (
+        decision === "acceptance" &&
+        (!risk.acceptanceJustification ||
+          risk.acceptanceJustification.trim().length === 0)
+      ) {
+        return {
+          kind: "missing_field",
+          message:
+            "Acceptance justification is required to finalize this risk.",
+        };
+      }
+      if (
+        decision === "transfer" &&
+        (!risk.transferMethod ||
+          risk.transferMethod.trim().length === 0 ||
+          !risk.transferResponsibleParty ||
+          risk.transferResponsibleParty.trim().length === 0)
+      ) {
+        return {
+          kind: "missing_field",
+          message:
+            "Transfer method and responsible party are required to finalize this risk.",
+        };
+      }
+      if (
+        decision === "avoidance" &&
+        (!risk.avoidanceActionNotes ||
+          risk.avoidanceActionNotes.trim().length === 0)
+      ) {
+        return {
+          kind: "missing_field",
+          message:
+            "Avoidance action notes are required to finalize this risk.",
+        };
+      }
+      if (
+        decision === "mitigation" &&
+        (!risk.mitigationSummary ||
+          risk.mitigationSummary.trim().length === 0 ||
+          !risk.mitigationPros ||
+          risk.mitigationPros.trim().length === 0 ||
+          !risk.mitigationCons ||
+          risk.mitigationCons.trim().length === 0 ||
+          !risk.mitigationEstimatedCost ||
+          risk.mitigationEstimatedCost.trim().length === 0 ||
+          !risk.mitigationControlType ||
+          risk.mitigationControlType.trim().length === 0 ||
+          !risk.mitigationControlDescription ||
+          risk.mitigationControlDescription.trim().length === 0)
+      ) {
+        return {
+          kind: "missing_field",
+          message:
+            "Mitigation summary, pros, cons, estimated cost, control type, and control description are all required to finalize this risk.",
+        };
+      }
+
+      let createdProjectId = risk.createdProjectId;
+      if (decision === "mitigation" && createdProjectId == null) {
+        const controlTypeLabel =
+          risk.mitigationControlType === "security_control"
+            ? "Security Control"
+            : risk.mitigationControlType === "compensating_control"
+              ? "Compensating Control"
+              : risk.mitigationControlType;
+        const projectDescription = [
+          risk.description || risk.title,
+          `\n\nMitigation finalized for risk: ${risk.title}.`,
+          `\n\n${controlTypeLabel} to implement:\n${risk.mitigationControlDescription}`,
+        ]
+          .join("")
+          .trim();
+        const [createdProject] = await tx
+          .insert(projectsTable)
+          .values({
+            name: `Risk Mitigation: ${risk.title}`,
+            description: projectDescription,
+            status: "active",
+            departmentId: risk.owningDepartmentId ?? null,
+            ownerId: risk.riskOwnerUserId ?? user.id,
+            suggestedById: risk.reporterId ?? user.id,
+            rationale:
+              `Created from finalized risk-mitigation decision (no approval required — ` +
+              `Financial and Operational impact are both 'No'). Risk rating at decision ` +
+              `time: ${risk.riskRating || "—"}.`,
+          })
+          .returning();
+        createdProjectId = createdProject.id;
+        await tx.insert(projectAuditEventsTable).values({
+          projectId: createdProject.id,
+          action: "created_from_risk",
+          reason: `Created from finalized risk-mitigation decision (risk #${risk.id}, no approval required).`,
+          detail: {
+            riskId: risk.id,
+            riskTitle: risk.title,
+            mitigationControlType: risk.mitigationControlType,
+            mitigationControlDescription: risk.mitigationControlDescription,
+            approvalRequired: false,
+          },
+          changedById: user.id,
+        });
+      }
+
+      const [updated] = await tx
+        .update(risksTable)
+        .set({ status: nextStatus, createdProjectId })
+        .where(eq(risksTable.id, risk.id))
+        .returning();
+      await tx.insert(riskAuditEventsTable).values({
+        riskId: risk.id,
+        oldStatus: "under_treatment",
+        newStatus: nextStatus,
+        action: "approve",
+        reason:
+          "Finalized without approval (Financial and Operational impact are both 'No').",
+        changedById: user.id,
+      });
+      return { kind: "ok", row: updated };
+    });
+
+    if (outcome.kind === "not_found") {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    if (outcome.kind === "wrong_status") {
+      res.status(409).json({
+        error:
+          "Risk is not Under Treatment — cannot finalize the treatment.",
+      });
+      return;
+    }
+    if (outcome.kind === "approval_required") {
+      res.status(409).json({ error: outcome.message });
+      return;
+    }
+    if (outcome.kind === "missing_decision") {
+      res.status(400).json({
+        error: "A treatment decision must be selected before finalizing.",
+      });
+      return;
+    }
+    if (outcome.kind === "pending_run") {
+      res.status(409).json({
+        error:
+          "An approval workflow run is already pending on this risk. Cancel it before finalizing directly.",
+      });
+      return;
+    }
+    if (outcome.kind === "missing_field") {
+      res.status(400).json({ error: outcome.message });
+      return;
+    }
+    const [hydrated] = await hydrate([outcome.row]);
+    res.json(hydrated);
+  },
+);
 
 // ---- DELETE ----
 router.delete("/risks/:id", async (req, res): Promise<void> => {
