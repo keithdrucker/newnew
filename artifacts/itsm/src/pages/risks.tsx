@@ -1290,44 +1290,153 @@ function RiskDetailContent({
     defaultTabForStatus(risk.status),
   );
 
-  // Lifted analysis form state so the parent can detect dirty + provide a
-  // single "Launch Treatment Phase" footer action that saves first.
-  const [likelihood, setLikelihood] = useState(risk.likelihood || "");
-  const [impact, setImpact] = useState(risk.impact || "");
-  const [impactScope, setImpactScope] = useState(risk.impactScope || "");
-  const [businessImpact, setBusinessImpact] = useState(
-    risk.businessImpact || "",
-  );
-  const [analysisNotes, setAnalysisNotes] = useState(risk.analysisNotes || "");
+  // Lifted form state for **all editable phase tabs** so users can keep
+  // editing previous phases (e.g. tweak the title or analysis notes after a
+  // risk has moved on) and so unsaved edits survive tab switches (Radix
+  // unmounts inactive `TabsContent` by default — we counter that with
+  // `forceMount` below, but keeping state at this level also lets a single
+  // `saveAll()` handler service the unsaved-changes prompt).
+  //
+  // **Dirty tracking uses per-section "baseline" snapshots**, NOT a direct
+  // comparison against the live `risk` prop. Otherwise an external refetch
+  // (cache invalidation, polling, another user's edit) would change `risk`
+  // values, instantly flip `dirty` to `true` for fields the user never
+  // touched, suppress the re-sync effect, and let `saveAllDirty()` push
+  // stale values back to the server. Baselines only update when (a) the
+  // user successfully saves, or (b) the risk refetches AND the section is
+  // not currently dirty (in which case we adopt the new server values for
+  // both local state and baseline).
 
-  const analysisEditable =
-    risk.status === "under_analysis" || risk.status === "identified";
+  const overviewSnapshot = (r: Risk) => ({
+    title: r.title,
+    riskType: r.riskType,
+    description: r.description || "",
+    departmentId: String(r.owningDepartmentId),
+    riskOwnerUserId:
+      r.riskOwnerUserId == null ? "none" : String(r.riskOwnerUserId),
+  });
+  const analysisSnapshot = (r: Risk) => ({
+    likelihood: r.likelihood || "",
+    impact: r.impact || "",
+    impactScope: r.impactScope || "",
+    businessImpact: r.businessImpact || "",
+    analysisNotes: r.analysisNotes || "",
+  });
+  const treatmentSnapshot = (r: Risk) => ({
+    decision: r.treatmentDecision || "",
+    acceptanceJustification: r.acceptanceJustification || "",
+    transferMethod: r.transferMethod || "",
+    transferResponsibleParty: r.transferResponsibleParty || "",
+    avoidanceActionNotes: r.avoidanceActionNotes || "",
+  });
+
+  // Overview / Identified-phase fields
+  const [overviewBaseline, setOverviewBaseline] = useState(() =>
+    overviewSnapshot(risk),
+  );
+  const [title, setTitle] = useState(overviewBaseline.title);
+  const [riskType, setRiskType] = useState(overviewBaseline.riskType);
+  const [description, setDescription] = useState(overviewBaseline.description);
+  const [departmentId, setDepartmentId] = useState(
+    overviewBaseline.departmentId,
+  );
+  const [riskOwnerUserId, setRiskOwnerUserId] = useState(
+    overviewBaseline.riskOwnerUserId,
+  );
+
+  // Analysis / Under-Analysis-phase fields
+  const [analysisBaseline, setAnalysisBaseline] = useState(() =>
+    analysisSnapshot(risk),
+  );
+  const [likelihood, setLikelihood] = useState(analysisBaseline.likelihood);
+  const [impact, setImpact] = useState(analysisBaseline.impact);
+  const [impactScope, setImpactScope] = useState(analysisBaseline.impactScope);
+  const [businessImpact, setBusinessImpact] = useState(
+    analysisBaseline.businessImpact,
+  );
+  const [analysisNotes, setAnalysisNotes] = useState(
+    analysisBaseline.analysisNotes,
+  );
+
+  // Treatment / Under-Treatment-phase fields
+  const [treatmentBaseline, setTreatmentBaseline] = useState(() =>
+    treatmentSnapshot(risk),
+  );
+  const [decision, setDecision] = useState(treatmentBaseline.decision);
+  const [acceptanceJustification, setAcceptanceJustification] = useState(
+    treatmentBaseline.acceptanceJustification,
+  );
+  const [transferMethod, setTransferMethod] = useState(
+    treatmentBaseline.transferMethod,
+  );
+  const [transferResponsibleParty, setTransferResponsibleParty] = useState(
+    treatmentBaseline.transferResponsibleParty,
+  );
+  const [avoidanceActionNotes, setAvoidanceActionNotes] = useState(
+    treatmentBaseline.avoidanceActionNotes,
+  );
+
+  const overviewDirty =
+    title !== overviewBaseline.title ||
+    riskType !== overviewBaseline.riskType ||
+    description !== overviewBaseline.description ||
+    departmentId !== overviewBaseline.departmentId ||
+    riskOwnerUserId !== overviewBaseline.riskOwnerUserId;
 
   const analysisDirty =
-    analysisEditable &&
-    ((likelihood || "") !== (risk.likelihood || "") ||
-      (impact || "") !== (risk.impact || "") ||
-      (impactScope || "") !== (risk.impactScope || "") ||
-      (businessImpact || "") !== (risk.businessImpact || "") ||
-      (analysisNotes || "") !== (risk.analysisNotes || ""));
+    likelihood !== analysisBaseline.likelihood ||
+    impact !== analysisBaseline.impact ||
+    impactScope !== analysisBaseline.impactScope ||
+    businessImpact !== analysisBaseline.businessImpact ||
+    analysisNotes !== analysisBaseline.analysisNotes;
+
+  const treatmentDirty =
+    decision !== treatmentBaseline.decision ||
+    acceptanceJustification !== treatmentBaseline.acceptanceJustification ||
+    transferMethod !== treatmentBaseline.transferMethod ||
+    transferResponsibleParty !== treatmentBaseline.transferResponsibleParty ||
+    avoidanceActionNotes !== treatmentBaseline.avoidanceActionNotes;
+
+  const isAnyDirty = overviewDirty || analysisDirty || treatmentDirty;
 
   useEffect(() => {
-    onDirtyChange(analysisDirty);
-  }, [analysisDirty, onDirtyChange]);
+    onDirtyChange(isAnyDirty);
+  }, [isAnyDirty, onDirtyChange]);
 
-  // After a successful save (or any external refresh of `risk`) the local
-  // form state may already match the server values, in which case `dirty`
-  // naturally clears. But if the server normalized something (trim, etc.) or
-  // the risk got updated outside this dialog, sync local state from the new
-  // record only when the form is **not** currently dirty — this preserves
-  // in-flight user edits while still re-baselining after saves.
+  // When `risk` refetches with new server values, re-sync the corresponding
+  // section ONLY if the user hasn't touched it (local state still matches
+  // the previous baseline). When we re-sync we update both `local` and
+  // `baseline` together, so dirty stays false and we don't fight the user's
+  // in-flight edits. We compare against `baseline` (not the new `risk`) so
+  // server changes don't spuriously look like dirt.
+  useEffect(() => {
+    if (!overviewDirty) {
+      const next = overviewSnapshot(risk);
+      setTitle(next.title);
+      setRiskType(next.riskType);
+      setDescription(next.description);
+      setDepartmentId(next.departmentId);
+      setRiskOwnerUserId(next.riskOwnerUserId);
+      setOverviewBaseline(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    risk.title,
+    risk.riskType,
+    risk.description,
+    risk.owningDepartmentId,
+    risk.riskOwnerUserId,
+  ]);
+
   useEffect(() => {
     if (!analysisDirty) {
-      setLikelihood(risk.likelihood || "");
-      setImpact(risk.impact || "");
-      setImpactScope(risk.impactScope || "");
-      setBusinessImpact(risk.businessImpact || "");
-      setAnalysisNotes(risk.analysisNotes || "");
+      const next = analysisSnapshot(risk);
+      setLikelihood(next.likelihood);
+      setImpact(next.impact);
+      setImpactScope(next.impactScope);
+      setBusinessImpact(next.businessImpact);
+      setAnalysisNotes(next.analysisNotes);
+      setAnalysisBaseline(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1338,9 +1447,69 @@ function RiskDetailContent({
     risk.analysisNotes,
   ]);
 
+  useEffect(() => {
+    if (!treatmentDirty) {
+      const next = treatmentSnapshot(risk);
+      setDecision(next.decision);
+      setAcceptanceJustification(next.acceptanceJustification);
+      setTransferMethod(next.transferMethod);
+      setTransferResponsibleParty(next.transferResponsibleParty);
+      setAvoidanceActionNotes(next.avoidanceActionNotes);
+      setTreatmentBaseline(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    risk.treatmentDecision,
+    risk.acceptanceJustification,
+    risk.transferMethod,
+    risk.transferResponsibleParty,
+    risk.avoidanceActionNotes,
+  ]);
+
   function refresh() {
     qc.invalidateQueries({ queryKey: getListRisksQueryKey() });
     qc.invalidateQueries({ queryKey: getGetRiskQueryKey(risk.id) });
+  }
+
+  async function saveOverview(): Promise<boolean> {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle || !departmentId) {
+      toast.error("Title and owning team are required.");
+      return false;
+    }
+    const trimmedDescription = description.trim();
+    try {
+      await updateRisk.mutateAsync({
+        id: risk.id,
+        data: {
+          title: trimmedTitle,
+          riskType,
+          description: trimmedDescription,
+          owningDepartmentId: Number(departmentId),
+          riskOwnerUserId:
+            riskOwnerUserId === "none" ? null : Number(riskOwnerUserId),
+        },
+      });
+      // Mirror server-side normalization (trim) into local + baseline so the
+      // form clears its dirty state immediately, before the refetch lands.
+      setTitle(trimmedTitle);
+      setDescription(trimmedDescription);
+      setOverviewBaseline({
+        title: trimmedTitle,
+        riskType,
+        description: trimmedDescription,
+        departmentId,
+        riskOwnerUserId,
+      });
+      refresh();
+      toast.success("Risk details saved.");
+      return true;
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't save risk details.",
+      );
+      return false;
+    }
   }
 
   async function saveAnalysis(): Promise<boolean> {
@@ -1355,6 +1524,13 @@ function RiskDetailContent({
           analysisNotes,
         },
       });
+      setAnalysisBaseline({
+        likelihood,
+        impact,
+        impactScope,
+        businessImpact,
+        analysisNotes,
+      });
       refresh();
       toast.success("Analysis saved.");
       return true;
@@ -1366,19 +1542,75 @@ function RiskDetailContent({
     }
   }
 
-  // Expose the save function to the parent so its "Save changes" prompt
-  // can persist before closing the dialog.
+  async function saveTreatment(): Promise<boolean> {
+    try {
+      await updateRisk.mutateAsync({
+        id: risk.id,
+        data: {
+          treatmentDecision: decision || undefined,
+          acceptanceJustification,
+          transferMethod,
+          transferResponsibleParty,
+          avoidanceActionNotes,
+        },
+      });
+      setTreatmentBaseline({
+        decision,
+        acceptanceJustification,
+        transferMethod,
+        transferResponsibleParty,
+        avoidanceActionNotes,
+      });
+      refresh();
+      toast.success("Treatment proposal saved.");
+      return true;
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't save treatment.",
+      );
+      return false;
+    }
+  }
+
+  // Single "save everything dirty" function exposed to the parent dialog so
+  // the unsaved-changes prompt can persist all pending edits in one click.
+  async function saveAllDirty(): Promise<boolean> {
+    if (overviewDirty) {
+      const ok = await saveOverview();
+      if (!ok) return false;
+    }
+    if (analysisDirty) {
+      const ok = await saveAnalysis();
+      if (!ok) return false;
+    }
+    if (treatmentDirty) {
+      const ok = await saveTreatment();
+      if (!ok) return false;
+    }
+    return true;
+  }
+
   useEffect(() => {
-    registerSaveHandler(analysisDirty ? saveAnalysis : null);
+    registerSaveHandler(isAnyDirty ? saveAllDirty : null);
     return () => registerSaveHandler(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    analysisDirty,
+    isAnyDirty,
+    title,
+    riskType,
+    description,
+    departmentId,
+    riskOwnerUserId,
     likelihood,
     impact,
     impactScope,
     businessImpact,
     analysisNotes,
+    decision,
+    acceptanceJustification,
+    transferMethod,
+    transferResponsibleParty,
+    avoidanceActionNotes,
   ]);
 
   const canMoveToTreatment =
@@ -1389,26 +1621,28 @@ function RiskDetailContent({
     !!businessImpact.trim();
 
   async function launchTreatmentPhase() {
-    // Persist any pending analysis edits first, then transition.
+    // Persist any pending analysis edits first, then transition. Only switch
+    // tabs if the transition actually succeeded — otherwise the user stays
+    // on Analysis to fix whatever the server complained about.
     if (analysisDirty) {
       const ok = await saveAnalysis();
       if (!ok) return;
     }
-    await transition("under_treatment");
-    setActiveTab("treatment");
+    const moved = await transition("under_treatment");
+    if (moved) setActiveTab("treatment");
   }
 
   async function transition(
     newStatus: string,
     extra: Record<string, unknown> = {},
-  ) {
+  ): Promise<boolean> {
     let transitionReason: string | undefined;
     if (newStatus === "closed") {
       const r = window.prompt("Reason for closing this risk:");
-      if (r === null) return;
+      if (r === null) return false;
       if (!r.trim()) {
         toast.error("Closing reason is required.");
-        return;
+        return false;
       }
       transitionReason = r.trim();
     }
@@ -1423,10 +1657,12 @@ function RiskDetailContent({
       });
       refresh();
       toast.success(`Risk moved to ${statusLabel(newStatus)}.`);
+      return true;
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Couldn't update the risk.",
       );
+      return false;
     }
   }
 
@@ -1526,10 +1762,37 @@ function RiskDetailContent({
 
         <ScrollArea className="flex-1">
           <div className="px-6 py-4">
-            <TabsContent value="overview" className="mt-0 space-y-4">
-              <OverviewTab risk={risk} onTransition={transition} />
+            {/* `forceMount` keeps inactive tab content in the DOM (just
+                hidden via Radix `data-state=inactive`), so unsaved edits on
+                one phase tab survive when the user switches to another. */}
+            <TabsContent
+              value="overview"
+              forceMount
+              className="mt-0 space-y-4 data-[state=inactive]:hidden"
+            >
+              <OverviewTab
+                risk={risk}
+                title={title}
+                riskType={riskType}
+                description={description}
+                departmentId={departmentId}
+                riskOwnerUserId={riskOwnerUserId}
+                onTitleChange={setTitle}
+                onRiskTypeChange={setRiskType}
+                onDescriptionChange={setDescription}
+                onDepartmentChange={setDepartmentId}
+                onRiskOwnerChange={setRiskOwnerUserId}
+                onSave={saveOverview}
+                onTransition={transition}
+                saving={updateRisk.isPending}
+                dirty={overviewDirty}
+              />
             </TabsContent>
-            <TabsContent value="analysis" className="mt-0 space-y-4">
+            <TabsContent
+              value="analysis"
+              forceMount
+              className="mt-0 space-y-4 data-[state=inactive]:hidden"
+            >
               <AnalysisTab
                 risk={risk}
                 likelihood={likelihood}
@@ -1548,8 +1811,26 @@ function RiskDetailContent({
                 saving={updateRisk.isPending}
               />
             </TabsContent>
-            <TabsContent value="treatment" className="mt-0 space-y-4">
-              <TreatmentTab risk={risk} onSaved={refresh} />
+            <TabsContent
+              value="treatment"
+              forceMount
+              className="mt-0 space-y-4 data-[state=inactive]:hidden"
+            >
+              <TreatmentTab
+                risk={risk}
+                decision={decision}
+                acceptanceJustification={acceptanceJustification}
+                transferMethod={transferMethod}
+                transferResponsibleParty={transferResponsibleParty}
+                avoidanceActionNotes={avoidanceActionNotes}
+                onDecisionChange={setDecision}
+                onAcceptanceJustificationChange={setAcceptanceJustification}
+                onTransferMethodChange={setTransferMethod}
+                onTransferResponsiblePartyChange={setTransferResponsibleParty}
+                onAvoidanceActionNotesChange={setAvoidanceActionNotes}
+                onSave={saveTreatment}
+                saving={updateRisk.isPending}
+              />
             </TabsContent>
             <TabsContent value="linked" className="mt-0 space-y-4">
               <LinkedWorkTab risk={risk} onNavigate={(p) => navigate(p)} />
@@ -1561,22 +1842,24 @@ function RiskDetailContent({
         </ScrollArea>
       </Tabs>
 
-      {risk.status === "under_analysis" && (
+      {(risk.status === "under_analysis" || isAnyDirty) && (
         <div className="px-6 py-3 border-t bg-muted/40 flex items-center justify-end gap-2">
-          {analysisDirty && (
+          {isAnyDirty && (
             <span className="text-xs text-muted-foreground mr-auto">
-              You have unsaved analysis changes.
+              You have unsaved changes.
             </span>
           )}
-          <Button
-            size="sm"
-            onClick={launchTreatmentPhase}
-            disabled={!canMoveToTreatment || updateRisk.isPending}
-            data-testid="button-launch-treatment-phase"
-          >
-            <ArrowRight className="h-4 w-4 mr-1.5" />
-            Launch Treatment Phase
-          </Button>
+          {risk.status === "under_analysis" && (
+            <Button
+              size="sm"
+              onClick={launchTreatmentPhase}
+              disabled={!canMoveToTreatment || updateRisk.isPending}
+              data-testid="button-launch-treatment-phase"
+            >
+              <ArrowRight className="h-4 w-4 mr-1.5" />
+              Launch Treatment Phase
+            </Button>
+          )}
         </div>
       )}
     </>
@@ -1604,31 +1887,139 @@ function Field({
 
 function OverviewTab({
   risk,
+  title,
+  riskType,
+  description,
+  departmentId,
+  riskOwnerUserId,
+  onTitleChange,
+  onRiskTypeChange,
+  onDescriptionChange,
+  onDepartmentChange,
+  onRiskOwnerChange,
+  onSave,
   onTransition,
+  saving,
+  dirty,
 }: {
   risk: Risk;
+  title: string;
+  riskType: string;
+  description: string;
+  departmentId: string;
+  riskOwnerUserId: string;
+  onTitleChange: (v: string) => void;
+  onRiskTypeChange: (v: string) => void;
+  onDescriptionChange: (v: string) => void;
+  onDepartmentChange: (v: string) => void;
+  onRiskOwnerChange: (v: string) => void;
+  onSave: () => Promise<boolean>;
   onTransition: (s: string, extra?: Record<string, unknown>) => void;
+  saving: boolean;
+  dirty: boolean;
 }) {
+  const scope = useTeamScope();
+  const teams = scope.accessible;
+  const { data: agents = [] } = useListAgents({});
+
   const canStartAnalysis = risk.status === "identified";
   const canClose =
     risk.status !== "closed" && risk.status !== "under_treatment";
 
   return (
     <>
+      <div className="space-y-1.5">
+        <Label htmlFor="risk-edit-title">Title</Label>
+        <Input
+          id="risk-edit-title"
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          data-testid="input-edit-risk-title"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>Risk Type</Label>
+          <Select value={riskType} onValueChange={onRiskTypeChange}>
+            <SelectTrigger data-testid="select-edit-risk-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RISK_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Owning Team</Label>
+          <Select value={departmentId} onValueChange={onDepartmentChange}>
+            <SelectTrigger data-testid="select-edit-risk-department">
+              <SelectValue placeholder="Pick a team" />
+            </SelectTrigger>
+            <SelectContent>
+              {teams.map((d) => (
+                <SelectItem key={d.id} value={String(d.id)}>
+                  {d.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Risk Owner</Label>
+          <Select value={riskOwnerUserId} onValueChange={onRiskOwnerChange}>
+            <SelectTrigger data-testid="select-edit-risk-owner">
+              <SelectValue placeholder="Unassigned" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Unassigned</SelectItem>
+              {agents.map((a: Agent) => (
+                <SelectItem key={a.id} value={String(a.id)}>
+                  {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Status
+          </p>
+          <div className="text-sm pt-1">{statusLabel(risk.status)}</div>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Risk Type">{risk.riskType}</Field>
-        <Field label="Status">{statusLabel(risk.status)}</Field>
-        <Field label="Owning Team">{risk.owningDepartmentName ?? "—"}</Field>
-        <Field label="Risk Owner">{risk.riskOwnerName ?? "Unassigned"}</Field>
         <Field label="Reporter">{risk.reporterName ?? "—"}</Field>
         <Field label="Created">
           {new Date(risk.createdAt).toLocaleString()}
         </Field>
       </div>
-      <Field label="Description">
-        <p className="whitespace-pre-wrap">{risk.description || "—"}</p>
-      </Field>
+      <div className="space-y-1.5">
+        <Label htmlFor="risk-edit-description">Description</Label>
+        <Textarea
+          id="risk-edit-description"
+          rows={4}
+          value={description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+          placeholder="Describe the risk, its trigger, and any context."
+          data-testid="input-edit-risk-description"
+        />
+      </div>
       <div className="flex flex-wrap gap-2 pt-2 border-t">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            void onSave();
+          }}
+          disabled={saving || !dirty}
+          data-testid="button-save-overview"
+        >
+          Save Details
+        </Button>
         {canStartAnalysis && (
           <Button
             size="sm"
@@ -1687,9 +2078,10 @@ function AnalysisTab({
   canMoveToTreatment: boolean;
   saving: boolean;
 }) {
-  // Visible Under Analysis and beyond.
-  const editable =
-    risk.status === "under_analysis" || risk.status === "identified";
+  // Editable in any phase: previous-phase edits are allowed so the user can
+  // refine analysis fields after the risk has moved on. The server PATCH
+  // accepts these fields at any status; only status TRANSITIONS are gated.
+  const editable = true;
 
   // Cheap client-side rating preview mirroring the server formula.
   const previewRating = useMemo(() => {
@@ -1820,24 +2212,39 @@ function AnalysisTab({
   );
 }
 
-function TreatmentTab({ risk, onSaved }: { risk: Risk; onSaved: () => void }) {
-  const updateRisk = useUpdateRisk();
-  const [decision, setDecision] = useState(risk.treatmentDecision || "");
-  const [acceptanceJustification, setAcceptanceJustification] = useState(
-    risk.acceptanceJustification || "",
-  );
-  const [transferMethod, setTransferMethod] = useState(
-    risk.transferMethod || "",
-  );
-  const [transferResponsibleParty, setTransferResponsibleParty] = useState(
-    risk.transferResponsibleParty || "",
-  );
-  const [avoidanceActionNotes, setAvoidanceActionNotes] = useState(
-    risk.avoidanceActionNotes || "",
-  );
-
-  // Decision is editable only while still Under Treatment.
-  const editable = risk.status === "under_treatment";
+function TreatmentTab({
+  risk,
+  decision,
+  acceptanceJustification,
+  transferMethod,
+  transferResponsibleParty,
+  avoidanceActionNotes,
+  onDecisionChange,
+  onAcceptanceJustificationChange,
+  onTransferMethodChange,
+  onTransferResponsiblePartyChange,
+  onAvoidanceActionNotesChange,
+  onSave,
+  saving,
+}: {
+  risk: Risk;
+  decision: string;
+  acceptanceJustification: string;
+  transferMethod: string;
+  transferResponsibleParty: string;
+  avoidanceActionNotes: string;
+  onDecisionChange: (v: string) => void;
+  onAcceptanceJustificationChange: (v: string) => void;
+  onTransferMethodChange: (v: string) => void;
+  onTransferResponsiblePartyChange: (v: string) => void;
+  onAvoidanceActionNotesChange: (v: string) => void;
+  onSave: () => Promise<boolean>;
+  saving: boolean;
+}) {
+  // Editable in any phase from Under Treatment onward — including post-
+  // approval statuses (Mitigation/Accepted/Transferred/Avoided), where the
+  // user can refine the recorded treatment details after the fact.
+  const editable = true;
   const visible =
     risk.status === "under_treatment" ||
     risk.status === "mitigation" ||
@@ -1854,34 +2261,13 @@ function TreatmentTab({ risk, onSaved }: { risk: Risk; onSaved: () => void }) {
     );
   }
 
-  async function saveDecision() {
-    try {
-      await updateRisk.mutateAsync({
-        id: risk.id,
-        data: {
-          treatmentDecision: decision || undefined,
-          acceptanceJustification,
-          transferMethod,
-          transferResponsibleParty,
-          avoidanceActionNotes,
-        },
-      });
-      onSaved();
-      toast.success("Treatment proposal saved.");
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Couldn't save treatment.",
-      );
-    }
-  }
-
   return (
     <>
       <div className="space-y-1.5">
         <Label>Treatment Decision</Label>
         <Select
           value={decision}
-          onValueChange={setDecision}
+          onValueChange={onDecisionChange}
           disabled={!editable}
         >
           <SelectTrigger data-testid="select-treatment-decision">
@@ -1909,7 +2295,9 @@ function TreatmentTab({ risk, onSaved }: { risk: Risk; onSaved: () => void }) {
           <Textarea
             rows={3}
             value={acceptanceJustification}
-            onChange={(e) => setAcceptanceJustification(e.target.value)}
+            onChange={(e) =>
+              onAcceptanceJustificationChange(e.target.value)
+            }
             placeholder="Why are we accepting this risk?"
             disabled={!editable}
             data-testid="input-acceptance-justification"
@@ -1922,7 +2310,7 @@ function TreatmentTab({ risk, onSaved }: { risk: Risk; onSaved: () => void }) {
             <Label>Transfer Method</Label>
             <Input
               value={transferMethod}
-              onChange={(e) => setTransferMethod(e.target.value)}
+              onChange={(e) => onTransferMethodChange(e.target.value)}
               placeholder="E.g. Cyber-insurance policy, vendor contract"
               disabled={!editable}
               data-testid="input-transfer-method"
@@ -1932,7 +2320,9 @@ function TreatmentTab({ risk, onSaved }: { risk: Risk; onSaved: () => void }) {
             <Label>Responsible Party</Label>
             <Input
               value={transferResponsibleParty}
-              onChange={(e) => setTransferResponsibleParty(e.target.value)}
+              onChange={(e) =>
+                onTransferResponsiblePartyChange(e.target.value)
+              }
               placeholder="Name of party assuming the risk"
               disabled={!editable}
               data-testid="input-transfer-party"
@@ -1946,7 +2336,7 @@ function TreatmentTab({ risk, onSaved }: { risk: Risk; onSaved: () => void }) {
           <Textarea
             rows={3}
             value={avoidanceActionNotes}
-            onChange={(e) => setAvoidanceActionNotes(e.target.value)}
+            onChange={(e) => onAvoidanceActionNotesChange(e.target.value)}
             placeholder="What activity is being stopped or replaced?"
             disabled={!editable}
             data-testid="input-avoidance-notes"
@@ -1954,19 +2344,19 @@ function TreatmentTab({ risk, onSaved }: { risk: Risk; onSaved: () => void }) {
         </div>
       )}
 
-      {editable && (
-        <div className="flex gap-2 pt-2 border-t">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={saveDecision}
-            disabled={updateRisk.isPending || !decision}
-            data-testid="button-save-treatment"
-          >
-            Save Treatment Proposal
-          </Button>
-        </div>
-      )}
+      <div className="flex gap-2 pt-2 border-t">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            void onSave();
+          }}
+          disabled={saving || !decision}
+          data-testid="button-save-treatment"
+        >
+          Save Treatment Proposal
+        </Button>
+      </div>
 
       <div className="pt-4 border-t space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
