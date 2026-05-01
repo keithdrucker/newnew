@@ -21,6 +21,7 @@ import riskRulesRouter from "./riskRules";
 import workflowsRouter from "./workflows";
 import dashboardRouter from "./dashboard";
 import dashboardVisibilityRouter from "./dashboardVisibility";
+import botRouter from "./bot";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(riskRulesRouter);
 router.use(workflowsRouter);
 router.use(dashboardRouter);
 router.use(dashboardVisibilityRouter);
+router.use(botRouter);
 
 export default router;
