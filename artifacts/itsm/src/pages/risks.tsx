@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -41,6 +41,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -1115,29 +1126,158 @@ function RiskDetailDialog({
   onClose: () => void;
 }) {
   const { data: risk, isLoading } = useGetRisk(riskId);
+  const [isDirty, setIsDirty] = useState(false);
+  const saveHandlerRef = useRef<(() => Promise<boolean>) | null>(null);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const registerSaveHandler = useCallback(
+    (fn: (() => Promise<boolean>) | null) => {
+      saveHandlerRef.current = fn;
+    },
+    [],
+  );
+
+  function attemptClose() {
+    if (isDirty) {
+      setConfirmCloseOpen(true);
+    } else {
+      onClose();
+    }
+  }
 
   return (
-    <Dialog open={true} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        className="max-w-3xl p-0 max-h-[90vh] flex flex-col"
-        data-testid="dialog-risk-detail"
-      >
-        {isLoading || !risk ? (
-          <div className="p-6 text-sm text-muted-foreground">Loading…</div>
-        ) : (
-          <RiskDetailContent risk={risk} onClose={onClose} />
-        )}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={true} onOpenChange={(o) => !o && attemptClose()}>
+        <DialogContent
+          className="max-w-3xl p-0 max-h-[90vh] flex flex-col"
+          data-testid="dialog-risk-detail"
+          onEscapeKeyDown={(e) => {
+            if (isDirty) {
+              e.preventDefault();
+              setConfirmCloseOpen(true);
+            }
+          }}
+          // Use only `onInteractOutside` to cover both pointer + focus-based
+          // outside interactions; combining with `onPointerDownOutside` would
+          // double-fire the prompt.
+          onInteractOutside={(e) => {
+            if (isDirty) {
+              e.preventDefault();
+              setConfirmCloseOpen(true);
+            }
+          }}
+        >
+          {isLoading || !risk ? (
+            <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <RiskDetailContent
+              risk={risk}
+              onClose={onClose}
+              onDirtyChange={setIsDirty}
+              registerSaveHandler={registerSaveHandler}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
+        <AlertDialogContent data-testid="dialog-unsaved-changes">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save changes before closing?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes on this risk. Would you like to save
+              them, or discard and close?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-keep-editing">
+              Keep editing
+            </AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setConfirmCloseOpen(false);
+                onClose();
+              }}
+              data-testid="button-discard-changes"
+            >
+              Discard changes
+            </Button>
+            <AlertDialogAction
+              onClick={async (e) => {
+                e.preventDefault();
+                const fn = saveHandlerRef.current;
+                if (fn) {
+                  const ok = await fn();
+                  if (ok) {
+                    setConfirmCloseOpen(false);
+                    onClose();
+                  }
+                } else {
+                  setConfirmCloseOpen(false);
+                  onClose();
+                }
+              }}
+              data-testid="button-save-and-close"
+            >
+              Save changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
+}
+
+// Maps a risk status to the tab that represents that phase. Anything past
+// "under_treatment" lives on the Overview tab (the workflow is done from a
+// phase-progression standpoint), and anything ambiguous falls back to overview.
+function defaultTabForStatus(status: string): string {
+  if (status === "under_analysis") return "analysis";
+  if (status === "under_treatment") return "treatment";
+  return "overview";
+}
+
+// Returns extra classes for a phase tab trigger so tabs render in
+// yellow (current phase), green (completed phase), or default (future phase).
+// "linked" and "history" are not lifecycle phases — they always use defaults.
+function phaseTabClass(status: string, tabValue: string): string {
+  const phaseOrder = ["overview", "analysis", "treatment"];
+  // Status → index of current phase in `phaseOrder`. Anything beyond
+  // "under_treatment" means all three phases are completed.
+  const statusIndex: Record<string, number> = {
+    identified: 0,
+    under_analysis: 1,
+    under_treatment: 2,
+    mitigation: 3,
+    accepted: 3,
+    transferred: 3,
+    avoided: 3,
+    closed: 3,
+  };
+  const idx = phaseOrder.indexOf(tabValue);
+  if (idx === -1) return "";
+  const current = statusIndex[status] ?? 0;
+  if (idx < current) {
+    // Completed phase
+    return "data-[state=active]:bg-emerald-500 data-[state=active]:text-white bg-emerald-100 text-emerald-800 hover:bg-emerald-200";
+  }
+  if (idx === current) {
+    // Current/active phase
+    return "data-[state=active]:bg-amber-500 data-[state=active]:text-white bg-amber-100 text-amber-900 hover:bg-amber-200";
+  }
+  return "";
 }
 
 function RiskDetailContent({
   risk,
   onClose,
+  onDirtyChange,
+  registerSaveHandler,
 }: {
   risk: Risk;
   onClose: () => void;
+  onDirtyChange: (dirty: boolean) => void;
+  registerSaveHandler: (fn: (() => Promise<boolean>) | null) => void;
 }) {
   const { session } = useSession();
   const isAdmin = session?.role === "admin";
@@ -1146,9 +1286,116 @@ function RiskDetailContent({
   const updateRisk = useUpdateRisk();
   const deleteRisk = useDeleteRisk();
 
+  const [activeTab, setActiveTab] = useState(() =>
+    defaultTabForStatus(risk.status),
+  );
+
+  // Lifted analysis form state so the parent can detect dirty + provide a
+  // single "Launch Treatment Phase" footer action that saves first.
+  const [likelihood, setLikelihood] = useState(risk.likelihood || "");
+  const [impact, setImpact] = useState(risk.impact || "");
+  const [impactScope, setImpactScope] = useState(risk.impactScope || "");
+  const [businessImpact, setBusinessImpact] = useState(
+    risk.businessImpact || "",
+  );
+  const [analysisNotes, setAnalysisNotes] = useState(risk.analysisNotes || "");
+
+  const analysisEditable =
+    risk.status === "under_analysis" || risk.status === "identified";
+
+  const analysisDirty =
+    analysisEditable &&
+    ((likelihood || "") !== (risk.likelihood || "") ||
+      (impact || "") !== (risk.impact || "") ||
+      (impactScope || "") !== (risk.impactScope || "") ||
+      (businessImpact || "") !== (risk.businessImpact || "") ||
+      (analysisNotes || "") !== (risk.analysisNotes || ""));
+
+  useEffect(() => {
+    onDirtyChange(analysisDirty);
+  }, [analysisDirty, onDirtyChange]);
+
+  // After a successful save (or any external refresh of `risk`) the local
+  // form state may already match the server values, in which case `dirty`
+  // naturally clears. But if the server normalized something (trim, etc.) or
+  // the risk got updated outside this dialog, sync local state from the new
+  // record only when the form is **not** currently dirty — this preserves
+  // in-flight user edits while still re-baselining after saves.
+  useEffect(() => {
+    if (!analysisDirty) {
+      setLikelihood(risk.likelihood || "");
+      setImpact(risk.impact || "");
+      setImpactScope(risk.impactScope || "");
+      setBusinessImpact(risk.businessImpact || "");
+      setAnalysisNotes(risk.analysisNotes || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    risk.likelihood,
+    risk.impact,
+    risk.impactScope,
+    risk.businessImpact,
+    risk.analysisNotes,
+  ]);
+
   function refresh() {
     qc.invalidateQueries({ queryKey: getListRisksQueryKey() });
     qc.invalidateQueries({ queryKey: getGetRiskQueryKey(risk.id) });
+  }
+
+  async function saveAnalysis(): Promise<boolean> {
+    try {
+      await updateRisk.mutateAsync({
+        id: risk.id,
+        data: {
+          likelihood,
+          impact,
+          impactScope,
+          businessImpact,
+          analysisNotes,
+        },
+      });
+      refresh();
+      toast.success("Analysis saved.");
+      return true;
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't save analysis.",
+      );
+      return false;
+    }
+  }
+
+  // Expose the save function to the parent so its "Save changes" prompt
+  // can persist before closing the dialog.
+  useEffect(() => {
+    registerSaveHandler(analysisDirty ? saveAnalysis : null);
+    return () => registerSaveHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    analysisDirty,
+    likelihood,
+    impact,
+    impactScope,
+    businessImpact,
+    analysisNotes,
+  ]);
+
+  const canMoveToTreatment =
+    risk.status === "under_analysis" &&
+    !!likelihood &&
+    !!impact &&
+    !!impactScope.trim() &&
+    !!businessImpact.trim();
+
+  async function launchTreatmentPhase() {
+    // Persist any pending analysis edits first, then transition.
+    if (analysisDirty) {
+      const ok = await saveAnalysis();
+      if (!ok) return;
+    }
+    await transition("under_treatment");
+    setActiveTab("treatment");
   }
 
   async function transition(
@@ -1242,15 +1489,31 @@ function RiskDetailContent({
         </div>
       </DialogHeader>
 
-      <Tabs defaultValue="overview" className="flex-1 overflow-hidden flex flex-col">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex-1 overflow-hidden flex flex-col"
+      >
         <TabsList className="mx-6 mt-3 self-start">
-          <TabsTrigger value="overview" data-testid="tab-overview">
+          <TabsTrigger
+            value="overview"
+            data-testid="tab-overview"
+            className={cn(phaseTabClass(risk.status, "overview"))}
+          >
             Overview
           </TabsTrigger>
-          <TabsTrigger value="analysis" data-testid="tab-analysis">
+          <TabsTrigger
+            value="analysis"
+            data-testid="tab-analysis"
+            className={cn(phaseTabClass(risk.status, "analysis"))}
+          >
             Analysis
           </TabsTrigger>
-          <TabsTrigger value="treatment" data-testid="tab-treatment">
+          <TabsTrigger
+            value="treatment"
+            data-testid="tab-treatment"
+            className={cn(phaseTabClass(risk.status, "treatment"))}
+          >
             Treatment
           </TabsTrigger>
           <TabsTrigger value="linked" data-testid="tab-linked">
@@ -1267,7 +1530,23 @@ function RiskDetailContent({
               <OverviewTab risk={risk} onTransition={transition} />
             </TabsContent>
             <TabsContent value="analysis" className="mt-0 space-y-4">
-              <AnalysisTab risk={risk} onTransition={transition} onSaved={refresh} />
+              <AnalysisTab
+                risk={risk}
+                likelihood={likelihood}
+                impact={impact}
+                impactScope={impactScope}
+                businessImpact={businessImpact}
+                analysisNotes={analysisNotes}
+                onLikelihoodChange={setLikelihood}
+                onImpactChange={setImpact}
+                onImpactScopeChange={setImpactScope}
+                onBusinessImpactChange={setBusinessImpact}
+                onAnalysisNotesChange={setAnalysisNotes}
+                onSave={saveAnalysis}
+                onLaunchTreatment={launchTreatmentPhase}
+                canMoveToTreatment={canMoveToTreatment}
+                saving={updateRisk.isPending}
+              />
             </TabsContent>
             <TabsContent value="treatment" className="mt-0 space-y-4">
               <TreatmentTab risk={risk} onSaved={refresh} />
@@ -1281,6 +1560,25 @@ function RiskDetailContent({
           </div>
         </ScrollArea>
       </Tabs>
+
+      {risk.status === "under_analysis" && (
+        <div className="px-6 py-3 border-t bg-muted/40 flex items-center justify-end gap-2">
+          {analysisDirty && (
+            <span className="text-xs text-muted-foreground mr-auto">
+              You have unsaved analysis changes.
+            </span>
+          )}
+          <Button
+            size="sm"
+            onClick={launchTreatmentPhase}
+            disabled={!canMoveToTreatment || updateRisk.isPending}
+            data-testid="button-launch-treatment-phase"
+          >
+            <ArrowRight className="h-4 w-4 mr-1.5" />
+            Launch Treatment Phase
+          </Button>
+        </div>
+      )}
     </>
   );
 }
@@ -1358,31 +1656,40 @@ function OverviewTab({
 
 function AnalysisTab({
   risk,
-  onTransition,
-  onSaved,
+  likelihood,
+  impact,
+  impactScope,
+  businessImpact,
+  analysisNotes,
+  onLikelihoodChange,
+  onImpactChange,
+  onImpactScopeChange,
+  onBusinessImpactChange,
+  onAnalysisNotesChange,
+  onSave,
+  onLaunchTreatment,
+  canMoveToTreatment,
+  saving,
 }: {
   risk: Risk;
-  onTransition: (s: string, extra?: Record<string, unknown>) => void;
-  onSaved: () => void;
+  likelihood: string;
+  impact: string;
+  impactScope: string;
+  businessImpact: string;
+  analysisNotes: string;
+  onLikelihoodChange: (v: string) => void;
+  onImpactChange: (v: string) => void;
+  onImpactScopeChange: (v: string) => void;
+  onBusinessImpactChange: (v: string) => void;
+  onAnalysisNotesChange: (v: string) => void;
+  onSave: () => Promise<boolean>;
+  onLaunchTreatment: () => Promise<void>;
+  canMoveToTreatment: boolean;
+  saving: boolean;
 }) {
-  const updateRisk = useUpdateRisk();
-  const [likelihood, setLikelihood] = useState(risk.likelihood || "");
-  const [impact, setImpact] = useState(risk.impact || "");
-  const [impactScope, setImpactScope] = useState(risk.impactScope || "");
-  const [businessImpact, setBusinessImpact] = useState(
-    risk.businessImpact || "",
-  );
-  const [analysisNotes, setAnalysisNotes] = useState(risk.analysisNotes || "");
-
   // Visible Under Analysis and beyond.
   const editable =
     risk.status === "under_analysis" || risk.status === "identified";
-  const canMoveToTreatment =
-    risk.status === "under_analysis" &&
-    !!likelihood &&
-    !!impact &&
-    !!impactScope.trim() &&
-    !!businessImpact.trim();
 
   // Cheap client-side rating preview mirroring the server formula.
   const previewRating = useMemo(() => {
@@ -1402,27 +1709,6 @@ function AnalysisTab({
     return "low";
   }, [likelihood, impact]);
 
-  async function save() {
-    try {
-      await updateRisk.mutateAsync({
-        id: risk.id,
-        data: {
-          likelihood,
-          impact,
-          impactScope,
-          businessImpact,
-          analysisNotes,
-        },
-      });
-      onSaved();
-      toast.success("Analysis saved.");
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Couldn't save analysis.",
-      );
-    }
-  }
-
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
@@ -1430,7 +1716,7 @@ function AnalysisTab({
           <Label>Likelihood</Label>
           <Select
             value={likelihood}
-            onValueChange={setLikelihood}
+            onValueChange={onLikelihoodChange}
             disabled={!editable}
           >
             <SelectTrigger data-testid="select-likelihood">
@@ -1449,7 +1735,7 @@ function AnalysisTab({
           <Label>Impact</Label>
           <Select
             value={impact}
-            onValueChange={setImpact}
+            onValueChange={onImpactChange}
             disabled={!editable}
           >
             <SelectTrigger data-testid="select-impact">
@@ -1474,7 +1760,7 @@ function AnalysisTab({
         <Label>Impact Scope</Label>
         <Input
           value={impactScope}
-          onChange={(e) => setImpactScope(e.target.value)}
+          onChange={(e) => onImpactScopeChange(e.target.value)}
           placeholder="What systems / users / processes are affected?"
           disabled={!editable}
           data-testid="input-impact-scope"
@@ -1485,7 +1771,7 @@ function AnalysisTab({
         <Textarea
           rows={3}
           value={businessImpact}
-          onChange={(e) => setBusinessImpact(e.target.value)}
+          onChange={(e) => onBusinessImpactChange(e.target.value)}
           placeholder="What happens to the business if this risk materializes?"
           disabled={!editable}
           data-testid="input-business-impact"
@@ -1496,7 +1782,7 @@ function AnalysisTab({
         <Textarea
           rows={4}
           value={analysisNotes}
-          onChange={(e) => setAnalysisNotes(e.target.value)}
+          onChange={(e) => onAnalysisNotesChange(e.target.value)}
           placeholder="Add references, root cause, dependencies, etc."
           disabled={!editable}
           data-testid="input-analysis-notes"
@@ -1507,8 +1793,10 @@ function AnalysisTab({
           <Button
             size="sm"
             variant="outline"
-            onClick={save}
-            disabled={updateRisk.isPending}
+            onClick={() => {
+              void onSave();
+            }}
+            disabled={saving}
             data-testid="button-save-analysis"
           >
             Save Analysis
@@ -1516,19 +1804,10 @@ function AnalysisTab({
           {canMoveToTreatment && (
             <Button
               size="sm"
-              onClick={async () => {
-                await updateRisk.mutateAsync({
-                  id: risk.id,
-                  data: {
-                    likelihood,
-                    impact,
-                    impactScope,
-                    businessImpact,
-                    analysisNotes,
-                  },
-                });
-                onTransition("under_treatment");
+              onClick={() => {
+                void onLaunchTreatment();
               }}
+              disabled={saving}
               data-testid="button-move-to-treatment"
             >
               <ArrowRight className="h-4 w-4 mr-1.5" />
