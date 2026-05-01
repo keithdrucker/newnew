@@ -83,6 +83,55 @@ const PHASE_COLUMNS: { key: ProjectPhase; label: string; color: string }[] = [
   { key: "cancelled", label: "Cancelled", color: "#F43F5E" },
 ];
 
+// Hint copy under each lane title — mirrors the Risk Register pattern so
+// viewers can see the "what should I do next" cue without opening a card.
+const PHASE_HINT: Record<ProjectPhase, string> = {
+  backlog_needs_assignment: "Assign owner + dates to schedule",
+  planning: "Scoping, kickoff, dependencies",
+  in_progress: "Active execution + checklist",
+  on_hold: "Paused — needs unblock",
+  completed: "Delivered — pending closeout",
+  closed: "Closed out and archived",
+  cancelled: "Stopped — no further work",
+};
+
+// Lane chrome (colored header band + ring) keyed to the same hue as the
+// header counter chips. Mirrors LANE_TONE on the Risk Register so the two
+// boards read as one design language.
+const PHASE_TONE: Record<
+  ProjectPhase,
+  { header: string; ring: string }
+> = {
+  backlog_needs_assignment: {
+    header: "bg-slate-100 text-slate-700",
+    ring: "ring-slate-200",
+  },
+  planning: {
+    header: "bg-sky-50 text-sky-800",
+    ring: "ring-sky-200",
+  },
+  in_progress: {
+    header: "bg-emerald-50 text-emerald-800",
+    ring: "ring-emerald-200",
+  },
+  on_hold: {
+    header: "bg-amber-50 text-amber-800",
+    ring: "ring-amber-200",
+  },
+  completed: {
+    header: "bg-teal-50 text-teal-800",
+    ring: "ring-teal-200",
+  },
+  closed: {
+    header: "bg-zinc-100 text-zinc-700",
+    ring: "ring-zinc-200",
+  },
+  cancelled: {
+    header: "bg-rose-50 text-rose-800",
+    ring: "ring-rose-200",
+  },
+};
+
 const PRIORITY_BADGE: Record<string, string> = {
   low: "bg-zinc-100 text-zinc-700 border-zinc-200",
   medium: "bg-sky-100 text-sky-700 border-sky-200",
@@ -922,8 +971,8 @@ export default function ProjectsPage() {
           {PHASE_COLUMNS.map((col) => (
             <PhaseColumn
               key={col.key}
+              phaseKey={col.key}
               label={col.label}
-              color={col.color}
               projects={byPhase[col.key]}
               onCardClick={(p) => setOpenProjectId(p.id)}
               testId={`column-${col.key}`}
@@ -989,40 +1038,43 @@ export default function ProjectsPage() {
 }
 
 function PhaseColumn({
+  phaseKey,
   label,
-  color,
   projects,
   onCardClick,
   testId,
 }: {
+  phaseKey: ProjectPhase;
   label: string;
-  color: string;
   projects: ProjectSummary[];
   onCardClick: (p: ProjectSummary) => void;
   testId: string;
 }) {
+  const tone = PHASE_TONE[phaseKey];
   return (
     <div
-      className="w-[300px] shrink-0 rounded-xl bg-muted/40 border border-border/60 flex flex-col"
+      className={cn(
+        "w-[280px] shrink-0 rounded-lg ring-1 bg-white flex flex-col",
+        tone.ring,
+      )}
       data-testid={testId}
     >
-      <div className="px-3 py-2.5 border-b border-border/60 flex items-center gap-2">
-        <span
-          className="h-2.5 w-2.5 rounded-full shrink-0"
-          style={{ backgroundColor: color }}
-          aria-hidden
-        />
-        <h3 className="text-[12.5px] font-semibold uppercase tracking-wide text-foreground/80 truncate">
-          {label}
-        </h3>
-        <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
-          {projects.length}
-        </span>
+      <div
+        className={cn(
+          "px-3 py-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide rounded-t-lg",
+          tone.header,
+        )}
+      >
+        <span className="truncate">{label}</span>
+        <span className="tabular-nums">{projects.length}</span>
       </div>
-      <div className="p-2 space-y-2 flex-1 min-h-[120px]">
+      <div className="px-3 py-1 text-[11.5px] text-muted-foreground border-b border-zinc-100">
+        {PHASE_HINT[phaseKey]}
+      </div>
+      <div className="p-3 space-y-2 min-h-[120px]">
         {projects.length === 0 ? (
-          <p className="text-[11.5px] text-muted-foreground/70 italic px-1 py-2">
-            Empty
+          <p className="text-xs text-muted-foreground italic px-1 py-2">
+            Nothing here yet.
           </p>
         ) : (
           projects.map((p) => (
