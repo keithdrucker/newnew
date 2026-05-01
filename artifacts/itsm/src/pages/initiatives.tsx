@@ -42,6 +42,13 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import {
   UnsavedChangesDialog,
   useBeforeUnloadGuard,
 } from "@/components/unsaved-changes-dialog";
@@ -110,6 +117,52 @@ const STATUS_ORDER: InitiativeStatus[] = [
   "approved",
   "rejected_deferred",
 ];
+
+// ---- Lifecycle phase tabs (in-dialog) ----
+// The Initiative detail dialog mirrors the Risk detail dialog: a clickable
+// tab strip below the title, where tabs left of the current phase are
+// emerald (completed), the current phase is amber, and tabs to the right
+// are grey/default. The third tab ("decision") covers both Approved and
+// Rejected/Deferred since they share the same content surface.
+type InitiativePhaseTab = "backlog" | "under_review" | "decision";
+
+const PHASE_TAB_ORDER: InitiativePhaseTab[] = [
+  "backlog",
+  "under_review",
+  "decision",
+];
+
+function defaultTabForStatus(status: InitiativeStatus): InitiativePhaseTab {
+  if (status === "backlog") return "backlog";
+  if (status === "under_review") return "under_review";
+  // approved | rejected_deferred -> decision
+  return "decision";
+}
+
+// Returns the index of the lifecycle phase the initiative is currently in.
+// approved + rejected_deferred both resolve to the "decision" tab (index 2).
+function phaseIndexForStatus(status: InitiativeStatus): number {
+  if (status === "backlog") return 0;
+  if (status === "under_review") return 1;
+  return 2;
+}
+
+// Color a single TabsTrigger based on whether it sits left of, on, or right
+// of the initiative's current phase. Identical pattern to the Risks dialog.
+function phaseTabClass(
+  status: InitiativeStatus,
+  tabValue: InitiativePhaseTab,
+): string {
+  const idx = PHASE_TAB_ORDER.indexOf(tabValue);
+  const current = phaseIndexForStatus(status);
+  if (idx < current) {
+    return "data-[state=active]:bg-emerald-500 data-[state=active]:text-white bg-emerald-100 text-emerald-800 hover:bg-emerald-200";
+  }
+  if (idx === current) {
+    return "data-[state=active]:bg-amber-500 data-[state=active]:text-white bg-amber-100 text-amber-900 hover:bg-amber-200";
+  }
+  return "";
+}
 
 const STATUS_LABEL: Record<InitiativeStatus, string> = {
   backlog: "Backlog",
@@ -1549,8 +1602,20 @@ function DetailDialog({
   // Reopen / move-back reason
   const [transitionReason, setTransitionReason] = useState("");
   // Open state of the "Move back to Backlog" confirmation dialog,
-  // launched by clicking the Backlog chip in the phase progress bar.
+  // launched by the "Move back to Backlog" footer button shown while
+  // the initiative is Under Review.
   const [moveBackOpen, setMoveBackOpen] = useState(false);
+  // Active lifecycle tab. Defaults to the initiative's current phase
+  // (backlog → "backlog", under_review → "under_review",
+  // approved/rejected_deferred → "decision") so opening a card always
+  // lands the user on the relevant content. Resets if the user opens a
+  // different initiative.
+  const [activeTab, setActiveTab] = useState<InitiativePhaseTab>(() =>
+    defaultTabForStatus(row.status as InitiativeStatus),
+  );
+  useEffect(() => {
+    setActiveTab(defaultTabForStatus(row.status as InitiativeStatus));
+  }, [row.id, row.status]);
 
   // Sync when picking a different row.
   useEffect(() => {
@@ -1892,23 +1957,70 @@ function DetailDialog({
                 · {new Date(row.createdAt).toLocaleDateString()}
               </span>
             </div>
-            <PhaseProgress
-              status={status}
-              onStageClick={(key) => {
-                if (key === "backlog" && status === "under_review") {
-                  setTransitionReason("");
-                  setMoveBackOpen(true);
-                }
-              }}
-            />
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 pt-2">
-          {/* Intake summary (always visible) — muted once we're past the
-              Backlog phase since it's read-only reference data. */}
-          <Section
-            title="Intake"
+        {/* Lifecycle phase tabs — clickable progression strip below the
+            title. Mirrors the Risks dialog: tabs left of the current
+            phase are emerald (completed), the current phase is amber,
+            and tabs to the right are grey/default. The third tab covers
+            both Approved and Rejected/Deferred since they share the
+            same content surface; its label adapts to the actual outcome.
+            The "Move back to Backlog" affordance that used to live on
+            the Backlog stage chip is exposed via a button inside the
+            Backlog tab footer area when the initiative is Under Review. */}
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as InitiativePhaseTab)}
+          className="flex-1 flex flex-col"
+        >
+          <TabsList className="self-start" data-testid="phase-tablist">
+            <TabsTrigger
+              value="backlog"
+              data-testid="tab-backlog"
+              className={cn(phaseTabClass(status, "backlog"))}
+            >
+              Backlog
+            </TabsTrigger>
+            <TabsTrigger
+              value="under_review"
+              data-testid="tab-under-review"
+              className={cn(phaseTabClass(status, "under_review"))}
+            >
+              Under Review
+            </TabsTrigger>
+            <TabsTrigger
+              value="decision"
+              data-testid="tab-decision"
+              className={cn(phaseTabClass(status, "decision"))}
+            >
+              {status === "rejected_deferred"
+                ? row.finalDecision === "defer"
+                  ? "Deferred"
+                  : "Rejected"
+                : status === "approved"
+                  ? "Approved"
+                  : "Decision"}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ---------- Backlog tab ---------- */}
+          {/* `forceMount` keeps inactive tab content in the DOM (just
+              visually hidden via data-[state=inactive]:hidden). This
+              mirrors the Risks dialog and prevents in-progress form
+              state — Intake fields, Backlog Triage drafts — from being
+              lost when the user clicks a different tab and back. */}
+          <TabsContent
+            value="backlog"
+            forceMount
+            className="space-y-4 pt-2 mt-0 data-[state=inactive]:hidden"
+            data-testid="tabpanel-backlog"
+          >
+            {/* Intake summary — read-only reference data captured at
+                creation time. Lives under Backlog because that's the
+                phase the user fills it in. */}
+            <Section
+              title="Intake"
             defaultOpen
             tone={status === "backlog" ? "default" : "done"}
           >
@@ -1992,7 +2104,15 @@ function DetailDialog({
               />
             )}
           </Section>
+          </TabsContent>
 
+          {/* ---------- Under Review tab ---------- */}
+          <TabsContent
+            value="under_review"
+            forceMount
+            className="space-y-4 pt-2 mt-0 data-[state=inactive]:hidden"
+            data-testid="tabpanel-under-review"
+          >
           {/* Under Review analysis */}
           <Section
             title="Under Review — Analysis"
@@ -2061,7 +2181,15 @@ function DetailDialog({
               <InitiativeWorkflowApproval row={row} />
             </Section>
           )}
+          </TabsContent>
 
+          {/* ---------- Decision tab (Approved / Rejected-Deferred) ---------- */}
+          <TabsContent
+            value="decision"
+            forceMount
+            className="space-y-4 pt-2 mt-0 data-[state=inactive]:hidden"
+            data-testid="tabpanel-decision"
+          >
           {/* Final decision (only meaningful in Under Review or post-decision) */}
           {(status === "under_review" ||
             status === "approved" ||
@@ -2170,10 +2298,10 @@ function DetailDialog({
           )}
 
           {/* Reopen reason input — only for terminal lanes. The
-              "Move back to Backlog" flow for Under Review is handled
-              by clicking the Backlog chip in the phase progress bar
-              above, which opens the confirm dialog at the bottom of
-              this component. */}
+              "Move back to Backlog" flow for Under Review is exposed
+              via a footer button (visible while status === "under_review")
+              that opens the confirm dialog at the bottom of this
+              component. */}
           {(status === "approved" ||
             status === "rejected_deferred") && (
             <Section title="Reopen" defaultOpen={false}>
@@ -2225,26 +2353,30 @@ function DetailDialog({
               </div>
             </Section>
           )}
+          </TabsContent>
+        </Tabs>
 
-          {/* Audit / history */}
-          <Section
-            title="Previous Review History"
-            defaultOpen={false}
-            badge={
-              row.auditEvents && row.auditEvents.length > 0 ? (
-                <Badge
-                  variant="outline"
-                  className="text-[10.5px] font-normal"
-                >
-                  {row.auditEvents.length}{" "}
-                  {row.auditEvents.length === 1 ? "event" : "events"}
-                </Badge>
-              ) : null
-            }
-          >
-            <AuditTimeline events={row.auditEvents ?? []} />
-          </Section>
-        </div>
+        {/* Audit / history — global, mirrors the Risks dialog where the
+            history tab sits outside any phase. We render it as a Section
+            below the tab strip so it's always reachable regardless of
+            which phase tab is active. */}
+        <Section
+          title="Previous Review History"
+          defaultOpen={false}
+          badge={
+            row.auditEvents && row.auditEvents.length > 0 ? (
+              <Badge
+                variant="outline"
+                className="text-[10.5px] font-normal"
+              >
+                {row.auditEvents.length}{" "}
+                {row.auditEvents.length === 1 ? "event" : "events"}
+              </Badge>
+            ) : null
+          }
+        >
+          <AuditTimeline events={row.auditEvents ?? []} />
+        </Section>
 
         <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2">
           <Button variant="ghost" onClick={requestClose}>
@@ -2281,6 +2413,21 @@ function DetailDialog({
             )}
             {status === "under_review" && (
               <>
+                {/* Move back to Backlog — replaces the formerly-clickable
+                    Backlog chip in PhaseProgress. Same flow: opens the
+                    confirmation dialog with a transition reason field. */}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setTransitionReason("");
+                    setMoveBackOpen(true);
+                  }}
+                  disabled={update.isPending}
+                  data-testid="button-move-back-to-backlog"
+                >
+                  <Undo2 className="h-4 w-4 mr-1.5" />
+                  Move back to Backlog
+                </Button>
                 <Button
                   variant="outline"
                   onClick={saveReview}
@@ -2322,9 +2469,10 @@ function DetailDialog({
       </DialogContent>
     </Dialog>
 
-    {/* Confirmation dialog launched by clicking the Backlog chip while
-        an initiative is Under Review. Captures the rationale before
-        invoking the existing moveBackToBacklog mutation. */}
+    {/* Confirmation dialog launched by the "Move back to Backlog"
+        footer button while an initiative is Under Review. Captures the
+        rationale before invoking the existing moveBackToBacklog
+        mutation. */}
     <Dialog
       open={moveBackOpen}
       onOpenChange={(o) => {
@@ -2400,112 +2548,6 @@ function DetailDialog({
       }}
     />
     </>
-  );
-}
-
-// ---------- Phase progress indicator ----------
-
-function PhaseProgress({
-  status,
-  onStageClick,
-}: {
-  status: InitiativeStatus;
-  // Optional callback. When provided, completed stages become buttons
-  // (e.g. clicking "Backlog" while in Under Review re-opens the move-back
-  // flow). The callback receives the stage key and decides what to do.
-  onStageClick?: (stageKey: "backlog" | "under_review" | "decision") => void;
-}) {
-  const isFinalRejected = status === "rejected_deferred";
-  const isFinalApproved = status === "approved";
-  const stages: {
-    key: string;
-    label: string;
-    state: "done" | "active" | "future";
-  }[] = [
-    {
-      key: "backlog",
-      label: "Backlog",
-      state:
-        status === "backlog"
-          ? "active"
-          : status === "under_review" ||
-              isFinalApproved ||
-              isFinalRejected
-            ? "done"
-            : "future",
-    },
-    {
-      key: "under_review",
-      label: "Under Review",
-      state:
-        status === "under_review"
-          ? "active"
-          : isFinalApproved || isFinalRejected
-            ? "done"
-            : "future",
-    },
-    {
-      key: "decision",
-      label: isFinalRejected
-        ? "Rejected / Deferred"
-        : isFinalApproved
-          ? "Approved"
-          : "Approved / Rejected",
-      state:
-        isFinalApproved || isFinalRejected ? "active" : "future",
-    },
-  ];
-  // Visually mirrors the phase tab strip on the Risks dialog: a single
-  // muted pill bar containing rounded "tab" chips. Done phases use the
-  // same emerald-100 / emerald-800 tone as Risks' completed tabs;
-  // the current phase uses amber-100 / amber-900 with a soft shadow
-  // (the same affordance the Radix TabsTrigger active state uses).
-  return (
-    <div
-      className="inline-flex items-center gap-1 rounded-md bg-muted p-1"
-      data-testid="phase-progress"
-    >
-      {stages.map((s) => {
-        const clickable =
-          !!onStageClick && s.state === "done" && s.key === "backlog";
-        const baseChip =
-          s.state === "active"
-            ? "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium bg-amber-100 text-amber-900 shadow-sm"
-            : s.state === "done"
-              ? "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium bg-emerald-100 text-emerald-800"
-              : "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground";
-        const interactiveChip = clickable
-          ? `${baseChip} cursor-pointer hover:bg-emerald-200 transition`
-          : baseChip;
-        return (
-          <div key={s.key}>
-            {clickable ? (
-              <button
-                type="button"
-                className={interactiveChip}
-                onClick={() =>
-                  onStageClick?.(
-                    s.key as "backlog" | "under_review" | "decision",
-                  )
-                }
-                data-testid={`phase-${s.key}-${s.state}-button`}
-                title="Move this initiative back to Backlog"
-              >
-                {s.label}
-                <Undo2 className="h-3 w-3 ml-1 opacity-70" aria-hidden />
-              </button>
-            ) : (
-              <div
-                className={baseChip}
-                data-testid={`phase-${s.key}-${s.state}`}
-              >
-                {s.label}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
   );
 }
 

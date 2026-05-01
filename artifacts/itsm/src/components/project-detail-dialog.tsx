@@ -49,6 +49,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
   UnsavedChangesDialog,
@@ -98,6 +105,63 @@ const PHASES: ProjectPhase[] = [
   "closed",
   "cancelled",
 ];
+
+// ---- Lifecycle phase tabs (in-dialog) ----
+// The Project detail dialog mirrors the Risk detail dialog: a clickable
+// tab strip below the title, where tabs left of the current phase are
+// emerald (completed), the current phase is amber, and tabs to the right
+// are grey/default. We expose 5 tabs for the linear flow and surface
+// off-track phases (on_hold, cancelled) via the existing banner above
+// the tab strip; clicking still lands the user on the closest in-flow tab.
+type ProjectPhaseTab =
+  | "backlog_needs_assignment"
+  | "planning"
+  | "in_progress"
+  | "completed"
+  | "closed";
+
+const PHASE_TAB_ORDER: ProjectPhaseTab[] = [
+  "backlog_needs_assignment",
+  "planning",
+  "in_progress",
+  "completed",
+  "closed",
+];
+
+// Map any project phase (including off-track phases) onto the closest
+// in-flow tab so the dialog opens on a sensible default. on_hold reflects
+// "paused implementation" → in_progress; cancelled jumps to whichever
+// phase the project was in when it died, but lacking that data we land
+// the user on Backlog as the safest read-only entry point.
+function defaultTabForPhase(phase: ProjectPhase): ProjectPhaseTab {
+  if (phase === "on_hold") return "in_progress";
+  if (phase === "cancelled") return "backlog_needs_assignment";
+  return phase as ProjectPhaseTab;
+}
+
+// Index of the current phase in the linear tab order. on_hold + cancelled
+// resolve to the same indices as defaultTabForPhase so the coloring stays
+// consistent with where the user actually lands.
+function phaseIndexForPhase(phase: ProjectPhase): number {
+  return PHASE_TAB_ORDER.indexOf(defaultTabForPhase(phase));
+}
+
+// Color a TabsTrigger based on whether it's left of, on, or right of the
+// project's current phase. Identical pattern to the Risks dialog.
+function phaseTabClass(
+  phase: ProjectPhase,
+  tabValue: ProjectPhaseTab,
+): string {
+  const idx = PHASE_TAB_ORDER.indexOf(tabValue);
+  const current = phaseIndexForPhase(phase);
+  if (idx < current) {
+    return "data-[state=active]:bg-emerald-500 data-[state=active]:text-white bg-emerald-100 text-emerald-800 hover:bg-emerald-200";
+  }
+  if (idx === current) {
+    return "data-[state=active]:bg-amber-500 data-[state=active]:text-white bg-amber-100 text-amber-900 hover:bg-amber-200";
+  }
+  return "";
+}
 
 const PHASE_LABEL: Record<ProjectPhase, string> = {
   backlog_needs_assignment: "Backlog / Needs Assignment",
@@ -726,6 +790,16 @@ function DetailInner({
 
   const openPhaseChange = (to: ProjectPhase) => setPendingPhase(to);
 
+  // Active lifecycle tab. Defaults to the project's current phase mapped
+  // through defaultTabForPhase (so on_hold lands on Implementation, etc.).
+  // Resets when the user opens a different project.
+  const [activeTab, setActiveTab] = useState<ProjectPhaseTab>(() =>
+    defaultTabForPhase(phase),
+  );
+  useEffect(() => {
+    setActiveTab(defaultTabForPhase(phase));
+  }, [row.id, phase]);
+
   // The "resume from on_hold" target depends on previousActivePhase.
   const resumeTarget: ProjectPhase =
     (row.previousActivePhase as ProjectPhase | null) ?? "planning";
@@ -827,7 +901,6 @@ function DetailInner({
                     </div>
                   );
                 })()}
-              <PhaseProgress phase={phase} />
             </div>
           </DialogHeader>
 
@@ -836,6 +909,67 @@ function DetailInner({
               <ReadField label="Description" value={row.description} />
             )}
 
+            {/* Off-track banner — preserved from the old PhaseProgress
+                so an on_hold or cancelled project is flagged at-a-glance
+                even though those phases don't get their own tab. */}
+            {(phase === "on_hold" || phase === "cancelled") && (
+              <div
+                className={
+                  phase === "on_hold"
+                    ? "rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] text-amber-900 inline-flex items-center gap-1.5"
+                    : "rounded border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[12px] text-rose-900 inline-flex items-center gap-1.5"
+                }
+                data-testid="phase-banner"
+              >
+                {phase === "on_hold" ? (
+                  <>
+                    <Pause className="h-3 w-3" /> On hold
+                  </>
+                ) : (
+                  <>
+                    <Square className="h-3 w-3" /> Cancelled
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Lifecycle phase tabs — mirrors the Risks dialog. The
+                default-selected tab is the project's current phase
+                (off-track phases on_hold + cancelled fall back to the
+                closest in-flow tab via defaultTabForPhase). Tabs left
+                of current = emerald; current = amber; future = grey. */}
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as ProjectPhaseTab)}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-5">
+                {PHASE_TAB_ORDER.map((t) => (
+                  <TabsTrigger
+                    key={t}
+                    value={t}
+                    className={cn(
+                      "text-xs sm:text-sm",
+                      phaseTabClass(phase, t),
+                    )}
+                    data-testid={`tab-phase-${t}`}
+                  >
+                    {PHASE_LABEL[t]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {/* ---- Backlog tab ---- */}
+              {/* `forceMount` keeps inactive tabs in the DOM (visually
+                  hidden via data-[state=inactive]:hidden). Mirrors the
+                  Risks dialog and prevents form drafts (Backlog fields,
+                  Planning notes, ChecklistEditor edits) from being lost
+                  when the user toggles between tabs. */}
+              <TabsContent
+                value="backlog_needs_assignment"
+                forceMount
+                className="space-y-4 pt-2 data-[state=inactive]:hidden"
+              >
             {/* ---- Backlog / Needs Assignment ---- */}
             <Section
               title="Backlog · Needs Assignment"
@@ -966,6 +1100,39 @@ function DetailInner({
               </div>
             </Section>
 
+            {/* When the project is cancelled, defaultTabForPhase routes
+                the user here. Show the Cancelled details inside this tab
+                so the relevant context lives next to its closest sibling
+                (Reopen-to-Backlog action). */}
+            {phase === "cancelled" && (
+              <Section title="Cancelled" defaultOpen tone="active">
+                <ReadField
+                  label="Cancellation reason"
+                  value={row.cancellationReason}
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      openPhaseChange("backlog_needs_assignment")
+                    }
+                    data-testid="button-reopen-cancelled"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen to
+                    Backlog
+                  </Button>
+                </div>
+              </Section>
+            )}
+              </TabsContent>
+
+              {/* ---- Planning tab ---- */}
+              <TabsContent
+                value="planning"
+                forceMount
+                className="space-y-4 pt-2 data-[state=inactive]:hidden"
+              >
             {/* ---- Planning ---- */}
             <Section
               title="Planning"
@@ -1065,7 +1232,14 @@ function DetailInner({
                 </div>
               )}
             </Section>
+              </TabsContent>
 
+              {/* ---- Implementation tab ---- */}
+              <TabsContent
+                value="in_progress"
+                forceMount
+                className="space-y-4 pt-2 data-[state=inactive]:hidden"
+              >
             {/* ---- Implementation ---- */}
             <Section
               title="Implementation"
@@ -1214,7 +1388,14 @@ function DetailInner({
                 </div>
               </Section>
             )}
+              </TabsContent>
 
+              {/* ---- Completed tab ---- */}
+              <TabsContent
+                value="completed"
+                forceMount
+                className="space-y-4 pt-2 data-[state=inactive]:hidden"
+              >
             {/* ---- Project Closeout (paperwork phase: editable) ---- */}
             {phase === "completed" && (
               <>
@@ -1303,7 +1484,14 @@ function DetailInner({
                 </Section>
               </>
             )}
+              </TabsContent>
 
+              {/* ---- Closed tab ---- */}
+              <TabsContent
+                value="closed"
+                forceMount
+                className="space-y-4 pt-2 data-[state=inactive]:hidden"
+              >
             {/* ---- Closed (locked, archived) ---- */}
             {phase === "closed" && (
               <>
@@ -1393,31 +1581,11 @@ function DetailInner({
                 </Section>
               </>
             )}
+              </TabsContent>
+            </Tabs>
 
-            {/* ---- Cancelled (only when applicable) ---- */}
-            {phase === "cancelled" && (
-              <Section title="Cancelled" defaultOpen tone="active">
-                <ReadField
-                  label="Cancellation reason"
-                  value={row.cancellationReason}
-                />
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      openPhaseChange("backlog_needs_assignment")
-                    }
-                    data-testid="button-reopen-cancelled"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reopen to
-                    Backlog
-                  </Button>
-                </div>
-              </Section>
-            )}
-
-            {/* ---- History ---- */}
+            {/* History sits BELOW the tab strip — it's a global audit
+                trail, not phase-specific. */}
             <Section title="History" defaultOpen={false} tone="default">
               <AuditTimeline events={row.auditEvents} />
             </Section>
@@ -2130,115 +2298,6 @@ function prettyAction(a: string) {
 
 function labelPhase(p: string) {
   return PHASE_LABEL[p as ProjectPhase] ?? p.replace(/_/g, " ");
-}
-
-// ----- Phase progress bar --------------------------------------------------
-
-function PhaseProgress({ phase }: { phase: ProjectPhase }) {
-  // Off-track phases don't fit the linear flow — show a banner instead.
-  const isOnHold = phase === "on_hold";
-  const isCancelled = phase === "cancelled";
-  const stages: {
-    key: ProjectPhase;
-    label: string;
-    state: "done" | "active" | "future";
-  }[] = [
-    {
-      key: "backlog_needs_assignment",
-      label: "Backlog",
-      state:
-        phase === "backlog_needs_assignment"
-          ? "active"
-          : "done",
-    },
-    {
-      key: "planning",
-      label: "Planning",
-      state:
-        phase === "backlog_needs_assignment"
-          ? "future"
-          : phase === "planning"
-            ? "active"
-            : "done",
-    },
-    {
-      key: "in_progress",
-      label: "Implementation",
-      state:
-        phase === "in_progress"
-          ? "active"
-          : phase === "completed" || phase === "closed"
-            ? "done"
-            : "future",
-    },
-    {
-      key: "completed",
-      label: "Completed",
-      state:
-        phase === "completed"
-          ? "active"
-          : phase === "closed"
-            ? "done"
-            : "future",
-    },
-    {
-      key: "closed",
-      label: "Closed",
-      state: phase === "closed" ? "active" : "future",
-    },
-  ];
-
-  return (
-    <div className="space-y-2">
-      {(isOnHold || isCancelled) && (
-        <div
-          className={
-            isOnHold
-              ? "rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] text-amber-900 inline-flex items-center gap-1.5"
-              : "rounded border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[12px] text-rose-900 inline-flex items-center gap-1.5"
-          }
-          data-testid="phase-banner"
-        >
-          {isOnHold ? (
-            <>
-              <Pause className="h-3 w-3" /> On hold
-            </>
-          ) : (
-            <>
-              <Square className="h-3 w-3" /> Cancelled
-            </>
-          )}
-        </div>
-      )}
-      {/* Visually mirrors the phase tab strip on the Risks dialog: a single
-          muted pill bar containing rounded "tab" chips. Done phases use the
-          same emerald-100 / emerald-800 tone as Risks' completed tabs;
-          the current phase uses amber-100 / amber-900 with a soft shadow
-          (the same affordance the Radix TabsTrigger active state uses). */}
-      <div
-        className="inline-flex items-center gap-1 rounded-md bg-muted p-1"
-        data-testid="phase-progress"
-      >
-        {stages.map((s) => {
-          const baseChip =
-            s.state === "active"
-              ? "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium bg-amber-100 text-amber-900 shadow-sm"
-              : s.state === "done"
-                ? "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium bg-emerald-100 text-emerald-800"
-                : "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground";
-          return (
-            <div
-              key={s.key}
-              className={baseChip}
-              data-testid={`phase-${s.key}-${s.state}`}
-            >
-              {s.label}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 // ----- Section / Field / ReadField primitives -----------------------------
