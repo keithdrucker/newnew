@@ -1275,17 +1275,7 @@ function DetailInner({
                 className="space-y-4 pt-2 data-[state=inactive]:hidden"
               >
             {/* ---- Implementation ---- */}
-            <Section
-              title="Implementation"
-              defaultOpen={phase === "in_progress"}
-              tone={
-                phase === "in_progress"
-                  ? "active"
-                  : phase === "completed" || phase === "closed"
-                    ? "done"
-                    : "default"
-              }
-            >
+            <div className="rounded-md border border-zinc-200 bg-white p-3 space-y-3">
               {/* Read-only carryover of the original timeline from
                   Backlog. The actual completion date is captured
                   automatically when the user clicks Mark Completed
@@ -1377,7 +1367,7 @@ function DetailInner({
                   </div>
                 </div>
               )}
-            </Section>
+            </div>
 
             {/* ---- On Hold (only when applicable) ---- */}
             {phase === "on_hold" && (
