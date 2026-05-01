@@ -30,6 +30,8 @@ tags:
     description: Department portal settings
   - name: initiatives
     description: Lightweight decision records — should we even do this work?
+  - name: risks
+    description: Risk Register — identify, analyze, and treat risks with auditable governance
   - name: workflows
     description: Admin-managed workflow definitions and approval runs
   - name: board-views
@@ -1627,6 +1629,100 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /risks:
+    get:
+      operationId: listRisks
+      tags: [risks]
+      summary: List risks, newest first.
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: "#/components/schemas/RiskStatus" }
+        - in: query
+          name: owningDepartmentId
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Risks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Risk" }
+    post:
+      operationId: createRisk
+      tags: [risks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRiskInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Risk" }
+
+  /risks/{id}:
+    get:
+      operationId: getRisk
+      tags: [risks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Risk
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Risk" }
+        "404": { description: Not found }
+    patch:
+      operationId: updateRisk
+      tags: [risks]
+      summary: |
+        Update fields and/or transition status. Status changes are
+        validated against an explicit allowed-transitions table:
+        identified → under_analysis | closed,
+        under_analysis → under_treatment | closed,
+        under_treatment → mitigation | accepted | transferred | avoided
+        (each requires an APPROVED workflow run for that risk and the
+         outcome-specific fields filled in),
+        and any treatment-outcome state → closed.
+        Transitions to mitigation atomically create a Project and
+        stamp createdProjectId on the returned record.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRiskInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Risk" }
+        "400": { description: Validation error }
+        "409": { description: Disallowed status transition }
+    delete:
+      operationId: deleteRisk
+      tags: [risks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+
   /departments/{id}/board:
     get:
       operationId: getDepartmentBoard
@@ -1979,6 +2075,28 @@ paths:
       operationId: startInitiativeWorkflowRun
       tags: [workflows]
       summary: Start an approval workflow run on an initiative (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartWorkflowRunInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
+
+  /risks/{id}/workflow-runs:
+    post:
+      operationId: startRiskWorkflowRun
+      tags: [workflows]
+      summary: Start an approval workflow run on a risk's treatment decision (admin only)
       parameters:
         - in: path
           name: id
@@ -4405,6 +4523,137 @@ components:
         revisitDate: { type: ["string", "null"], format: date }
         # Reason captured on the audit event for reopen / move-back /
         # close transitions. Required for those status changes.
+        transitionReason: { type: string }
+
+    RiskStatus:
+      type: string
+      enum:
+        - identified
+        - under_analysis
+        - under_treatment
+        - mitigation
+        - accepted
+        - transferred
+        - avoided
+        - closed
+
+    RiskAuditEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        oldStatus: { $ref: "#/components/schemas/RiskStatus" }
+        newStatus: { $ref: "#/components/schemas/RiskStatus" }
+        action: { type: string }
+        reason: { type: string }
+        changedById: { type: ["integer", "null"] }
+        changedByName: { type: ["string", "null"] }
+        changedAt: { type: string, format: date-time }
+      required:
+        - id
+        - oldStatus
+        - newStatus
+        - action
+        - reason
+        - changedAt
+
+    Risk:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        riskType: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/RiskStatus" }
+        owningDepartmentId: { type: integer }
+        owningDepartmentName: { type: ["string", "null"] }
+        riskOwnerUserId: { type: ["integer", "null"] }
+        riskOwnerName: { type: ["string", "null"] }
+        reporterId: { type: ["integer", "null"] }
+        reporterName: { type: ["string", "null"] }
+        # Analysis
+        likelihood: { type: string }
+        impact: { type: string }
+        impactScope: { type: string }
+        businessImpact: { type: string }
+        riskRating: { type: string }
+        analysisNotes: { type: string }
+        # Treatment
+        treatmentDecision: { type: string }
+        acceptanceJustification: { type: string }
+        transferMethod: { type: string }
+        transferResponsibleParty: { type: string }
+        avoidanceActionNotes: { type: string }
+        # Linked work
+        createdProjectId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        auditEvents:
+          type: array
+          items: { $ref: "#/components/schemas/RiskAuditEvent" }
+        workflowRuns:
+          type: array
+          items: { $ref: "#/components/schemas/WorkflowRun" }
+      required:
+        - id
+        - title
+        - riskType
+        - description
+        - status
+        - owningDepartmentId
+        - likelihood
+        - impact
+        - impactScope
+        - businessImpact
+        - riskRating
+        - analysisNotes
+        - treatmentDecision
+        - acceptanceJustification
+        - transferMethod
+        - transferResponsibleParty
+        - avoidanceActionNotes
+        - auditEvents
+        - workflowRuns
+        - createdAt
+        - updatedAt
+
+    CreateRiskInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        riskType: { type: string, minLength: 1 }
+        description: { type: string }
+        owningDepartmentId: { type: integer }
+        riskOwnerUserId: { type: ["integer", "null"] }
+      required: [title, riskType, owningDepartmentId]
+
+    UpdateRiskInput:
+      type: object
+      description: |
+        Patch the risk and/or transition its status. Treatment-outcome
+        transitions (mitigation/accepted/transferred/avoided) require an
+        APPROVED workflow run on this risk and the outcome-specific
+        fields filled in. Mitigation auto-creates a Project and
+        stamps createdProjectId.
+      properties:
+        title: { type: string, minLength: 1 }
+        riskType: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/RiskStatus" }
+        owningDepartmentId: { type: integer }
+        riskOwnerUserId: { type: ["integer", "null"] }
+        # Analysis
+        likelihood: { type: string }
+        impact: { type: string }
+        impactScope: { type: string }
+        businessImpact: { type: string }
+        analysisNotes: { type: string }
+        # Treatment
+        treatmentDecision: { type: string }
+        acceptanceJustification: { type: string }
+        transferMethod: { type: string }
+        transferResponsibleParty: { type: string }
+        avoidanceActionNotes: { type: string }
+        # Reason captured on the audit event for close transitions.
         transitionReason: { type: string }
 
     Workflow:

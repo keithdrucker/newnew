@@ -1,3 +1,4 @@
+// @ts-expect-error dotenv@10 ships bundled types whose package.json exports field omits them; resolution fails under Node16/Bundler moduleResolution. Pinned version is intentional.
 import { config } from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";

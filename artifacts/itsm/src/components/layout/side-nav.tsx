@@ -14,6 +14,7 @@ import {
   ListChecks,
   Lightbulb,
   BarChart3,
+  ShieldAlert,
 } from "lucide-react";
 import sidekickLogo from "@assets/sidekick_logo_dark.png";
 import {
@@ -92,6 +93,14 @@ const IMPROVEMENTS: NavItem[] = [
     matchPrefix: "/initiatives",
     endUserHidden: true,
     testId: "nav-initiatives",
+  },
+  {
+    href: "/risks",
+    label: "Risk Register",
+    icon: ShieldAlert,
+    matchPrefix: "/risks",
+    endUserHidden: true,
+    testId: "nav-risks",
   },
   {
     href: "/projects",

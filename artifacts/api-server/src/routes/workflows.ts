@@ -8,7 +8,10 @@ import {
   workflowAuditEventsTable,
   initiativesTable,
   initiativeAuditEventsTable,
+  risksTable,
+  riskAuditEventsTable,
   projectsTable,
+  projectAuditEventsTable,
   usersTable,
   type Workflow as WorkflowRow,
   type WorkflowRun as WorkflowRunRow,
@@ -26,6 +29,8 @@ import {
   GetWorkflowRunParams,
   StartInitiativeWorkflowRunParams,
   StartInitiativeWorkflowRunBody,
+  StartRiskWorkflowRunParams,
+  StartRiskWorkflowRunBody,
   SubmitWorkflowRunDecisionParams,
   SubmitWorkflowRunDecisionBody,
   CancelWorkflowRunParams,
@@ -207,6 +212,34 @@ export async function fetchInitiativeWorkflowRuns(
       and(
         eq(workflowRunsTable.subjectType, "initiative"),
         inArray(workflowRunsTable.subjectId, initiativeIds),
+      ),
+    )
+    .orderBy(desc(workflowRunsTable.startedAt));
+  const hydrated = await hydrateWorkflowRuns(runs);
+  for (const r of hydrated) {
+    const list = out.get(r.subjectId) ?? [];
+    list.push(r);
+    out.set(r.subjectId, list);
+  }
+  return out;
+}
+
+// Public so risks.ts can hydrate runs onto the risk response.
+export async function fetchRiskWorkflowRuns(
+  riskIds: number[],
+): Promise<Map<number, Awaited<ReturnType<typeof hydrateWorkflowRuns>>>> {
+  const out = new Map<
+    number,
+    Awaited<ReturnType<typeof hydrateWorkflowRuns>>
+  >();
+  if (riskIds.length === 0) return out;
+  const runs = await db
+    .select()
+    .from(workflowRunsTable)
+    .where(
+      and(
+        eq(workflowRunsTable.subjectType, "risk"),
+        inArray(workflowRunsTable.subjectId, riskIds),
       ),
     )
     .orderBy(desc(workflowRunsTable.startedAt));
@@ -699,6 +732,204 @@ router.post(
 );
 
 // ----------------------------------------------------------------------
+// START a workflow run on a risk (admin) — for treatment-decision approval
+// ----------------------------------------------------------------------
+router.post(
+  "/risks/:id/workflow-runs",
+  async (req, res): Promise<void> => {
+    const user = await getCurrentUser(req);
+    assertAdmin(user);
+    const params = StartRiskWorkflowRunParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = StartRiskWorkflowRunBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const riskId = params.data.id;
+    const workflowId = body.data.workflowId;
+
+    const [workflow] = await db
+      .select()
+      .from(workflowsTable)
+      .where(eq(workflowsTable.id, workflowId))
+      .limit(1);
+    if (!workflow) {
+      res.status(404).json({ error: "Workflow not found" });
+      return;
+    }
+    if (workflow.module !== "risks") {
+      res.status(400).json({
+        error: `Workflow module is "${workflow.module}", expected "risks".`,
+      });
+      return;
+    }
+    if (workflow.workflowType !== "approval") {
+      res.status(400).json({
+        error: 'Only "approval" workflows can be started this way.',
+      });
+      return;
+    }
+    if (workflow.status !== "active") {
+      res
+        .status(409)
+        .json({ error: "Workflow must be Active to start a run." });
+      return;
+    }
+
+    const approverIds = await resolveApproverUserIds(workflow);
+    if (approverIds.length === 0) {
+      res.status(400).json({
+        error:
+          "Workflow has no resolvable approvers. Configure approvers and try again.",
+      });
+      return;
+    }
+
+    type StartOutcome =
+      | { kind: "ok"; runId: number }
+      | { kind: "not_found" }
+      | { kind: "wrong_status" }
+      | { kind: "missing_decision" }
+      | { kind: "missing_field"; message: string }
+      | { kind: "already_pending" };
+
+    const outcome: StartOutcome = await db.transaction(async (tx) => {
+      const [risk] = await tx
+        .select()
+        .from(risksTable)
+        .where(eq(risksTable.id, riskId))
+        .for("update")
+        .limit(1);
+      if (!risk) return { kind: "not_found" };
+      if (risk.status !== "under_treatment") {
+        return { kind: "wrong_status" };
+      }
+      if (!risk.treatmentDecision) {
+        return { kind: "missing_decision" };
+      }
+      // Outcome-specific required fields must be populated before
+      // the approval run is opened — keeps approvers from voting on
+      // an incomplete proposal.
+      if (
+        risk.treatmentDecision === "acceptance" &&
+        (!risk.acceptanceJustification ||
+          risk.acceptanceJustification.trim().length === 0)
+      ) {
+        return {
+          kind: "missing_field",
+          message: "Acceptance justification is required before approval.",
+        };
+      }
+      if (
+        risk.treatmentDecision === "transfer" &&
+        (!risk.transferMethod || !risk.transferResponsibleParty)
+      ) {
+        return {
+          kind: "missing_field",
+          message:
+            "Transfer method and responsible party are required before approval.",
+        };
+      }
+      if (
+        risk.treatmentDecision === "avoidance" &&
+        (!risk.avoidanceActionNotes ||
+          risk.avoidanceActionNotes.trim().length === 0)
+      ) {
+        return {
+          kind: "missing_field",
+          message: "Avoidance action notes are required before approval.",
+        };
+      }
+
+      const existingPending = await tx
+        .select({ id: workflowRunsTable.id })
+        .from(workflowRunsTable)
+        .where(
+          and(
+            eq(workflowRunsTable.subjectType, "risk"),
+            eq(workflowRunsTable.subjectId, riskId),
+            eq(workflowRunsTable.status, "pending"),
+          ),
+        )
+        .limit(1);
+      if (existingPending.length > 0) return { kind: "already_pending" };
+
+      const [run] = await tx
+        .insert(workflowRunsTable)
+        .values({
+          workflowId: workflow.id,
+          module: workflow.module,
+          subjectType: "risk",
+          subjectId: riskId,
+          status: "pending",
+          approvalType: workflow.approvalType,
+          requireDecisionRationale: workflow.requireDecisionRationale,
+          startedById: user.id,
+        })
+        .returning();
+      await tx.insert(workflowRunApproversTable).values(
+        approverIds.map((uid) => ({
+          runId: run.id,
+          userId: uid,
+        })),
+      );
+      await tx.insert(workflowAuditEventsTable).values({
+        workflowId: workflow.id,
+        runId: run.id,
+        action: "triggered",
+        detail: {
+          subjectType: "risk",
+          subjectId: riskId,
+          treatmentDecision: risk.treatmentDecision,
+          approverIds,
+        },
+        changedById: user.id,
+      });
+      return { kind: "ok", runId: run.id };
+    });
+
+    if (outcome.kind === "not_found") {
+      res.status(404).json({ error: "Risk not found" });
+      return;
+    }
+    if (outcome.kind === "wrong_status") {
+      res.status(409).json({
+        error: "Risk must be Under Treatment to start an approval run.",
+      });
+      return;
+    }
+    if (outcome.kind === "missing_decision") {
+      res.status(400).json({
+        error:
+          "Set a treatment decision (mitigation/acceptance/transfer/avoidance) before starting the approval run.",
+      });
+      return;
+    }
+    if (outcome.kind === "missing_field") {
+      res.status(400).json({ error: outcome.message });
+      return;
+    }
+    if (outcome.kind === "already_pending") {
+      res
+        .status(409)
+        .json({ error: "An approval run is already pending on this risk." });
+      return;
+    }
+    const [created] = await db
+      .select()
+      .from(workflowRunsTable)
+      .where(eq(workflowRunsTable.id, outcome.runId))
+      .limit(1);
+    const [hydrated] = await hydrateWorkflowRuns([created]);
+    res.status(201).json(hydrated);
+  },
+);
+
+// ----------------------------------------------------------------------
 // SUBMIT a decision on a workflow run
 // ----------------------------------------------------------------------
 router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
@@ -725,7 +956,20 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
     | { kind: "already_decided" }
     | { kind: "illegal_state"; message: string };
 
-  const outcome: Outcome = await db.transaction(async (tx) => {
+  // Sentinel: thrown from inside the transaction AFTER the approver
+  // vote has been written, so that the tx rolls back the vote when the
+  // subject can't be finalized (e.g. risk no longer Under Treatment).
+  // Returning a value here would commit the partial work and leave the
+  // run stuck (vote recorded but run still pending).
+  class FinalizeError extends Error {
+    constructor(public readonly userMessage: string) {
+      super(userMessage);
+    }
+  }
+
+  let outcome: Outcome;
+  try {
+    outcome = await db.transaction(async (tx) => {
     const [run] = await tx
       .select()
       .from(workflowRunsTable)
@@ -796,28 +1040,16 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
       return { kind: "ok", runId: run.id };
     }
 
-    // Resolve the run + cascade to the initiative.
-    if (run.subjectType !== "initiative") {
-      return {
-        kind: "illegal_state",
-        message: "Only initiative subjects are supported in v1.",
-      };
-    }
-    const [initiative] = await tx
-      .select()
-      .from(initiativesTable)
-      .where(eq(initiativesTable.id, run.subjectId))
-      .for("update")
-      .limit(1);
-    if (!initiative) {
-      return { kind: "illegal_state", message: "Initiative no longer exists" };
-    }
-    if (initiative.status !== "under_review") {
-      return {
-        kind: "illegal_state",
-        message:
-          "Initiative is no longer Under Review — cannot finalize the workflow.",
-      };
+    // Resolve the run + cascade to the subject. Initiatives go down
+    // the existing approval-creates-project flow; risks branch by
+    // treatmentDecision (mitigation also creates a project).
+    if (
+      run.subjectType !== "initiative" &&
+      run.subjectType !== "risk"
+    ) {
+      throw new FinalizeError(
+        `Subject type "${run.subjectType}" is not supported.`,
+      );
     }
 
     // Build the resolution reason from the deciding approvers' notes.
@@ -835,6 +1067,181 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
       `Auto-resolved via workflow "${workflow.name}".`;
 
     const now = new Date();
+
+    if (run.subjectType === "risk") {
+      const [risk] = await tx
+        .select()
+        .from(risksTable)
+        .where(eq(risksTable.id, run.subjectId))
+        .for("update")
+        .limit(1);
+      if (!risk) {
+        throw new FinalizeError("Risk no longer exists");
+      }
+      if (risk.status !== "under_treatment") {
+        throw new FinalizeError(
+          "Risk is no longer Under Treatment — cannot finalize the workflow.",
+        );
+      }
+      if (outcomeStatus === "approved") {
+        // Map treatmentDecision → terminal lifecycle status.
+        const decision = risk.treatmentDecision;
+        let nextStatus:
+          | "mitigation"
+          | "accepted"
+          | "transferred"
+          | "avoided"
+          | null = null;
+        if (decision === "mitigation") nextStatus = "mitigation";
+        else if (decision === "acceptance") nextStatus = "accepted";
+        else if (decision === "transfer") nextStatus = "transferred";
+        else if (decision === "avoidance") nextStatus = "avoided";
+        if (!nextStatus) {
+          throw new FinalizeError(
+            "Risk has no treatment decision recorded.",
+          );
+        }
+        // Re-validate outcome-specific required fields at finalize
+        // time. Even though we lock these fields in PATCH while a run
+        // is pending, validate again so we never transition a risk
+        // into a terminal state with missing data.
+        if (
+          decision === "acceptance" &&
+          (!risk.acceptanceJustification ||
+            risk.acceptanceJustification.trim().length === 0)
+        ) {
+          throw new FinalizeError(
+            "Acceptance justification is required to approve this risk.",
+          );
+        }
+        if (
+          decision === "transfer" &&
+          (!risk.transferMethod ||
+            risk.transferMethod.trim().length === 0 ||
+            !risk.transferResponsibleParty ||
+            risk.transferResponsibleParty.trim().length === 0)
+        ) {
+          throw new FinalizeError(
+            "Transfer method and responsible party are required to approve this risk.",
+          );
+        }
+        if (
+          decision === "avoidance" &&
+          (!risk.avoidanceActionNotes ||
+            risk.avoidanceActionNotes.trim().length === 0)
+        ) {
+          throw new FinalizeError(
+            "Avoidance action notes are required to approve this risk.",
+          );
+        }
+
+        let createdProjectId = risk.createdProjectId;
+        if (decision === "mitigation" && createdProjectId == null) {
+          // Auto-create a Project for the mitigation work. Owner
+          // falls back to the deciding admin when the risk has no
+          // explicit owner; suggester is the original reporter.
+          const projectDescription = [
+            risk.description || risk.title,
+            `\n\nMitigation approved for risk: ${risk.title}.`,
+            resolutionReason
+              ? `\n\nDecision notes:\n${resolutionReason}`
+              : "",
+          ]
+            .join("")
+            .trim();
+          const [createdProject] = await tx
+            .insert(projectsTable)
+            .values({
+              name: `Risk Mitigation: ${risk.title}`,
+              description: projectDescription,
+              status: "active",
+              departmentId: risk.owningDepartmentId ?? null,
+              ownerId: risk.riskOwnerUserId ?? user.id,
+              suggestedById: risk.reporterId ?? user.id,
+              rationale:
+                `Created from approved risk-mitigation decision. ` +
+                `Risk rating at decision time: ${risk.riskRating || "—"}.`,
+            })
+            .returning();
+          createdProjectId = createdProject.id;
+          await tx.insert(projectAuditEventsTable).values({
+            projectId: createdProject.id,
+            action: "created_from_risk",
+            reason: `Created from approved risk-mitigation decision (risk #${risk.id}).`,
+            detail: { riskId: risk.id, riskTitle: risk.title },
+            changedById: user.id,
+          });
+        }
+
+        await tx
+          .update(risksTable)
+          .set({
+            status: nextStatus,
+            createdProjectId,
+          })
+          .where(eq(risksTable.id, risk.id));
+        await tx.insert(riskAuditEventsTable).values({
+          riskId: risk.id,
+          oldStatus: "under_treatment",
+          newStatus: nextStatus,
+          action: "approve",
+          reason: resolutionReason,
+          changedById: user.id,
+        });
+      } else {
+        // rejected / deferred → bounce risk back to under_analysis so
+        // the team can revise the proposal.
+        await tx
+          .update(risksTable)
+          .set({ status: "under_analysis" })
+          .where(eq(risksTable.id, risk.id));
+        await tx.insert(riskAuditEventsTable).values({
+          riskId: risk.id,
+          oldStatus: "under_treatment",
+          newStatus: "under_analysis",
+          action: outcomeStatus === "deferred" ? "transition" : "transition",
+          reason:
+            outcomeStatus === "deferred"
+              ? `Treatment deferred. ${resolutionReason}`
+              : `Treatment rejected. ${resolutionReason}`,
+          changedById: user.id,
+        });
+      }
+
+      await tx
+        .update(workflowRunsTable)
+        .set({
+          status: outcomeStatus,
+          resolvedAt: now,
+          resolvedById: user.id,
+          outcomeReason: resolutionReason,
+        })
+        .where(eq(workflowRunsTable.id, run.id));
+      await tx.insert(workflowAuditEventsTable).values({
+        workflowId: workflow.id,
+        runId: run.id,
+        action: "resolved",
+        detail: { outcome: outcomeStatus, reason: resolutionReason },
+        changedById: user.id,
+      });
+      return { kind: "ok", runId: run.id };
+    }
+
+    const [initiative] = await tx
+      .select()
+      .from(initiativesTable)
+      .where(eq(initiativesTable.id, run.subjectId))
+      .for("update")
+      .limit(1);
+    if (!initiative) {
+      throw new FinalizeError("Initiative no longer exists");
+    }
+    if (initiative.status !== "under_review") {
+      throw new FinalizeError(
+        "Initiative is no longer Under Review — cannot finalize the workflow.",
+      );
+    }
+
     if (outcomeStatus === "approved") {
       // Cascade: under_review → approved + create project on first approval.
       const projectDescription = [

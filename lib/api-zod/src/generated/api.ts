@@ -3796,6 +3796,424 @@ export const DeleteInitiativeParams = zod.object({
 });
 
 /**
+ * @summary List risks, newest first.
+ */
+export const ListRisksQueryParams = zod.object({
+  status: zod
+    .enum([
+      "identified",
+      "under_analysis",
+      "under_treatment",
+      "mitigation",
+      "accepted",
+      "transferred",
+      "avoided",
+      "closed",
+    ])
+    .optional(),
+  owningDepartmentId: zod.coerce.number().optional(),
+});
+
+export const ListRisksResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  riskType: zod.string(),
+  description: zod.string(),
+  status: zod.enum([
+    "identified",
+    "under_analysis",
+    "under_treatment",
+    "mitigation",
+    "accepted",
+    "transferred",
+    "avoided",
+    "closed",
+  ]),
+  owningDepartmentId: zod.number(),
+  owningDepartmentName: zod.string().nullish(),
+  riskOwnerUserId: zod.number().nullish(),
+  riskOwnerName: zod.string().nullish(),
+  reporterId: zod.number().nullish(),
+  reporterName: zod.string().nullish(),
+  likelihood: zod.string(),
+  impact: zod.string(),
+  impactScope: zod.string(),
+  businessImpact: zod.string(),
+  riskRating: zod.string(),
+  analysisNotes: zod.string(),
+  treatmentDecision: zod.string(),
+  acceptanceJustification: zod.string(),
+  transferMethod: zod.string(),
+  transferResponsibleParty: zod.string(),
+  avoidanceActionNotes: zod.string(),
+  createdProjectId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  auditEvents: zod.array(
+    zod.object({
+      id: zod.number(),
+      oldStatus: zod.enum([
+        "identified",
+        "under_analysis",
+        "under_treatment",
+        "mitigation",
+        "accepted",
+        "transferred",
+        "avoided",
+        "closed",
+      ]),
+      newStatus: zod.enum([
+        "identified",
+        "under_analysis",
+        "under_treatment",
+        "mitigation",
+        "accepted",
+        "transferred",
+        "avoided",
+        "closed",
+      ]),
+      action: zod.string(),
+      reason: zod.string(),
+      changedById: zod.number().nullish(),
+      changedByName: zod.string().nullish(),
+      changedAt: zod.coerce.date(),
+    }),
+  ),
+  workflowRuns: zod.array(
+    zod.object({
+      id: zod.number(),
+      workflowId: zod.number(),
+      workflowName: zod.string().nullish(),
+      module: zod.string(),
+      subjectType: zod.string(),
+      subjectId: zod.number(),
+      status: zod.enum([
+        "pending",
+        "approved",
+        "rejected",
+        "deferred",
+        "cancelled",
+      ]),
+      startedById: zod.number().nullish(),
+      startedByName: zod.string().nullish(),
+      startedAt: zod.coerce.date(),
+      resolvedAt: zod.coerce.date().nullish(),
+      resolvedById: zod.number().nullish(),
+      resolvedByName: zod.string().nullish(),
+      outcomeReason: zod.string(),
+      approvalType: zod.enum(["single", "all", "any"]),
+      requireDecisionRationale: zod.boolean(),
+      approvers: zod.array(
+        zod.object({
+          id: zod.number(),
+          userId: zod.number(),
+          userName: zod.string().nullish(),
+          decision: zod
+            .union([
+              zod.literal(null),
+              zod.literal("approve"),
+              zod.literal("reject"),
+              zod.literal("defer"),
+            ])
+            .nullish(),
+          rationale: zod.string(),
+          decidedAt: zod.coerce.date().nullish(),
+        }),
+      ),
+    }),
+  ),
+});
+export const ListRisksResponse = zod.array(ListRisksResponseItem);
+
+export const CreateRiskBody = zod.object({
+  title: zod.string().min(1),
+  riskType: zod.string().min(1),
+  description: zod.string().optional(),
+  owningDepartmentId: zod.number(),
+  riskOwnerUserId: zod.number().nullish(),
+});
+
+export const GetRiskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetRiskResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  riskType: zod.string(),
+  description: zod.string(),
+  status: zod.enum([
+    "identified",
+    "under_analysis",
+    "under_treatment",
+    "mitigation",
+    "accepted",
+    "transferred",
+    "avoided",
+    "closed",
+  ]),
+  owningDepartmentId: zod.number(),
+  owningDepartmentName: zod.string().nullish(),
+  riskOwnerUserId: zod.number().nullish(),
+  riskOwnerName: zod.string().nullish(),
+  reporterId: zod.number().nullish(),
+  reporterName: zod.string().nullish(),
+  likelihood: zod.string(),
+  impact: zod.string(),
+  impactScope: zod.string(),
+  businessImpact: zod.string(),
+  riskRating: zod.string(),
+  analysisNotes: zod.string(),
+  treatmentDecision: zod.string(),
+  acceptanceJustification: zod.string(),
+  transferMethod: zod.string(),
+  transferResponsibleParty: zod.string(),
+  avoidanceActionNotes: zod.string(),
+  createdProjectId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  auditEvents: zod.array(
+    zod.object({
+      id: zod.number(),
+      oldStatus: zod.enum([
+        "identified",
+        "under_analysis",
+        "under_treatment",
+        "mitigation",
+        "accepted",
+        "transferred",
+        "avoided",
+        "closed",
+      ]),
+      newStatus: zod.enum([
+        "identified",
+        "under_analysis",
+        "under_treatment",
+        "mitigation",
+        "accepted",
+        "transferred",
+        "avoided",
+        "closed",
+      ]),
+      action: zod.string(),
+      reason: zod.string(),
+      changedById: zod.number().nullish(),
+      changedByName: zod.string().nullish(),
+      changedAt: zod.coerce.date(),
+    }),
+  ),
+  workflowRuns: zod.array(
+    zod.object({
+      id: zod.number(),
+      workflowId: zod.number(),
+      workflowName: zod.string().nullish(),
+      module: zod.string(),
+      subjectType: zod.string(),
+      subjectId: zod.number(),
+      status: zod.enum([
+        "pending",
+        "approved",
+        "rejected",
+        "deferred",
+        "cancelled",
+      ]),
+      startedById: zod.number().nullish(),
+      startedByName: zod.string().nullish(),
+      startedAt: zod.coerce.date(),
+      resolvedAt: zod.coerce.date().nullish(),
+      resolvedById: zod.number().nullish(),
+      resolvedByName: zod.string().nullish(),
+      outcomeReason: zod.string(),
+      approvalType: zod.enum(["single", "all", "any"]),
+      requireDecisionRationale: zod.boolean(),
+      approvers: zod.array(
+        zod.object({
+          id: zod.number(),
+          userId: zod.number(),
+          userName: zod.string().nullish(),
+          decision: zod
+            .union([
+              zod.literal(null),
+              zod.literal("approve"),
+              zod.literal("reject"),
+              zod.literal("defer"),
+            ])
+            .nullish(),
+          rationale: zod.string(),
+          decidedAt: zod.coerce.date().nullish(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
+ * @summary Update fields and/or transition status. Status changes are
+validated against an explicit allowed-transitions table:
+identified → under_analysis | closed,
+under_analysis → under_treatment | closed,
+under_treatment → mitigation | accepted | transferred | avoided
+(each requires an APPROVED workflow run for that risk and the
+ outcome-specific fields filled in),
+and any treatment-outcome state → closed.
+Transitions to mitigation atomically create a Project and
+stamp createdProjectId on the returned record.
+
+ */
+export const UpdateRiskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateRiskBody = zod
+  .object({
+    title: zod.string().min(1).optional(),
+    riskType: zod.string().optional(),
+    description: zod.string().optional(),
+    status: zod
+      .enum([
+        "identified",
+        "under_analysis",
+        "under_treatment",
+        "mitigation",
+        "accepted",
+        "transferred",
+        "avoided",
+        "closed",
+      ])
+      .optional(),
+    owningDepartmentId: zod.number().optional(),
+    riskOwnerUserId: zod.number().nullish(),
+    likelihood: zod.string().optional(),
+    impact: zod.string().optional(),
+    impactScope: zod.string().optional(),
+    businessImpact: zod.string().optional(),
+    analysisNotes: zod.string().optional(),
+    treatmentDecision: zod.string().optional(),
+    acceptanceJustification: zod.string().optional(),
+    transferMethod: zod.string().optional(),
+    transferResponsibleParty: zod.string().optional(),
+    avoidanceActionNotes: zod.string().optional(),
+    transitionReason: zod.string().optional(),
+  })
+  .describe(
+    "Patch the risk and\/or transition its status. Treatment-outcome\ntransitions (mitigation\/accepted\/transferred\/avoided) require an\nAPPROVED workflow run on this risk and the outcome-specific\nfields filled in. Mitigation auto-creates a Project and\nstamps createdProjectId.\n",
+  );
+
+export const UpdateRiskResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  riskType: zod.string(),
+  description: zod.string(),
+  status: zod.enum([
+    "identified",
+    "under_analysis",
+    "under_treatment",
+    "mitigation",
+    "accepted",
+    "transferred",
+    "avoided",
+    "closed",
+  ]),
+  owningDepartmentId: zod.number(),
+  owningDepartmentName: zod.string().nullish(),
+  riskOwnerUserId: zod.number().nullish(),
+  riskOwnerName: zod.string().nullish(),
+  reporterId: zod.number().nullish(),
+  reporterName: zod.string().nullish(),
+  likelihood: zod.string(),
+  impact: zod.string(),
+  impactScope: zod.string(),
+  businessImpact: zod.string(),
+  riskRating: zod.string(),
+  analysisNotes: zod.string(),
+  treatmentDecision: zod.string(),
+  acceptanceJustification: zod.string(),
+  transferMethod: zod.string(),
+  transferResponsibleParty: zod.string(),
+  avoidanceActionNotes: zod.string(),
+  createdProjectId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  auditEvents: zod.array(
+    zod.object({
+      id: zod.number(),
+      oldStatus: zod.enum([
+        "identified",
+        "under_analysis",
+        "under_treatment",
+        "mitigation",
+        "accepted",
+        "transferred",
+        "avoided",
+        "closed",
+      ]),
+      newStatus: zod.enum([
+        "identified",
+        "under_analysis",
+        "under_treatment",
+        "mitigation",
+        "accepted",
+        "transferred",
+        "avoided",
+        "closed",
+      ]),
+      action: zod.string(),
+      reason: zod.string(),
+      changedById: zod.number().nullish(),
+      changedByName: zod.string().nullish(),
+      changedAt: zod.coerce.date(),
+    }),
+  ),
+  workflowRuns: zod.array(
+    zod.object({
+      id: zod.number(),
+      workflowId: zod.number(),
+      workflowName: zod.string().nullish(),
+      module: zod.string(),
+      subjectType: zod.string(),
+      subjectId: zod.number(),
+      status: zod.enum([
+        "pending",
+        "approved",
+        "rejected",
+        "deferred",
+        "cancelled",
+      ]),
+      startedById: zod.number().nullish(),
+      startedByName: zod.string().nullish(),
+      startedAt: zod.coerce.date(),
+      resolvedAt: zod.coerce.date().nullish(),
+      resolvedById: zod.number().nullish(),
+      resolvedByName: zod.string().nullish(),
+      outcomeReason: zod.string(),
+      approvalType: zod.enum(["single", "all", "any"]),
+      requireDecisionRationale: zod.boolean(),
+      approvers: zod.array(
+        zod.object({
+          id: zod.number(),
+          userId: zod.number(),
+          userName: zod.string().nullish(),
+          decision: zod
+            .union([
+              zod.literal(null),
+              zod.literal("approve"),
+              zod.literal("reject"),
+              zod.literal("defer"),
+            ])
+            .nullish(),
+          rationale: zod.string(),
+          decidedAt: zod.coerce.date().nullish(),
+        }),
+      ),
+    }),
+  ),
+});
+
+export const DeleteRiskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Department-level Kanban — phase columns + project cards.
  */
 export const GetDepartmentBoardParams = zod.object({
@@ -4777,6 +5195,17 @@ export const StartInitiativeWorkflowRunParams = zod.object({
 });
 
 export const StartInitiativeWorkflowRunBody = zod.object({
+  workflowId: zod.number(),
+});
+
+/**
+ * @summary Start an approval workflow run on a risk's treatment decision (admin only)
+ */
+export const StartRiskWorkflowRunParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const StartRiskWorkflowRunBody = zod.object({
   workflowId: zod.number(),
 });
 

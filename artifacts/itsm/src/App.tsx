@@ -30,6 +30,7 @@ import {
 import Timesheet from "@/pages/timesheet";
 import OperationalTasks from "@/pages/operational-tasks";
 import Initiatives from "@/pages/initiatives";
+import Risks from "@/pages/risks";
 import ExecutiveDashboard from "@/pages/executive-dashboard";
 
 const queryClient = new QueryClient();
@@ -60,6 +61,7 @@ function Router() {
         <Route path="/operational-tasks" component={OperationalTasks} />
         <Route path="/initiatives/dept/:slug" component={Initiatives} />
         <Route path="/initiatives" component={Initiatives} />
+        <Route path="/risks" component={Risks} />
         <Route path="/executive-dashboard" component={ExecutiveDashboard} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/agents" component={SettingsAgents} />

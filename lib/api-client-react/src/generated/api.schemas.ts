@@ -2279,6 +2279,109 @@ export interface UpdateInitiativeInput {
   transitionReason?: string;
 }
 
+export type RiskStatus = (typeof RiskStatus)[keyof typeof RiskStatus];
+
+export const RiskStatus = {
+  identified: "identified",
+  under_analysis: "under_analysis",
+  under_treatment: "under_treatment",
+  mitigation: "mitigation",
+  accepted: "accepted",
+  transferred: "transferred",
+  avoided: "avoided",
+  closed: "closed",
+} as const;
+
+export interface RiskAuditEvent {
+  id: number;
+  oldStatus: RiskStatus;
+  newStatus: RiskStatus;
+  action: string;
+  reason: string;
+  /** @nullable */
+  changedById?: number | null;
+  /** @nullable */
+  changedByName?: string | null;
+  changedAt: string;
+}
+
+export interface Risk {
+  id: number;
+  title: string;
+  riskType: string;
+  description: string;
+  status: RiskStatus;
+  owningDepartmentId: number;
+  /** @nullable */
+  owningDepartmentName?: string | null;
+  /** @nullable */
+  riskOwnerUserId?: number | null;
+  /** @nullable */
+  riskOwnerName?: string | null;
+  /** @nullable */
+  reporterId?: number | null;
+  /** @nullable */
+  reporterName?: string | null;
+  likelihood: string;
+  impact: string;
+  impactScope: string;
+  businessImpact: string;
+  riskRating: string;
+  analysisNotes: string;
+  treatmentDecision: string;
+  acceptanceJustification: string;
+  transferMethod: string;
+  transferResponsibleParty: string;
+  avoidanceActionNotes: string;
+  /** @nullable */
+  createdProjectId?: number | null;
+  createdAt: string;
+  updatedAt: string;
+  auditEvents: RiskAuditEvent[];
+  workflowRuns: WorkflowRun[];
+}
+
+export interface CreateRiskInput {
+  /** @minLength 1 */
+  title: string;
+  /** @minLength 1 */
+  riskType: string;
+  description?: string;
+  owningDepartmentId: number;
+  /** @nullable */
+  riskOwnerUserId?: number | null;
+}
+
+/**
+ * Patch the risk and/or transition its status. Treatment-outcome
+transitions (mitigation/accepted/transferred/avoided) require an
+APPROVED workflow run on this risk and the outcome-specific
+fields filled in. Mitigation auto-creates a Project and
+stamps createdProjectId.
+
+ */
+export interface UpdateRiskInput {
+  /** @minLength 1 */
+  title?: string;
+  riskType?: string;
+  description?: string;
+  status?: RiskStatus;
+  owningDepartmentId?: number;
+  /** @nullable */
+  riskOwnerUserId?: number | null;
+  likelihood?: string;
+  impact?: string;
+  impactScope?: string;
+  businessImpact?: string;
+  analysisNotes?: string;
+  treatmentDecision?: string;
+  acceptanceJustification?: string;
+  transferMethod?: string;
+  transferResponsibleParty?: string;
+  avoidanceActionNotes?: string;
+  transitionReason?: string;
+}
+
 export type WorkflowModule =
   (typeof WorkflowModule)[keyof typeof WorkflowModule];
 
@@ -2854,6 +2957,11 @@ export const ListProjectsStatus = {
 export type ListInitiativesParams = {
   status?: InitiativeStatus;
   departmentId?: number;
+};
+
+export type ListRisksParams = {
+  status?: RiskStatus;
+  owningDepartmentId?: number;
 };
 
 export type GetDashboardOverviewParams = {
