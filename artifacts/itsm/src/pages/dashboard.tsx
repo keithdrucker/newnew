@@ -73,6 +73,10 @@ import {
   buildTimeIntelligenceSummary,
   fmtMinutes,
 } from "@/lib/ai-impact-placeholder";
+import { DashboardVisibilityProvider } from "@/components/dashboard/dashboard-visibility-provider";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
+import { CustomizeDashboardSheet } from "@/components/dashboard/customize-dashboard-sheet";
+import { useDashboardVisibility } from "@/components/dashboard/dashboard-visibility-provider";
 import { format } from "date-fns";
 import {
   Clock,
@@ -268,11 +272,31 @@ export default function Dashboard() {
         </Select>
       </div>
 
-      {view === "team_health" && showAgentViews && <TeamHealthDashboard />}
-      {view === "tickets" && <TicketsDashboardContent />}
-      {view === "projects" && <ProjectsDashboard />}
-      {view === "initiatives" && <InitiativesDashboard />}
-      {view === "operational_tasks" && <OperationalTasksDashboard />}
+      {view === "team_health" && showAgentViews && (
+        <DashboardVisibilityProvider dashboardKey="team_health">
+          <TeamHealthDashboard />
+        </DashboardVisibilityProvider>
+      )}
+      {view === "tickets" && (
+        <DashboardVisibilityProvider dashboardKey="support_performance">
+          <TicketsDashboardContent />
+        </DashboardVisibilityProvider>
+      )}
+      {view === "projects" && (
+        <DashboardVisibilityProvider dashboardKey="project_execution">
+          <ProjectsDashboard />
+        </DashboardVisibilityProvider>
+      )}
+      {view === "initiatives" && (
+        <DashboardVisibilityProvider dashboardKey="initiative_pipeline">
+          <InitiativesDashboard />
+        </DashboardVisibilityProvider>
+      )}
+      {view === "operational_tasks" && (
+        <DashboardVisibilityProvider dashboardKey="operations_overview">
+          <OperationalTasksDashboard />
+        </DashboardVisibilityProvider>
+      )}
     </div>
   );
 }
@@ -592,6 +616,9 @@ function useScopedDashboard(
 
 function TicketsDashboardContent() {
   const scope = useTeamScope();
+  const { data: session } = useGetSession();
+  const isAdmin = session?.role === "admin";
+  const visibility = useDashboardVisibility();
   const [range, setRange] = useState<TimeRangeValue>(DEFAULT_TIME_RANGE);
   // Multi-select agent filter. Empty array = "All Agents" (no filter).
   const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
@@ -891,6 +918,7 @@ function TicketsDashboardContent() {
             testId="select-tickets-dashboard-assignee"
           />
           <TimeRangePicker value={range} onChange={setRange} />
+          {isAdmin && <CustomizeDashboardSheet />}
         </div>
       </div>
 
@@ -907,27 +935,39 @@ function TicketsDashboardContent() {
       ) : (
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="flex flex-wrap h-auto">
+            {/* The overview tab always renders because three of its
+                four sub-sections are locked; only the optional tabs
+                drop their trigger when hidden via Customize. */}
             <TabsTrigger value="overview" data-testid="tab-overview">
               Overview
             </TabsTrigger>
-            <TabsTrigger value="risk" data-testid="tab-risk-categories">
-              Risk &amp; Categories
-            </TabsTrigger>
-            <TabsTrigger value="root-cause" data-testid="tab-root-cause">
-              Root Cause &amp; Resolution
-            </TabsTrigger>
-            <TabsTrigger value="ai-impact" data-testid="tab-ai-impact">
-              AI Impact
-            </TabsTrigger>
-            <TabsTrigger
-              value="time-intelligence"
-              data-testid="tab-time-intelligence"
-            >
-              Time Intelligence
-            </TabsTrigger>
+            {visibility.isVisible("risk_categories") && (
+              <TabsTrigger value="risk" data-testid="tab-risk-categories">
+                Risk &amp; Categories
+              </TabsTrigger>
+            )}
+            {visibility.isVisible("root_cause_resolution") && (
+              <TabsTrigger value="root-cause" data-testid="tab-root-cause">
+                Root Cause &amp; Resolution
+              </TabsTrigger>
+            )}
+            {visibility.isVisible("ai_impact") && (
+              <TabsTrigger value="ai-impact" data-testid="tab-ai-impact">
+                AI Impact
+              </TabsTrigger>
+            )}
+            {visibility.isVisible("time_intelligence") && (
+              <TabsTrigger
+                value="time-intelligence"
+                data-testid="tab-time-intelligence"
+              >
+                Time Intelligence
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-0">
+          <DashboardSection sectionKey="performance_metrics">
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<Timer className="h-4 w-4 text-indigo-500" />}
@@ -955,7 +995,9 @@ function TicketsDashboardContent() {
               tone="warning"
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="workload">
           <div className="grid gap-4 md:grid-cols-4">
             <StatusCard
               icon={<Inbox className="h-4 w-4 text-blue-500" />}
@@ -1000,7 +1042,9 @@ function TicketsDashboardContent() {
               tone={riskStats.backlog > 0 ? "warning" : undefined}
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="risk_sla">
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
@@ -1031,7 +1075,9 @@ function TicketsDashboardContent() {
               tone={riskStats.stale > 0 ? "warning" : undefined}
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="ticket_analysis">
           <Card data-testid="card-priority-distribution">
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -1176,7 +1222,9 @@ function TicketsDashboardContent() {
               </CardContent>
             </Card>
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="risk_sla">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -1218,9 +1266,11 @@ function TicketsDashboardContent() {
               )}
             </CardContent>
           </Card>
+          </DashboardSection>
           </TabsContent>
 
           <TabsContent value="risk" className="space-y-6 mt-0">
+            <DashboardSection sectionKey="risk_categories">
             <div className="grid gap-4 lg:grid-cols-2">
               <Card data-testid="card-risk-level">
                 <CardHeader>
@@ -1311,9 +1361,11 @@ function TicketsDashboardContent() {
                 </CardContent>
               </Card>
             </div>
+            </DashboardSection>
           </TabsContent>
 
           <TabsContent value="root-cause" className="space-y-6 mt-0">
+            <DashboardSection sectionKey="root_cause_resolution">
             <div className="grid gap-4 lg:grid-cols-2">
               <Card data-testid="card-root-cause">
                 <CardHeader>
@@ -1415,9 +1467,11 @@ function TicketsDashboardContent() {
               When the dedicated category fields ship they will replace
               this derivation automatically.
             </p>
+            </DashboardSection>
           </TabsContent>
 
           <TabsContent value="ai-impact" className="space-y-6 mt-0">
+            <DashboardSection sectionKey="ai_impact">
             <p className="text-xs text-muted-foreground">
               AI Impact metrics are placeholder values derived from the
               current ticket dataset until the AI handling backend lands.
@@ -1565,12 +1619,14 @@ function TicketsDashboardContent() {
                 )}
               </CardContent>
             </Card>
+            </DashboardSection>
           </TabsContent>
 
           <TabsContent
             value="time-intelligence"
             className="space-y-6 mt-0"
           >
+            <DashboardSection sectionKey="time_intelligence">
             <p className="text-xs text-muted-foreground">
               Time Intelligence metrics rely on per-stage timing
               information that isn&apos;t yet captured per-ticket.
@@ -1698,6 +1754,7 @@ function TicketsDashboardContent() {
                 </CardContent>
               </Card>
             </div>
+            </DashboardSection>
           </TabsContent>
         </Tabs>
       )}

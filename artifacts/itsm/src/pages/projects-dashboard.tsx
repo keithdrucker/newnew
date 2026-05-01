@@ -2,9 +2,12 @@ import { useMemo } from "react";
 import { Link } from "wouter";
 import {
   useListProjects,
+  useGetSession,
   getListProjectsQueryKey,
   type ProjectSummary,
 } from "@workspace/api-client-react";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
+import { CustomizeDashboardSheet } from "@/components/dashboard/customize-dashboard-sheet";
 import {
   Card,
   CardContent,
@@ -72,6 +75,8 @@ function formatDue(iso: string | Date | null | undefined) {
 }
 
 export default function ProjectsDashboard() {
+  const { data: session } = useGetSession();
+  const isAdmin = session?.role === "admin";
   const scope = useTeamScope();
   const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
   const filters = useDashboardFilters();
@@ -295,6 +300,7 @@ export default function ProjectsDashboard() {
             onChange={filters.setRange}
             testId="select-projects-dashboard-range"
           />
+          {isAdmin && <CustomizeDashboardSheet />}
         </div>
       </div>
 
@@ -330,6 +336,7 @@ export default function ProjectsDashboard() {
         </div>
       ) : (
         <>
+          <DashboardSection sectionKey="project_summary">
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<KanbanSquare className="h-4 w-4 text-indigo-500" />}
@@ -357,7 +364,9 @@ export default function ProjectsDashboard() {
               tone={stats.overdue > 0 ? "warning" : undefined}
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="delivery_status">
           <div className="grid gap-4 md:grid-cols-4">
             <StatusCard
               icon={<Activity className="h-4 w-4 text-emerald-500" />}
@@ -408,7 +417,9 @@ export default function ProjectsDashboard() {
               hint={`From ${stats.counts.completed} completed`}
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="completion_trend">
           <Card data-testid="card-completion-trend">
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -450,8 +461,10 @@ export default function ProjectsDashboard() {
               )}
             </CardContent>
           </Card>
+          </DashboardSection>
 
           <div className="grid gap-4 lg:grid-cols-3">
+            <DashboardSection sectionKey="progress_chart">
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -499,7 +512,9 @@ export default function ProjectsDashboard() {
                 )}
               </CardContent>
             </Card>
+            </DashboardSection>
 
+            <DashboardSection sectionKey="top_owners">
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium">
@@ -524,9 +539,11 @@ export default function ProjectsDashboard() {
                 )}
               </CardContent>
             </Card>
+            </DashboardSection>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
+            <DashboardSection sectionKey="team_breakdown">
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium">
@@ -564,7 +581,9 @@ export default function ProjectsDashboard() {
                 )}
               </CardContent>
             </Card>
+            </DashboardSection>
 
+            <DashboardSection sectionKey="risk_blockers">
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -615,6 +634,7 @@ export default function ProjectsDashboard() {
                 )}
               </CardContent>
             </Card>
+            </DashboardSection>
           </div>
         </>
       )}

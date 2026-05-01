@@ -20,6 +20,7 @@ import operationalTasksRouter from "./operationalTasks";
 import riskRulesRouter from "./riskRules";
 import workflowsRouter from "./workflows";
 import dashboardRouter from "./dashboard";
+import dashboardVisibilityRouter from "./dashboardVisibility";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(operationalTasksRouter);
 router.use(riskRulesRouter);
 router.use(workflowsRouter);
 router.use(dashboardRouter);
+router.use(dashboardVisibilityRouter);
 
 export default router;

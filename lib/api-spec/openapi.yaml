@@ -366,6 +366,58 @@ paths:
         "204":
           description: Removed
 
+  /dashboard-visibility:
+    get:
+      operationId: listDashboardVisibility
+      tags: [settings]
+      summary: List all stored dashboard section visibility overrides (org-wide)
+      responses:
+        "200":
+          description: Visibility overrides
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardVisibilityResponse" }
+
+  /dashboard-visibility/{dashboardKey}/{sectionKey}:
+    put:
+      operationId: setDashboardSectionVisibility
+      tags: [settings]
+      summary: Upsert visibility for a single dashboard section (admin only)
+      parameters:
+        - in: path
+          name: dashboardKey
+          required: true
+          schema: { type: string }
+        - in: path
+          name: sectionKey
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetDashboardVisibilityInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardVisibilityRow" }
+
+  /dashboard-visibility/reset/{dashboardKey}:
+    post:
+      operationId: resetDashboardVisibility
+      tags: [settings]
+      summary: Clear all stored visibility overrides for a dashboard (admin only)
+      parameters:
+        - in: path
+          name: dashboardKey
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Reset
+
   /tickets:
     get:
       operationId: listTickets
@@ -3089,6 +3141,31 @@ components:
         riskLevel:
           type: string
           enum: [low, medium, high, critical]
+
+    DashboardVisibilityRow:
+      type: object
+      properties:
+        dashboardKey: { type: string }
+        sectionKey: { type: string }
+        isVisible: { type: boolean }
+        updatedAt:
+          type: string
+          format: date-time
+      required: [dashboardKey, sectionKey, isVisible, updatedAt]
+
+    DashboardVisibilityResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardVisibilityRow" }
+      required: [items]
+
+    SetDashboardVisibilityInput:
+      type: object
+      properties:
+        isVisible: { type: boolean }
+      required: [isVisible]
 
     TicketView:
       type: object

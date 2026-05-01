@@ -503,6 +503,46 @@ export const DeleteRiskRuleParams = zod.object({
 });
 
 /**
+ * @summary List all stored dashboard section visibility overrides (org-wide)
+ */
+export const ListDashboardVisibilityResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      dashboardKey: zod.string(),
+      sectionKey: zod.string(),
+      isVisible: zod.boolean(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Upsert visibility for a single dashboard section (admin only)
+ */
+export const SetDashboardSectionVisibilityParams = zod.object({
+  dashboardKey: zod.coerce.string(),
+  sectionKey: zod.coerce.string(),
+});
+
+export const SetDashboardSectionVisibilityBody = zod.object({
+  isVisible: zod.boolean(),
+});
+
+export const SetDashboardSectionVisibilityResponse = zod.object({
+  dashboardKey: zod.string(),
+  sectionKey: zod.string(),
+  isVisible: zod.boolean(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Clear all stored visibility overrides for a dashboard (admin only)
+ */
+export const ResetDashboardVisibilityParams = zod.object({
+  dashboardKey: zod.coerce.string(),
+});
+
+/**
  * @summary List tickets, scoped by current user's role and department
  */
 export const ListTicketsQueryParams = zod.object({

@@ -49,6 +49,8 @@ import type {
   CreateWorkflowInput,
   DashboardOverview,
   DashboardTimeseries,
+  DashboardVisibilityResponse,
+  DashboardVisibilityRow,
   Department,
   DepartmentBoard,
   DepartmentBucket,
@@ -83,6 +85,7 @@ import type {
   ReorderChecklistInput,
   RiskRule,
   Session,
+  SetDashboardVisibilityInput,
   StartWorkflowRunInput,
   SwitchSessionInput,
   Ticket,
@@ -1741,6 +1744,289 @@ export const useDeleteRiskRule = <
   TContext
 > => {
   return useMutation(getDeleteRiskRuleMutationOptions(options));
+};
+
+/**
+ * @summary List all stored dashboard section visibility overrides (org-wide)
+ */
+export const getListDashboardVisibilityUrl = () => {
+  return `/api/dashboard-visibility`;
+};
+
+export const listDashboardVisibility = async (
+  options?: RequestInit,
+): Promise<DashboardVisibilityResponse> => {
+  return customFetch<DashboardVisibilityResponse>(
+    getListDashboardVisibilityUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListDashboardVisibilityQueryKey = () => {
+  return [`/api/dashboard-visibility`] as const;
+};
+
+export const getListDashboardVisibilityQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDashboardVisibility>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDashboardVisibility>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDashboardVisibilityQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDashboardVisibility>>
+  > = ({ signal }) => listDashboardVisibility({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDashboardVisibility>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDashboardVisibilityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDashboardVisibility>>
+>;
+export type ListDashboardVisibilityQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all stored dashboard section visibility overrides (org-wide)
+ */
+
+export function useListDashboardVisibility<
+  TData = Awaited<ReturnType<typeof listDashboardVisibility>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDashboardVisibility>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDashboardVisibilityQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upsert visibility for a single dashboard section (admin only)
+ */
+export const getSetDashboardSectionVisibilityUrl = (
+  dashboardKey: string,
+  sectionKey: string,
+) => {
+  return `/api/dashboard-visibility/${dashboardKey}/${sectionKey}`;
+};
+
+export const setDashboardSectionVisibility = async (
+  dashboardKey: string,
+  sectionKey: string,
+  setDashboardVisibilityInput: SetDashboardVisibilityInput,
+  options?: RequestInit,
+): Promise<DashboardVisibilityRow> => {
+  return customFetch<DashboardVisibilityRow>(
+    getSetDashboardSectionVisibilityUrl(dashboardKey, sectionKey),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(setDashboardVisibilityInput),
+    },
+  );
+};
+
+export const getSetDashboardSectionVisibilityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDashboardSectionVisibility>>,
+    TError,
+    {
+      dashboardKey: string;
+      sectionKey: string;
+      data: BodyType<SetDashboardVisibilityInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setDashboardSectionVisibility>>,
+  TError,
+  {
+    dashboardKey: string;
+    sectionKey: string;
+    data: BodyType<SetDashboardVisibilityInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["setDashboardSectionVisibility"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setDashboardSectionVisibility>>,
+    {
+      dashboardKey: string;
+      sectionKey: string;
+      data: BodyType<SetDashboardVisibilityInput>;
+    }
+  > = (props) => {
+    const { dashboardKey, sectionKey, data } = props ?? {};
+
+    return setDashboardSectionVisibility(
+      dashboardKey,
+      sectionKey,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetDashboardSectionVisibilityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setDashboardSectionVisibility>>
+>;
+export type SetDashboardSectionVisibilityMutationBody =
+  BodyType<SetDashboardVisibilityInput>;
+export type SetDashboardSectionVisibilityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Upsert visibility for a single dashboard section (admin only)
+ */
+export const useSetDashboardSectionVisibility = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDashboardSectionVisibility>>,
+    TError,
+    {
+      dashboardKey: string;
+      sectionKey: string;
+      data: BodyType<SetDashboardVisibilityInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setDashboardSectionVisibility>>,
+  TError,
+  {
+    dashboardKey: string;
+    sectionKey: string;
+    data: BodyType<SetDashboardVisibilityInput>;
+  },
+  TContext
+> => {
+  return useMutation(getSetDashboardSectionVisibilityMutationOptions(options));
+};
+
+/**
+ * @summary Clear all stored visibility overrides for a dashboard (admin only)
+ */
+export const getResetDashboardVisibilityUrl = (dashboardKey: string) => {
+  return `/api/dashboard-visibility/reset/${dashboardKey}`;
+};
+
+export const resetDashboardVisibility = async (
+  dashboardKey: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getResetDashboardVisibilityUrl(dashboardKey), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getResetDashboardVisibilityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetDashboardVisibility>>,
+    TError,
+    { dashboardKey: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetDashboardVisibility>>,
+  TError,
+  { dashboardKey: string },
+  TContext
+> => {
+  const mutationKey = ["resetDashboardVisibility"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetDashboardVisibility>>,
+    { dashboardKey: string }
+  > = (props) => {
+    const { dashboardKey } = props ?? {};
+
+    return resetDashboardVisibility(dashboardKey, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetDashboardVisibilityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetDashboardVisibility>>
+>;
+
+export type ResetDashboardVisibilityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Clear all stored visibility overrides for a dashboard (admin only)
+ */
+export const useResetDashboardVisibility = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetDashboardVisibility>>,
+    TError,
+    { dashboardKey: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetDashboardVisibility>>,
+  TError,
+  { dashboardKey: string },
+  TContext
+> => {
+  return useMutation(getResetDashboardVisibilityMutationOptions(options));
 };
 
 /**

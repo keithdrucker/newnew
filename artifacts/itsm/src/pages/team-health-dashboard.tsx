@@ -5,6 +5,7 @@ import {
   useListOperationalTasks,
   useListInitiatives,
   useListProjects,
+  useGetSession,
   getListTicketsQueryKey,
   getListOperationalTasksQueryKey,
   getListInitiativesQueryKey,
@@ -14,6 +15,8 @@ import {
   type Initiative,
   type ProjectSummary,
 } from "@workspace/api-client-react";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
+import { CustomizeDashboardSheet } from "@/components/dashboard/customize-dashboard-sheet";
 import {
   Card,
   CardContent,
@@ -73,6 +76,8 @@ function formatShortDate(iso: string | Date | null | undefined): string {
 
 export default function TeamHealthDashboard() {
   const scope = useTeamScope();
+  const { data: session } = useGetSession();
+  const isAdmin = session?.role === "admin";
 
   // Same convention as the other sub-dashboards: when a single team
   // is in scope we narrow the API call by departmentId so the user
@@ -346,6 +351,7 @@ export default function TeamHealthDashboard() {
             onChange={filters.setRange}
             testId="select-team-health-range"
           />
+          {isAdmin && <CustomizeDashboardSheet />}
         </div>
       </div>
 
@@ -361,6 +367,7 @@ export default function TeamHealthDashboard() {
         </div>
       ) : (
         <>
+          <DashboardSection sectionKey="executive_summary">
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<Layers className="h-4 w-4 text-indigo-500" />}
@@ -396,7 +403,9 @@ export default function TeamHealthDashboard() {
               testId="kpi-ops-tasks-active"
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="workload">
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<Inbox className="h-4 w-4 text-sky-500" />}
@@ -442,7 +451,9 @@ export default function TeamHealthDashboard() {
               testId="kpi-active-projects"
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="risk">
           <div className="grid gap-4 md:grid-cols-3">
             <Card data-testid="card-sla-health">
               <CardHeader>
@@ -534,7 +545,9 @@ export default function TeamHealthDashboard() {
               </CardContent>
             </Card>
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="delivery">
           {showWorkloadTable && teamRows.length > 0 && (
             <Card data-testid="card-workload-by-team">
               <CardHeader>
@@ -735,6 +748,7 @@ export default function TeamHealthDashboard() {
               </CardContent>
             </Card>
           </div>
+          </DashboardSection>
         </>
       )}
     </div>

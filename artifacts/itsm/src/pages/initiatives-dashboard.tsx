@@ -2,10 +2,13 @@ import { useMemo } from "react";
 import { Link } from "wouter";
 import {
   useListInitiatives,
+  useGetSession,
   getListInitiativesQueryKey,
   type Initiative,
   type InitiativeStatus,
 } from "@workspace/api-client-react";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
+import { CustomizeDashboardSheet } from "@/components/dashboard/customize-dashboard-sheet";
 import {
   Card,
   CardContent,
@@ -69,6 +72,8 @@ function formatDate(iso: string | Date | null | undefined) {
 }
 
 export default function InitiativesDashboard() {
+  const { data: session } = useGetSession();
+  const isAdmin = session?.role === "admin";
   const scope = useTeamScope();
   const queryDeptId = scope.single ? scope.singleId ?? undefined : undefined;
   const filters = useDashboardFilters();
@@ -269,6 +274,7 @@ export default function InitiativesDashboard() {
             onChange={filters.setRange}
             testId="select-initiatives-dashboard-range"
           />
+          {isAdmin && <CustomizeDashboardSheet />}
         </div>
       </div>
 
@@ -304,6 +310,7 @@ export default function InitiativesDashboard() {
         </div>
       ) : (
         <>
+          <DashboardSection sectionKey="pipeline_summary">
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<Lightbulb className="h-4 w-4 text-indigo-500" />}
@@ -331,7 +338,9 @@ export default function InitiativesDashboard() {
               hint={`${stats.counts.rejected_deferred} rejected/deferred`}
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="approval_status">
           <div className="grid gap-4 md:grid-cols-3">
             <KpiCard
               icon={<XCircle className="h-4 w-4 text-rose-500" />}
@@ -395,7 +404,9 @@ export default function InitiativesDashboard() {
               )}
             </CardContent>
           </Card>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="team_breakdown">
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
@@ -461,7 +472,9 @@ export default function InitiativesDashboard() {
               </CardContent>
             </Card>
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="queue">
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
@@ -560,6 +573,7 @@ export default function InitiativesDashboard() {
               </CardContent>
             </Card>
           </div>
+          </DashboardSection>
         </>
       )}
     </div>

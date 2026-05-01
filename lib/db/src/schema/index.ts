@@ -18,3 +18,4 @@ export * from "./operationalTaskActivity";
 export * from "./riskRules";
 export * from "./timeEntries";
 export * from "./workflows";
+export * from "./dashboardSectionVisibility";

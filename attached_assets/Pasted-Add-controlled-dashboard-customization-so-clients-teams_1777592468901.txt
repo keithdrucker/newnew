@@ -1,0 +1,204 @@
+Add controlled dashboard customization so clients/teams can hide or show dashboard sections without breaking standard reporting.
+
+Goal:
+Each dashboard should have a “Customize Dashboard” option that lets authorized users hide optional sections they do not want to see.
+
+Dashboards:
+- Team Health
+- Support Performance
+- Operations Overview
+- Initiative Pipeline
+- Project Execution
+
+--------------------------------------------------
+CUSTOMIZE DASHBOARD BUTTON
+--------------------------------------------------
+
+Add a button near the dashboard filters/header:
+
+Button label:
+- Customize Dashboard
+
+When clicked:
+- Open a right-side drawer or modal
+- Show available dashboard sections with toggles
+- Show locked sections as disabled toggles with a lock icon
+
+--------------------------------------------------
+SECTION VISIBILITY RULES
+--------------------------------------------------
+
+Use section-level toggles, not individual metric toggles for now.
+
+Each section should be either:
+- Locked/Core: cannot be hidden
+- Optional: can be hidden
+
+Default:
+- All sections visible
+
+Support Performance:
+Locked/Core:
+- Performance Metrics
+- Risk & SLA
+- Workload
+
+Optional:
+- Ticket Analysis
+- Risk & Category Analysis
+- Root Cause & Resolution Analysis
+- AI Impact
+- Time Intelligence
+
+Team Health:
+Locked/Core:
+- Executive Summary
+- Workload
+- Risk
+
+Optional:
+- Delivery
+- AI Impact
+- Time Intelligence
+- Reactive vs Proactive Work
+
+Operations Overview:
+Locked/Core:
+- Operations Summary
+- Task Workload
+- Risk / Overdue Work
+
+Optional:
+- System Health
+- Automation
+- AI Impact
+- Time Intelligence
+
+Initiative Pipeline:
+Locked/Core:
+- Pipeline Summary
+- Approval Status
+- Priority / Risk
+
+Optional:
+- Cost vs Value
+- Approval Time
+- Initiative to Project Conversion
+- AI Insights
+
+Project Execution:
+Locked/Core:
+- Project Summary
+- Delivery Status
+- Risk / Blockers
+
+Optional:
+- Checklist Progress
+- Time in Phases
+- AI-Assisted Steps
+- Time Intelligence
+
+--------------------------------------------------
+PERSISTENCE
+--------------------------------------------------
+
+Save dashboard customization preferences:
+- Per organization or per team
+- Not per individual user for now
+
+Store:
+- dashboard_name
+- section_key
+- is_visible
+- is_locked
+- updated_at
+
+If no saved settings exist:
+- Load default visibility settings
+
+Add:
+- Reset to Default button
+
+--------------------------------------------------
+PERMISSIONS
+--------------------------------------------------
+
+Only authorized users can customize dashboards.
+
+Suggested roles:
+- Admin
+- Team Manager
+- Owner
+
+Non-authorized users:
+- Can view dashboards
+- Cannot see Customize Dashboard button
+
+--------------------------------------------------
+UI / UX
+--------------------------------------------------
+
+In customization drawer/modal:
+- Group sections clearly
+- Show short descriptions for each section
+- Locked sections should show:
+  “Required section”
+- Optional sections should show:
+  “Can be hidden from this dashboard”
+
+When sections are hidden:
+- Do not render those cards/charts
+- Layout should automatically close gaps
+- No blank spaces should remain
+
+--------------------------------------------------
+TECHNICAL REQUIREMENTS
+--------------------------------------------------
+
+Create reusable dashboard visibility logic:
+- getDashboardSections(dashboardName)
+- getVisibleSections(dashboardName, teamId/orgId)
+- updateDashboardSectionVisibility(...)
+- resetDashboardVisibilityToDefault(...)
+
+Use reusable section wrapper component:
+- DashboardSection
+- Accepts sectionKey, title, isVisible
+
+Do not duplicate logic across dashboards.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Confirm:
+- Customize Dashboard opens on each dashboard
+- Locked sections cannot be hidden
+- Optional sections can be hidden/shown
+- Preferences persist after refresh
+- Reset to Default works
+- Hidden sections do not render
+- Dashboard layout remains clean
+- Filters still work
+- No data or workflow changes occur
+
+--------------------------------------------------
+DO NOT CHANGE
+--------------------------------------------------
+
+Do not change:
+- Dashboard names
+- Existing routes
+- Existing ticket/project/task logic
+- Existing data records
+- Existing permission model unless needed to check roles
+
+--------------------------------------------------
+RETURN
+--------------------------------------------------
+
+Return:
+- Summary of files changed
+- Components created/updated
+- Where preferences are stored
+- Any assumptions made about roles/permissions

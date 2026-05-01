@@ -2,11 +2,14 @@ import { useMemo } from "react";
 import { Link } from "wouter";
 import {
   useListOperationalTasks,
+  useGetSession,
   getListOperationalTasksQueryKey,
   type OperationalTask,
   type OperationalTaskStatus,
   type OperationalTaskFrequency,
 } from "@workspace/api-client-react";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
+import { CustomizeDashboardSheet } from "@/components/dashboard/customize-dashboard-sheet";
 import {
   Card,
   CardContent,
@@ -96,6 +99,8 @@ function isDueWithinDays(yyyyMmDd: string, days: number): boolean {
 }
 
 export default function OperationalTasksDashboard() {
+  const { data: session } = useGetSession();
+  const isAdmin = session?.role === "admin";
   const scope = useTeamScope();
 
   // Single-team narrows server-side via departmentId; "All Teams" /
@@ -310,6 +315,7 @@ export default function OperationalTasksDashboard() {
             onChange={filters.setRange}
             testId="select-ops-tasks-dashboard-range"
           />
+          {isAdmin && <CustomizeDashboardSheet />}
         </div>
       </div>
 
@@ -347,6 +353,7 @@ export default function OperationalTasksDashboard() {
         </div>
       ) : (
         <>
+          <DashboardSection sectionKey="operations_summary">
           <div className="grid gap-4 md:grid-cols-4">
             <KpiCard
               icon={<ListChecks className="h-4 w-4 text-indigo-500" />}
@@ -390,7 +397,9 @@ export default function OperationalTasksDashboard() {
               hint={`From ${stats.counts.completed} completed task${stats.counts.completed === 1 ? "" : "s"}`}
             />
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="team_performance">
           <Card data-testid="card-team-performance">
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -441,7 +450,9 @@ export default function OperationalTasksDashboard() {
               )}
             </CardContent>
           </Card>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="task_workload">
           <div className="grid gap-4 md:grid-cols-3">
             <StatusCard
               icon={<CalendarClock className="h-4 w-4 text-slate-500" />}
@@ -540,7 +551,9 @@ export default function OperationalTasksDashboard() {
               </CardContent>
             </Card>
           </div>
+          </DashboardSection>
 
+          <DashboardSection sectionKey="risk_overdue">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -591,6 +604,7 @@ export default function OperationalTasksDashboard() {
               )}
             </CardContent>
           </Card>
+          </DashboardSection>
         </>
       )}
     </div>

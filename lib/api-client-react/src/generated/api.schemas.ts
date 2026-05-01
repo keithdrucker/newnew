@@ -970,6 +970,21 @@ export interface UpdateRiskRuleInput {
   riskLevel?: UpdateRiskRuleInputRiskLevel;
 }
 
+export interface DashboardVisibilityRow {
+  dashboardKey: string;
+  sectionKey: string;
+  isVisible: boolean;
+  updatedAt: string;
+}
+
+export interface DashboardVisibilityResponse {
+  items: DashboardVisibilityRow[];
+}
+
+export interface SetDashboardVisibilityInput {
+  isVisible: boolean;
+}
+
 export interface TicketView {
   id: number;
   userId: number;
