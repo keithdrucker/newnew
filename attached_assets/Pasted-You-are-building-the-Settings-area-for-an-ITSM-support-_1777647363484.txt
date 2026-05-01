@@ -1,0 +1,270 @@
+You are building the Settings area for an ITSM / support‑operations platform.
+This Settings area is admin & team‑lead facing only and must follow a responsibility‑based information architecture (not a flat feature list).
+
+Your task is to implement the navigation structure, page hierarchy, and behavior rules exactly as defined below.
+
+1️⃣ Settings – High‑Level Structure
+Create a top‑level Settings section with the following primary categories:
+System & Defaults
+People & Access
+Service Configuration
+Customer Experience
+Technology & Data
+Security & Governance
+
+Design goals:
+
+Clear separation of responsibility
+Role‑aware visibility (Admin vs Team Lead)
+Scalable structure that avoids rework as features grow
+
+
+2️⃣ System & Defaults
+Purpose: Control global system behavior and foundational defaults.
+Pages:
+
+General
+Notifications
+Appearance & Theme
+Timezone & Localization
+System Defaults
+
+Rules:
+
+Applies system‑wide
+Changes affect all users unless explicitly overridden elsewhere
+No team‑specific configuration lives here
+
+
+3️⃣ People & Access
+Purpose: Control who exists in the system and how access is managed.
+Pages:
+
+Agents
+Roles & Permissions
+Groups
+
+
+✅ Teams (Core Operational Unit)
+Teams define how work is done, not just who belongs to whom.
+Teams → All Teams
+Each team includes:
+Team Overview
+
+Team Name
+Description
+Team Manager (required)
+Backup Manager (optional)
+
+Members
+
+Add/remove team members
+
+
+4️⃣ Teams → Work Types (Breakout Structure)
+Each team has a Work Types configuration page.
+Supported Work Types
+
+Tickets
+Operational Tasks
+Initiatives
+Projects
+Timesheets
+
+Each work type MUST display:
+
+✅ Enable toggle
+✅ Require Time Tracking toggle (if applicable)
+✅ Manage {Work Type} action (visible only when enabled)
+
+Rules:
+
+Disabled work types are hidden from the team UI entirely
+“Require Time Tracking” cannot be enabled unless the work type is enabled
+
+
+5️⃣ Manage Work Type Pages (Enable → Manage Pattern)
+When a work type is enabled, clicking Manage {Work Type} opens a dedicated management area.
+
+✅ Manage Tickets
+SLA‑driven support work.
+Sections:
+
+Overview
+Members & Teams
+SLAs & Targets
+Notifications
+Automation
+Categories & Tags
+Requirements
+Visibility & Reporting
+
+
+✅ Manage Operational Tasks
+Lightweight, non‑SLA operational work.
+Sections:
+
+Overview
+Members & Teams
+Notifications
+Automation
+Categories & Tags
+Requirements
+Reporting
+
+
+✅ Manage Initiatives
+Structured work requiring governance and approvals.
+Sections:
+
+Overview
+Members & Teams
+Approval Rules
+
+Uses Team Manager
+
+
+Notifications
+Automation
+Categories & Tags
+Requirements
+Reporting
+
+
+✅ Manage Projects
+Long‑running, milestone‑based execution work.
+Sections:
+
+Overview
+Members & Teams
+Milestones & Status Rules
+Approval Rules
+
+Uses Team Manager
+
+
+Notifications
+Automation
+Categories & Tags
+Requirements
+Reporting
+
+
+✅ Manage Timesheets (Important Rules)
+Purpose: Time logging only — not submission, billing, or payroll.
+Sections:
+
+Overview
+Who Logs Time
+Time Entry Rules
+Where Time Can Be Logged
+
+Tickets
+Operational Tasks
+Projects
+Initiatives
+
+
+Visibility & Reporting
+
+Rules:
+
+❌ No approval workflows
+❌ No submission process
+✅ Pure activity tracking only
+
+
+6️⃣ Service Configuration
+Purpose: Define global capabilities that teams can opt into.
+Pages:
+
+Forms
+Global Workflows
+SLA Frameworks
+Automation Rules
+
+Rule:
+
+These define what is possible
+Teams decide how and whether they apply
+
+
+7️⃣ Customer Experience
+Purpose: Everything end users interact with.
+Pages:
+
+Self‑Service Portal
+Branding
+Knowledge Base Visibility
+End‑User Forms
+
+
+8️⃣ Technology & Data
+Purpose: Systems, data, and integrations.
+Pages:
+
+Asset Management
+Applications
+Integrations
+API & Webhooks
+
+
+9️⃣ Security & Governance (Admin Only)
+Purpose: Control, audit, and compliance.
+Pages:
+
+Audit Logs
+Data Retention
+Security Controls
+
+Rules:
+
+Visible to Admins only
+Read‑only or hidden for non‑admin roles
+
+
+🔟 Global Help Menu
+Context‑aware assistance only — no configuration.
+Items:
+
+Documentation
+What’s New
+Contact Support
+Chat (opens with conversation history)
+
+
+1️⃣1️⃣ User Menu (Avatar / Name Click)
+Personal‑only settings. Never system‑wide.
+Items:
+
+My Profile
+Preferences
+
+Theme
+Language
+Timezone
+
+
+Switch to Self‑Service Portal
+Documentation
+Log Out
+
+
+✅ Key Design Constraints
+
+Follow Enable → Manage → Configure consistently
+Keep Team Manager as the authority for approvals
+Do not mix personal settings with system configuration
+Reuse UI patterns across work types
+Avoid ITSM jargon overload
+
+
+✅ Expected Outcome
+Implement:
+
+A clear Settings navigation hierarchy
+Progressive configuration for Teams and Work Types
+Responsibility‑based organization
+Scalable, maintainable structure suitable for enterprise support teams
+
+Do not invent additional sections unless explicitly needed.
