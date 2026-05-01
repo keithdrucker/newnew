@@ -26,7 +26,7 @@ export const boardViewsTable = pgTable(
     userId: integer("user_id").notNull(),
     // Stored as text to keep the migration trivial; the route layer
     // narrows it via the generated zod schema. Allowed values:
-    //   "initiative" | "project" | "operational_task"
+    //   "initiative" | "project" | "operational_task" | "risk"
     scope: text("scope").notNull(),
     name: text("name").notNull(),
     isDefault: boolean("is_default").notNull().default(false),

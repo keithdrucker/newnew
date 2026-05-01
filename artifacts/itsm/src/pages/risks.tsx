@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -8,13 +8,18 @@ import {
   useUpdateRisk,
   useDeleteRisk,
   useListAgents,
+  useListBoardViews,
+  useCreateBoardView,
+  useUpdateBoardView,
+  useDeleteBoardView,
   getListRisksQueryKey,
   getGetRiskQueryKey,
+  getListBoardViewsQueryKey,
   type Risk,
   type RiskAuditEvent,
   type Agent,
 } from "@workspace/api-client-react";
-import { useTeamScope } from "@/lib/team-scope";
+import { useTeamScope, filterByTeamScope } from "@/lib/team-scope";
 import { useSession } from "@/components/providers/session-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,11 +53,20 @@ import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ShieldAlert,
   Plus,
   Trash2,
   ArrowRight,
   ChevronRight,
+  ChevronsUpDown,
   ExternalLink,
   History as HistoryIcon,
   Search,
@@ -61,6 +75,8 @@ import {
   CheckCircle2,
   XCircle,
   X,
+  Check,
+  Star,
 } from "lucide-react";
 import { RiskWorkflowApproval } from "@/components/risk-workflow-approval";
 
@@ -256,6 +272,7 @@ function statusBadgeClass(status: string): string {
 
 export default function RisksPage() {
   const { session } = useSession();
+  const queryClient = useQueryClient();
   const isAgentOrAdmin =
     session?.role === "admin" || session?.role === "agent";
   const [createOpen, setCreateOpen] = useState(false);
@@ -267,11 +284,140 @@ export default function RisksPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [ratingFilter, setRatingFilter] = useState<RatingFilter | "all">("all");
 
+  // Team scope — narrows the board to a single team or "All Teams" the
+  // same way Initiatives + Projects do, so the header reads as a true
+  // "section · scope › view" breadcrumb.
+  const scope = useTeamScope();
+  const scopeLabel = useMemo(() => {
+    if (scope.loading) return "Loading…";
+    if (scope.accessible.length === 0) return "No teams";
+    if (scope.isAll && scope.accessible.length > 1) return "All Teams";
+    if (scope.single) {
+      const dept = scope.accessible.find((d) => d.id === scope.singleId);
+      return dept?.name ?? "1 team";
+    }
+    return `${scope.selectedIds.length} teams`;
+  }, [
+    scope.loading,
+    scope.accessible,
+    scope.isAll,
+    scope.single,
+    scope.singleId,
+    scope.selectedIds,
+  ]);
+
+  // Saved views — scoped to "risk". Mirrors Projects/Initiatives so a
+  // user's per-section default view is auto-applied on first load.
+  const { data: views } = useListBoardViews({ scope: "risk" });
+  const createView = useCreateBoardView();
+  const updateView = useUpdateBoardView();
+  const deleteView = useDeleteBoardView();
+
+  const [activeViewId, setActiveViewId] = useState<number | null>(null);
+  const [defaultApplied, setDefaultApplied] = useState(false);
+  const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
+
+  type RiskViewConfig = {
+    search?: string | null;
+    typeFilter?: string | null;
+    ratingFilter?: string | null;
+  };
+
+  function buildConfigFromFilters(): RiskViewConfig {
+    return {
+      search: search ? search : null,
+      typeFilter: typeFilter === "all" ? null : typeFilter,
+      ratingFilter: ratingFilter === "all" ? null : ratingFilter,
+    };
+  }
+
+  function applyView(viewId: number) {
+    const v = views?.find((x) => x.id === viewId);
+    if (!v) return;
+    const c = (v.config ?? {}) as RiskViewConfig;
+    setSearch(typeof c.search === "string" ? c.search : "");
+    setTypeFilter(typeof c.typeFilter === "string" ? c.typeFilter : "all");
+    setRatingFilter(
+      c.ratingFilter === "critical" ||
+        c.ratingFilter === "high" ||
+        c.ratingFilter === "medium" ||
+        c.ratingFilter === "low"
+        ? c.ratingFilter
+        : "all",
+    );
+    setActiveViewId(viewId);
+  }
+
+  // Auto-apply the user's default saved view once on first load.
+  useEffect(() => {
+    if (defaultApplied || !views) return;
+    const def = views.find((v) => v.isDefault);
+    if (def) applyView(def.id);
+    setDefaultApplied(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [views, defaultApplied]);
+
+  const activeView = useMemo(
+    () =>
+      (activeViewId ? views?.find((v) => v.id === activeViewId) : null) ??
+      null,
+    [views, activeViewId],
+  );
+
+  async function handleSaveView() {
+    if (!saveName.trim()) return;
+    const created = await createView.mutateAsync({
+      data: {
+        scope: "risk",
+        name: saveName.trim(),
+        config: buildConfigFromFilters() as unknown as Record<string, unknown>,
+        isDefault: saveAsDefault,
+      },
+    });
+    await queryClient.invalidateQueries({
+      queryKey: getListBoardViewsQueryKey({ scope: "risk" }),
+    });
+    setActiveViewId(created.id);
+    setSaveName("");
+    setSaveAsDefault(false);
+    setSaveOpen(false);
+  }
+
+  async function handleSetDefaultView(viewId: number, value: boolean) {
+    await updateView.mutateAsync({ id: viewId, data: { isDefault: value } });
+    await queryClient.invalidateQueries({
+      queryKey: getListBoardViewsQueryKey({ scope: "risk" }),
+    });
+  }
+
+  async function handleDeleteView(viewId: number) {
+    await deleteView.mutateAsync({ id: viewId });
+    if (activeViewId === viewId) setActiveViewId(null);
+    await queryClient.invalidateQueries({
+      queryKey: getListBoardViewsQueryKey({ scope: "risk" }),
+    });
+  }
+
   const { data: risks = [], isLoading } = useListRisks(undefined);
+
+  // Risks store the team key as `owningDepartmentId`; the shared
+  // team-scope helper expects `departmentId`. Map once here so the
+  // generic helper can do its job — keeps a single source of truth
+  // for scope semantics across all three boards.
+  const scopedRisks = useMemo(() => {
+    const projected = risks.map((r) => ({
+      __raw: r,
+      departmentId: r.owningDepartmentId ?? null,
+    }));
+    return filterByTeamScope(projected, scope).map((p) => p.__raw);
+  }, [risks, scope]);
 
   const filteredRisks = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return risks.filter((r) => {
+    return scopedRisks.filter((r) => {
       if (typeFilter !== "all" && r.riskType !== typeFilter) return false;
       if (ratingFilter !== "all" && r.riskRating !== ratingFilter) return false;
       if (q) {
@@ -282,7 +428,7 @@ export default function RisksPage() {
       }
       return true;
     });
-  }, [risks, search, typeFilter, ratingFilter]);
+  }, [scopedRisks, search, typeFilter, ratingFilter]);
 
   const grouped = useMemo(() => {
     const m = new Map<RiskLane, Risk[]>();
@@ -312,36 +458,164 @@ export default function RisksPage() {
   return (
     <div className="p-6 space-y-4" data-testid="page-risks">
       <header className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="h-10 w-10 rounded-md bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
               <ShieldAlert className="h-5 w-5" />
             </div>
             <h1
-              className="text-2xl font-semibold tracking-tight m-0"
+              className="flex items-center gap-1 text-[26px] font-display font-semibold tracking-tight m-0"
               data-testid="text-risks-title"
             >
-              Risk Register
+              <span>Risk Register</span>
+              <span className="text-muted-foreground font-normal mx-1.5">·</span>
+              <span
+                className="px-1.5 py-0.5 text-[26px] font-display font-semibold"
+                data-testid="text-scope-label"
+              >
+                {scopeLabel}
+              </span>
+
+              <ChevronRight className="h-4 w-4 opacity-50 mx-0.5" />
+
+              <DropdownMenu
+                open={viewsMenuOpen}
+                onOpenChange={setViewsMenuOpen}
+              >
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 text-[26px] font-display font-semibold"
+                    data-testid="button-risk-views"
+                  >
+                    <span>
+                      {activeView ? activeView.name : "Default view"}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 opacity-60" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Views
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setViewsMenuOpen(false);
+                      setActiveViewId(null);
+                      setSearch("");
+                      setTypeFilter("all");
+                      setRatingFilter("all");
+                    }}
+                    className="flex items-center justify-between"
+                    data-testid="risk-view-option-default"
+                  >
+                    <span>Default view</span>
+                    {!activeView && (
+                      <Check className="h-4 w-4 text-emerald-500" />
+                    )}
+                  </DropdownMenuItem>
+                  {(views ?? []).map((v) => (
+                    <DropdownMenuItem
+                      key={v.id}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setViewsMenuOpen(false);
+                        applyView(v.id);
+                      }}
+                      className="flex items-center justify-between gap-2"
+                      data-testid={`risk-menu-view-${v.id}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{v.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {v.isDefault && (
+                          <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                        )}
+                        {activeViewId === v.id && (
+                          <Check className="h-4 w-4 text-emerald-500" />
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setViewsMenuOpen(false);
+                      setSaveName(
+                        activeView ? `${activeView.name} (copy)` : "My view",
+                      );
+                      setSaveAsDefault(false);
+                      setSaveOpen(true);
+                    }}
+                    disabled={
+                      activeFilterCount === 0 &&
+                      search.trim().length === 0 &&
+                      !activeView
+                    }
+                    data-testid="risk-menu-save-view"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-2" />
+                    Save current view
+                  </DropdownMenuItem>
+                  {activeView && (
+                    <>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          handleSetDefaultView(
+                            activeView.id,
+                            !activeView.isDefault,
+                          );
+                        }}
+                        data-testid="risk-menu-toggle-default"
+                      >
+                        <Star className="h-3.5 w-3.5 mr-2" />
+                        {activeView.isDefault
+                          ? "Unset as default view"
+                          : "Set as default view"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          handleDeleteView(activeView.id);
+                        }}
+                        className="text-red-600 focus:text-red-700"
+                        data-testid="risk-menu-delete-view"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-2" />
+                        Delete this view
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </h1>
-            {/* Status counts chips */}
-            <div className="flex items-center gap-1.5 flex-wrap ml-1">
-              {LANE_ORDER.map((lane) => (
-                <Badge
-                  key={lane}
-                  variant="outline"
-                  className={`text-[11.5px] font-medium px-2 py-0.5 ${LANE_TONE[lane].chip}`}
-                  data-testid={`chip-count-${lane}`}
-                >
-                  {grouped.get(lane)?.length ?? 0} {LANE_LABEL[lane]}
-                </Badge>
-              ))}
-            </div>
           </div>
           <p className="text-sm text-muted-foreground max-w-3xl">
             Track risks through identification, analysis, treatment, and
             closure. Treatment decisions go through the approval workflow;
             approved mitigations automatically become Projects.
           </p>
+          {/* Status counts chips — mirror the per-phase chip set on the
+              Projects/Initiatives boards so users can see the lifecycle
+              distribution at a glance. */}
+          <div
+            className="flex items-center gap-1.5 flex-wrap pt-1"
+            data-testid="risk-counters"
+          >
+            {LANE_ORDER.map((lane) => (
+              <Badge
+                key={lane}
+                variant="outline"
+                className={`text-[11.5px] font-medium px-2 py-0.5 ${LANE_TONE[lane].chip}`}
+                data-testid={`chip-count-${lane}`}
+              >
+                {grouped.get(lane)?.length ?? 0} {LANE_LABEL[lane]}
+              </Badge>
+            ))}
+          </div>
         </div>
         <Button
           onClick={() => setCreateOpen(true)}
@@ -503,6 +777,53 @@ export default function RisksPage() {
           onClose={() => setSelectedId(null)}
         />
       )}
+
+      {/* Save view dialog */}
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Save view</DialogTitle>
+            <DialogDescription>
+              Saved views capture your filters so you can recall them with a
+              single click.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="risk-view-name">Name</Label>
+              <Input
+                id="risk-view-name"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="e.g. High & critical only"
+                data-testid="input-risk-view-name"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={saveAsDefault}
+                onChange={(e) => setSaveAsDefault(e.target.checked)}
+                data-testid="checkbox-risk-view-default"
+              />
+              <span>Set as my default view</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveView}
+              disabled={!saveName.trim() || createView.isPending}
+              data-testid="button-risk-view-save"
+            >
+              Save view
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

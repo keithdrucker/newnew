@@ -24,7 +24,7 @@ function toDto(row: ViewRow) {
   return {
     id: row.id,
     userId: row.userId,
-    scope: row.scope as "initiative" | "project" | "operational_task",
+    scope: row.scope as "initiative" | "project" | "operational_task" | "risk",
     name: row.name,
     isDefault: row.isDefault,
     config: row.config ?? {},

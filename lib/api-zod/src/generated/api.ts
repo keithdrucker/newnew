@@ -1021,13 +1021,13 @@ export const AddTicketCommentBody = zod.object({
  * @summary List the current user's saved views for a section
  */
 export const ListBoardViewsQueryParams = zod.object({
-  scope: zod.enum(["initiative", "project", "operational_task"]),
+  scope: zod.enum(["initiative", "project", "operational_task", "risk"]),
 });
 
 export const ListBoardViewsResponseItem = zod.object({
   id: zod.number(),
   userId: zod.number(),
-  scope: zod.enum(["initiative", "project", "operational_task"]),
+  scope: zod.enum(["initiative", "project", "operational_task", "risk"]),
   name: zod.string(),
   isDefault: zod.boolean(),
   config: zod
@@ -1057,7 +1057,7 @@ export const ListBoardViewsResponse = zod.array(ListBoardViewsResponseItem);
  * @summary Create a saved view for a section (Initiatives / Projects / Operational Tasks)
  */
 export const CreateBoardViewBody = zod.object({
-  scope: zod.enum(["initiative", "project", "operational_task"]),
+  scope: zod.enum(["initiative", "project", "operational_task", "risk"]),
   name: zod.string(),
   config: zod
     .object({
@@ -1114,7 +1114,7 @@ export const UpdateBoardViewBody = zod.object({
 export const UpdateBoardViewResponse = zod.object({
   id: zod.number(),
   userId: zod.number(),
-  scope: zod.enum(["initiative", "project", "operational_task"]),
+  scope: zod.enum(["initiative", "project", "operational_task", "risk"]),
   name: zod.string(),
   isDefault: zod.boolean(),
   config: zod

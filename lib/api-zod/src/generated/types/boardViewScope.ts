@@ -13,4 +13,5 @@ export const BoardViewScope = {
   initiative: "initiative",
   project: "project",
   operational_task: "operational_task",
+  risk: "risk",
 } as const;

@@ -3318,7 +3318,7 @@ components:
 
     BoardViewScope:
       type: string
-      enum: [initiative, project, operational_task]
+      enum: [initiative, project, operational_task, risk]
 
     BoardViewConfig:
       type: object
