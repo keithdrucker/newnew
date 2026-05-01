@@ -1,24 +1,13 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  type ReactNode,
-} from "react";
+import { useMemo, type ReactNode } from "react";
 import { useListDashboardVisibility } from "@workspace/api-client-react";
 import {
   type DashboardKey,
-  getDashboardSections,
   getSectionDef,
 } from "@/lib/dashboard-sections";
-
-interface DashboardVisibilityContextValue {
-  dashboardKey: DashboardKey;
-  isVisible: (sectionKey: string) => boolean;
-  isLoading: boolean;
-}
-
-const DashboardVisibilityContext =
-  createContext<DashboardVisibilityContextValue | null>(null);
+import {
+  DashboardVisibilityContext,
+  type DashboardVisibilityContextValue,
+} from "./dashboard-visibility-context";
 
 interface ProviderProps {
   dashboardKey: DashboardKey;
@@ -66,22 +55,4 @@ export function DashboardVisibilityProvider({
       {children}
     </DashboardVisibilityContext.Provider>
   );
-}
-
-export function useDashboardVisibility(): DashboardVisibilityContextValue {
-  const ctx = useContext(DashboardVisibilityContext);
-  if (!ctx) {
-    throw new Error(
-      "useDashboardVisibility must be used inside DashboardVisibilityProvider",
-    );
-  }
-  return ctx;
-}
-
-// Convenience: returns the registry definitions for the current
-// dashboard so the customize sheet can render toggles without taking
-// a separate prop.
-export function useDashboardSections() {
-  const { dashboardKey } = useDashboardVisibility();
-  return getDashboardSections(dashboardKey);
 }

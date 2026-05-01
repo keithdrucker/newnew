@@ -76,7 +76,7 @@ import {
 import { DashboardVisibilityProvider } from "@/components/dashboard/dashboard-visibility-provider";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { CustomizeDashboardSheet } from "@/components/dashboard/customize-dashboard-sheet";
-import { useDashboardVisibility } from "@/components/dashboard/dashboard-visibility-provider";
+import { useDashboardVisibility } from "@/components/dashboard/use-dashboard-visibility";
 import { format } from "date-fns";
 import {
   Clock,

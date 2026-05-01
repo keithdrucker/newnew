@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   useDashboardSections,
   useDashboardVisibility,
-} from "./dashboard-visibility-provider";
+} from "./use-dashboard-visibility";
 import {
   type DashboardKey,
   getDashboardLabel,

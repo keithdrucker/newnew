@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useDashboardVisibility } from "./dashboard-visibility-provider";
+import { useDashboardVisibility } from "./use-dashboard-visibility";
 
 interface DashboardSectionProps {
   sectionKey: string;
