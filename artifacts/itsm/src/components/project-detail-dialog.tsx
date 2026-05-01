@@ -1238,12 +1238,25 @@ function DetailInner({
                     </Button>
                     <Button
                       size="sm"
-                      disabled={update.isPending}
+                      disabled={update.isPending || changePhase.isPending}
                       onClick={async () => {
                         // Persist any in-flight planning edits BEFORE
                         // changing phase so we never race the audit row.
                         await saveBasics("Saved");
-                        openPhaseChange("in_progress");
+                        // Planning → Implementation is a routine forward
+                        // step; skip the reason prompt and transition
+                        // directly. Other phase changes still go through
+                        // PhaseChangeDialog via openPhaseChange().
+                        changePhase.mutate(
+                          { id: row.id, data: { to: "in_progress" } },
+                          {
+                            onSuccess: () => {
+                              toast({
+                                title: `Moved to ${PHASE_LABEL.in_progress}`,
+                              });
+                            },
+                          },
+                        );
                       }}
                       data-testid="button-start-project"
                     >
