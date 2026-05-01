@@ -291,7 +291,6 @@ async function hydrate(rows: RiskRow[]): Promise<unknown[]> {
     businessImpact: r.businessImpact,
     riskRating: r.riskRating,
     analysisNotes: r.analysisNotes,
-    employeeImpact: r.employeeImpact,
     financialImpact: r.financialImpact,
     operationalImpact: r.operationalImpact,
     complianceImpact: r.complianceImpact,

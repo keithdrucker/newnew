@@ -2337,6 +2337,33 @@ export interface RiskAuditEvent {
   changedAt: string;
 }
 
+export type RiskFinancialImpact =
+  (typeof RiskFinancialImpact)[keyof typeof RiskFinancialImpact];
+
+export const RiskFinancialImpact = {
+  "": "",
+  yes: "yes",
+  no: "no",
+} as const;
+
+export type RiskOperationalImpact =
+  (typeof RiskOperationalImpact)[keyof typeof RiskOperationalImpact];
+
+export const RiskOperationalImpact = {
+  "": "",
+  yes: "yes",
+  no: "no",
+} as const;
+
+export type RiskComplianceImpact =
+  (typeof RiskComplianceImpact)[keyof typeof RiskComplianceImpact];
+
+export const RiskComplianceImpact = {
+  "": "",
+  yes: "yes",
+  no: "no",
+} as const;
+
 export type RiskMitigationControlType =
   (typeof RiskMitigationControlType)[keyof typeof RiskMitigationControlType];
 
@@ -2369,10 +2396,9 @@ export interface Risk {
   businessImpact: string;
   riskRating: string;
   analysisNotes: string;
-  employeeImpact: string;
-  financialImpact: string;
-  operationalImpact: string;
-  complianceImpact: string;
+  financialImpact: RiskFinancialImpact;
+  operationalImpact: RiskOperationalImpact;
+  complianceImpact: RiskComplianceImpact;
   assetType: string;
   assetValue: string;
   assetCriticality: string;
@@ -2409,6 +2435,33 @@ export interface CreateRiskInput {
   riskOwnerUserId?: number | null;
 }
 
+export type UpdateRiskInputFinancialImpact =
+  (typeof UpdateRiskInputFinancialImpact)[keyof typeof UpdateRiskInputFinancialImpact];
+
+export const UpdateRiskInputFinancialImpact = {
+  "": "",
+  yes: "yes",
+  no: "no",
+} as const;
+
+export type UpdateRiskInputOperationalImpact =
+  (typeof UpdateRiskInputOperationalImpact)[keyof typeof UpdateRiskInputOperationalImpact];
+
+export const UpdateRiskInputOperationalImpact = {
+  "": "",
+  yes: "yes",
+  no: "no",
+} as const;
+
+export type UpdateRiskInputComplianceImpact =
+  (typeof UpdateRiskInputComplianceImpact)[keyof typeof UpdateRiskInputComplianceImpact];
+
+export const UpdateRiskInputComplianceImpact = {
+  "": "",
+  yes: "yes",
+  no: "no",
+} as const;
+
 export type UpdateRiskInputMitigationControlType =
   (typeof UpdateRiskInputMitigationControlType)[keyof typeof UpdateRiskInputMitigationControlType];
 
@@ -2440,10 +2493,9 @@ export interface UpdateRiskInput {
   impactScope?: string;
   businessImpact?: string;
   analysisNotes?: string;
-  employeeImpact?: string;
-  financialImpact?: string;
-  operationalImpact?: string;
-  complianceImpact?: string;
+  financialImpact?: UpdateRiskInputFinancialImpact;
+  operationalImpact?: UpdateRiskInputOperationalImpact;
+  complianceImpact?: UpdateRiskInputComplianceImpact;
   assetType?: string;
   assetValue?: string;
   assetCriticality?: string;

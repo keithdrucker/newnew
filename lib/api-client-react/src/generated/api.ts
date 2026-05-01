@@ -9480,6 +9480,96 @@ export const useStartInitiativeWorkflowRun = <
 };
 
 /**
+ * Used when neither financial nor operational impact is "yes", so the
+treatment doesn't need Team Manager approval. Validates the
+per-decision required fields, performs the under_treatment →
+terminal status transition, and (for mitigation) auto-creates the
+same Project that the approval path would have created.
+
+ * @summary Finalize a risk's treatment decision directly (no approval workflow)
+ */
+export const getFinalizeRiskTreatmentUrl = (id: number) => {
+  return `/api/risks/${id}/finalize-treatment`;
+};
+
+export const finalizeRiskTreatment = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Risk> => {
+  return customFetch<Risk>(getFinalizeRiskTreatmentUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getFinalizeRiskTreatmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof finalizeRiskTreatment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof finalizeRiskTreatment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["finalizeRiskTreatment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof finalizeRiskTreatment>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return finalizeRiskTreatment(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FinalizeRiskTreatmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof finalizeRiskTreatment>>
+>;
+
+export type FinalizeRiskTreatmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Finalize a risk's treatment decision directly (no approval workflow)
+ */
+export const useFinalizeRiskTreatment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof finalizeRiskTreatment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof finalizeRiskTreatment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getFinalizeRiskTreatmentMutationOptions(options));
+};
+
+/**
  * @summary Start an approval workflow run on a risk's treatment decision (admin only)
  */
 export const getStartRiskWorkflowRunUrl = (id: number) => {

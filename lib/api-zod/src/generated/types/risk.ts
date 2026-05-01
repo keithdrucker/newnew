@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RiskAuditEvent } from "./riskAuditEvent";
+import type { RiskComplianceImpact } from "./riskComplianceImpact";
+import type { RiskFinancialImpact } from "./riskFinancialImpact";
 import type { RiskMitigationControlType } from "./riskMitigationControlType";
+import type { RiskOperationalImpact } from "./riskOperationalImpact";
 import type { RiskStatus } from "./riskStatus";
 import type { WorkflowRun } from "./workflowRun";
 
@@ -33,10 +36,9 @@ export interface Risk {
   businessImpact: string;
   riskRating: string;
   analysisNotes: string;
-  employeeImpact: string;
-  financialImpact: string;
-  operationalImpact: string;
-  complianceImpact: string;
+  financialImpact: RiskFinancialImpact;
+  operationalImpact: RiskOperationalImpact;
+  complianceImpact: RiskComplianceImpact;
   assetType: string;
   assetValue: string;
   assetCriticality: string;

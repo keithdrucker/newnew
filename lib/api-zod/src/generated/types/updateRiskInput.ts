@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RiskStatus } from "./riskStatus";
+import type { UpdateRiskInputComplianceImpact } from "./updateRiskInputComplianceImpact";
+import type { UpdateRiskInputFinancialImpact } from "./updateRiskInputFinancialImpact";
 import type { UpdateRiskInputMitigationControlType } from "./updateRiskInputMitigationControlType";
+import type { UpdateRiskInputOperationalImpact } from "./updateRiskInputOperationalImpact";
 
 /**
  * Patch the risk and/or transition its status. Treatment-outcome
@@ -30,10 +33,9 @@ export interface UpdateRiskInput {
   impactScope?: string;
   businessImpact?: string;
   analysisNotes?: string;
-  employeeImpact?: string;
-  financialImpact?: string;
-  operationalImpact?: string;
-  complianceImpact?: string;
+  financialImpact?: UpdateRiskInputFinancialImpact;
+  operationalImpact?: UpdateRiskInputOperationalImpact;
+  complianceImpact?: UpdateRiskInputComplianceImpact;
   assetType?: string;
   assetValue?: string;
   assetCriticality?: string;

@@ -2137,6 +2137,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/WorkflowRun" }
 
+  /risks/{id}/finalize-treatment:
+    post:
+      operationId: finalizeRiskTreatment
+      tags: [risks]
+      summary: Finalize a risk's treatment decision directly (no approval workflow)
+      description: |
+        Used when neither financial nor operational impact is "yes", so the
+        treatment doesn't need Team Manager approval. Validates the
+        per-decision required fields, performs the under_treatment →
+        terminal status transition, and (for mitigation) auto-creates the
+        same Project that the approval path would have created.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Risk transitioned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Risk" }
+
   /risks/{id}/workflow-runs:
     post:
       operationId: startRiskWorkflowRun
@@ -4649,11 +4672,16 @@ components:
         businessImpact: { type: string }
         riskRating: { type: string }
         analysisNotes: { type: string }
-        # Structured Impact Assessment
-        employeeImpact: { type: string }
-        financialImpact: { type: string }
-        operationalImpact: { type: string }
-        complianceImpact: { type: string }
+        # Structured Impact Assessment (all yes/no flags)
+        financialImpact:
+          type: string
+          enum: ["", "yes", "no"]
+        operationalImpact:
+          type: string
+          enum: ["", "yes", "no"]
+        complianceImpact:
+          type: string
+          enum: ["", "yes", "no"]
         # Asset Context
         assetType: { type: string }
         assetValue: { type: string }
@@ -4699,7 +4727,6 @@ components:
         - businessImpact
         - riskRating
         - analysisNotes
-        - employeeImpact
         - financialImpact
         - operationalImpact
         - complianceImpact
@@ -4756,11 +4783,16 @@ components:
         impactScope: { type: string }
         businessImpact: { type: string }
         analysisNotes: { type: string }
-        # Structured Impact Assessment
-        employeeImpact: { type: string }
-        financialImpact: { type: string }
-        operationalImpact: { type: string }
-        complianceImpact: { type: string }
+        # Structured Impact Assessment (all yes/no flags)
+        financialImpact:
+          type: string
+          enum: ["", "yes", "no"]
+        operationalImpact:
+          type: string
+          enum: ["", "yes", "no"]
+        complianceImpact:
+          type: string
+          enum: ["", "yes", "no"]
         # Asset Context
         assetType: { type: string }
         assetValue: { type: string }

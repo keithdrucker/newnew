@@ -68,15 +68,16 @@ export const risksTable = pgTable(
     analysisNotes: text("analysis_notes").notNull().default(""),
 
     // -- Structured Impact Assessment (replaces free-text impactScope/biz)
-    // none | low | medium | high
-    employeeImpact: text("employee_impact").notNull().default(""),
-    // Free-form so users can record either a number ("50000") or a
-    // range ("$50K-$100K") — the spec calls for an estimate, not a
-    // strict numeric.
+    // All three are strict yes/no flags. The Treatment-tab approval
+    // gate uses the financial + operational flags to decide whether
+    // Team Manager approval is required: if either is "yes", the
+    // treatment decision must go through the approval workflow; if
+    // both are "no", the user can finalize the treatment directly
+    // (see POST /risks/:id/finalize-treatment in routes/risks.ts).
+    // Stored as text "" | "yes" | "no" so an unanswered field stays
+    // empty rather than defaulting to a specific answer.
     financialImpact: text("financial_impact").notNull().default(""),
-    // low | medium | high
     operationalImpact: text("operational_impact").notNull().default(""),
-    // yes | no
     complianceImpact: text("compliance_impact").notNull().default(""),
 
     // -- Asset Context (optional)
