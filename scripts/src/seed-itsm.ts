@@ -310,7 +310,7 @@ async function main() {
 
   const sources = ["portal", "email", "phone", "chat", "walk_in"] as const;
   const priorities = ["low", "medium", "high", "urgent"] as const;
-  const statuses = ["open", "open", "open", "pending", "resolved", "resolved", "closed"] as const;
+  const statuses = ["new", "new", "in_progress", "in_progress", "resolved", "resolved", "closed"] as const;
 
   let idx = 0;
   for (const dept of deptRows) {

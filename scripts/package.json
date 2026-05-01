@@ -6,6 +6,9 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "seed:itsm": "tsx ./src/seed-itsm.ts",
+    "add-user": "tsx ./src/add-user.ts",
+    "check-tickets": "tsx ./src/check-tickets.ts",
+    "fix-statuses": "tsx ./src/fix-statuses.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
