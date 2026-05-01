@@ -336,7 +336,7 @@ function BoardActions({
 // grid (each card occupies one column on desktop). The "Save settings"
 // button lives in the SLA card so it's adjacent to the editable fields
 // without disturbing the parent area-section layout.
-function TicketsSetupForm({ departmentId }: { departmentId: number }) {
+export function TicketsSetupForm({ departmentId }: { departmentId: number }) {
   const { data: settings, isLoading } = useGetDepartmentSettings(departmentId);
   const update = useUpdateDepartmentSettings();
   const { toast } = useToast();

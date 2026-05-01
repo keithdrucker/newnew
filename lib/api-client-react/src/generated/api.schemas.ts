@@ -392,6 +392,37 @@ export interface UpdateBoardMemberInput {
   sectionRoles?: BoardSectionRoles | null;
 }
 
+export type TeamWorkTypeKey =
+  (typeof TeamWorkTypeKey)[keyof typeof TeamWorkTypeKey];
+
+export const TeamWorkTypeKey = {
+  tickets: "tickets",
+  operational_tasks: "operational_tasks",
+  initiatives: "initiatives",
+  projects: "projects",
+  timesheets: "timesheets",
+} as const;
+
+export interface TeamWorkType {
+  id: number;
+  departmentId: number;
+  workType: TeamWorkTypeKey;
+  isEnabled: boolean;
+  requiresTimeTracking: boolean;
+}
+
+/**
+ * Toggle one or both flags for a single (team, work-type) pair.
+Server enforces the rule: if `isEnabled` becomes false, the row's
+`requiresTimeTracking` is forced to false; setting
+`requiresTimeTracking=true` while the row is disabled is a 400.
+
+ */
+export interface UpdateTeamWorkTypeInput {
+  isEnabled?: boolean;
+  requiresTimeTracking?: boolean;
+}
+
 export type UpdateDepartmentSettingsInputDefaultPriority =
   (typeof UpdateDepartmentSettingsInputDefaultPriority)[keyof typeof UpdateDepartmentSettingsInputDefaultPriority];
 

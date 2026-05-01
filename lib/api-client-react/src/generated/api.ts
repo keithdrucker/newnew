@@ -91,6 +91,8 @@ import type {
   SetDashboardVisibilityInput,
   StartWorkflowRunInput,
   SwitchSessionInput,
+  TeamWorkType,
+  TeamWorkTypeKey,
   Ticket,
   TicketComment,
   TicketDetail,
@@ -115,6 +117,7 @@ import type {
   UpdateProjectInput,
   UpdateRiskInput,
   UpdateRiskRuleInput,
+  UpdateTeamWorkTypeInput,
   UpdateTicketInput,
   UpdateTicketViewInput,
   UpdateTimeEntryInput,
@@ -1416,6 +1419,204 @@ export const useRemoveBoardMember = <
   TContext
 > => {
   return useMutation(getRemoveBoardMemberMutationOptions(options));
+};
+
+/**
+ * @summary List the five work-type enablement rows for a team. Lazy-creates defaults if missing.
+ */
+export const getListTeamWorkTypesUrl = (id: number) => {
+  return `/api/departments/${id}/work-types`;
+};
+
+export const listTeamWorkTypes = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TeamWorkType[]> => {
+  return customFetch<TeamWorkType[]>(getListTeamWorkTypesUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTeamWorkTypesQueryKey = (id: number) => {
+  return [`/api/departments/${id}/work-types`] as const;
+};
+
+export const getListTeamWorkTypesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTeamWorkTypes>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTeamWorkTypes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTeamWorkTypesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTeamWorkTypes>>
+  > = ({ signal }) => listTeamWorkTypes(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTeamWorkTypes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTeamWorkTypesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTeamWorkTypes>>
+>;
+export type ListTeamWorkTypesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List the five work-type enablement rows for a team. Lazy-creates defaults if missing.
+ */
+
+export function useListTeamWorkTypes<
+  TData = Awaited<ReturnType<typeof listTeamWorkTypes>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTeamWorkTypes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTeamWorkTypesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Toggle enablement / time-tracking for a single work type on this team (admin only)
+ */
+export const getUpdateTeamWorkTypeUrl = (
+  id: number,
+  workType: TeamWorkTypeKey,
+) => {
+  return `/api/departments/${id}/work-types/${workType}`;
+};
+
+export const updateTeamWorkType = async (
+  id: number,
+  workType: TeamWorkTypeKey,
+  updateTeamWorkTypeInput: UpdateTeamWorkTypeInput,
+  options?: RequestInit,
+): Promise<TeamWorkType> => {
+  return customFetch<TeamWorkType>(getUpdateTeamWorkTypeUrl(id, workType), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateTeamWorkTypeInput),
+  });
+};
+
+export const getUpdateTeamWorkTypeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTeamWorkType>>,
+    TError,
+    {
+      id: number;
+      workType: TeamWorkTypeKey;
+      data: BodyType<UpdateTeamWorkTypeInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTeamWorkType>>,
+  TError,
+  {
+    id: number;
+    workType: TeamWorkTypeKey;
+    data: BodyType<UpdateTeamWorkTypeInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateTeamWorkType"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTeamWorkType>>,
+    {
+      id: number;
+      workType: TeamWorkTypeKey;
+      data: BodyType<UpdateTeamWorkTypeInput>;
+    }
+  > = (props) => {
+    const { id, workType, data } = props ?? {};
+
+    return updateTeamWorkType(id, workType, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTeamWorkTypeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTeamWorkType>>
+>;
+export type UpdateTeamWorkTypeMutationBody = BodyType<UpdateTeamWorkTypeInput>;
+export type UpdateTeamWorkTypeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Toggle enablement / time-tracking for a single work type on this team (admin only)
+ */
+export const useUpdateTeamWorkType = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTeamWorkType>>,
+    TError,
+    {
+      id: number;
+      workType: TeamWorkTypeKey;
+      data: BodyType<UpdateTeamWorkTypeInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTeamWorkType>>,
+  TError,
+  {
+    id: number;
+    workType: TeamWorkTypeKey;
+    data: BodyType<UpdateTeamWorkTypeInput>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateTeamWorkTypeMutationOptions(options));
 };
 
 /**

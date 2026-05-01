@@ -13,16 +13,20 @@ import ProjectsDashboard from "@/pages/projects-dashboard";
 import Tickets from "@/pages/tickets";
 import TicketDetail from "@/pages/ticket-detail";
 import People from "@/pages/people";
-import SettingsAgents from "@/pages/settings-agents";
 import Assets from "@/pages/assets";
 import Applications from "@/pages/applications";
 import Vendors from "@/pages/vendors";
 import Projects from "@/pages/projects";
-import Settings from "@/pages/settings";
-import SettingsRiskRules from "@/pages/settings-risk-rules";
-import SettingsWorkflows from "@/pages/settings-workflows";
-import SettingsWorkflowEdit from "@/pages/settings-workflow-edit";
-import BoardSettings from "@/pages/board-settings";
+import SettingsCategoryPage from "@/pages/settings/category-page";
+import SettingsLeafPage from "@/pages/settings/leaf-page";
+import SettingsAgentsPage from "@/pages/settings/agents-page";
+import SettingsTeamsPage from "@/pages/settings/teams-page";
+import SettingsWorkflowsPage from "@/pages/settings/workflows-page";
+import SettingsWorkflowEditPage from "@/pages/settings/workflow-edit-page";
+import SettingsAutomationPage from "@/pages/settings/automation-page";
+import SettingsRiskRulesPage from "@/pages/settings/risk-rules-page";
+import TeamPage from "@/pages/settings/team-page";
+import TeamWorkTypePage from "@/pages/settings/team-work-type-page";
 import {
   KnowledgeBaseList,
   KnowledgeBaseDetail,
@@ -46,7 +50,7 @@ function Router() {
         <Route path="/tickets/:id" component={TicketDetail} />
         <Route path="/people" component={People} />
         <Route path="/agents">
-          <Redirect to="/settings/agents" />
+          <Redirect to="/settings/people-access/agents" />
         </Route>
         <Route path="/knowledge-base" component={KnowledgeBaseList} />
         <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
@@ -63,13 +67,77 @@ function Router() {
         <Route path="/initiatives" component={Initiatives} />
         <Route path="/risks" component={Risks} />
         <Route path="/executive-dashboard" component={ExecutiveDashboard} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/settings/agents" component={SettingsAgents} />
-        <Route path="/settings/risk-rules" component={SettingsRiskRules} />
-        <Route path="/settings/workflows" component={SettingsWorkflows} />
-        <Route path="/settings/workflows/new" component={SettingsWorkflowEdit} />
-        <Route path="/settings/workflows/:id" component={SettingsWorkflowEdit} />
-        <Route path="/settings/boards/:slug" component={BoardSettings} />
+        {/* Settings — IA shell. Top-level /settings redirects into the
+            first category landing. Specific wired pages have their own
+            dedicated routes; everything else falls through to the
+            generic leaf-page dispatcher which renders a stub. */}
+        <Route path="/settings">
+          <Redirect to="/settings/system-defaults" />
+        </Route>
+        {/* Legacy redirects for routes that moved into the new IA. */}
+        <Route path="/settings/agents">
+          <Redirect to="/settings/people-access/agents" />
+        </Route>
+        <Route path="/settings/workflows" component={SettingsWorkflowsPage} />
+        <Route path="/settings/workflows/new" component={SettingsWorkflowEditPage} />
+        <Route path="/settings/workflows/:id" component={SettingsWorkflowEditPage} />
+        <Route path="/settings/risk-rules" component={SettingsRiskRulesPage} />
+        <Route path="/settings/boards/:slug">
+          {(params) => (
+            <Redirect
+              to={`/settings/people-access/teams/${(params as { slug: string }).slug}`}
+            />
+          )}
+        </Route>
+
+        {/* People & Access — Teams */}
+        <Route
+          path="/settings/people-access/teams"
+          component={SettingsTeamsPage}
+        />
+        <Route
+          path="/settings/people-access/teams/:slug"
+          component={TeamPage}
+        />
+        <Route
+          path="/settings/people-access/teams/:slug/work-types/:workType"
+          component={TeamWorkTypePage}
+        />
+
+        {/* People & Access — Agents (existing wired page) */}
+        <Route
+          path="/settings/people-access/agents"
+          component={SettingsAgentsPage}
+        />
+
+        {/* Service Configuration — wired pages */}
+        <Route
+          path="/settings/service/workflows"
+          component={SettingsWorkflowsPage}
+        />
+        <Route
+          path="/settings/service/workflows/new"
+          component={SettingsWorkflowEditPage}
+        />
+        <Route
+          path="/settings/service/workflows/:id"
+          component={SettingsWorkflowEditPage}
+        />
+        <Route
+          path="/settings/service/automation"
+          component={SettingsAutomationPage}
+        />
+
+        {/* Generic leaf-page + category-page dispatchers */}
+        <Route
+          path="/settings/:category/:page"
+          component={SettingsLeafPage}
+        />
+        <Route
+          path="/settings/:category"
+          component={SettingsCategoryPage}
+        />
+
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

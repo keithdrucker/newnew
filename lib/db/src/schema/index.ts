@@ -20,3 +20,4 @@ export * from "./timeEntries";
 export * from "./workflows";
 export * from "./dashboardSectionVisibility";
 export * from "./risks";
+export * from "./teamWorkTypes";

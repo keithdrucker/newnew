@@ -305,6 +305,51 @@ paths:
         "204":
           description: Removed
 
+  /departments/{id}/work-types:
+    get:
+      operationId: listTeamWorkTypes
+      tags: [settings]
+      summary: List the five work-type enablement rows for a team. Lazy-creates defaults if missing.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Work types
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TeamWorkType" }
+
+  /departments/{id}/work-types/{workType}:
+    patch:
+      operationId: updateTeamWorkType
+      tags: [settings]
+      summary: Toggle enablement / time-tracking for a single work type on this team (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: workType
+          required: true
+          schema: { $ref: "#/components/schemas/TeamWorkTypeKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTeamWorkTypeInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamWorkType" }
+
   /risk-rules:
     get:
       operationId: listRiskRules
@@ -2872,6 +2917,31 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/BoardSectionRoles" }
             - { type: "null" }
+
+    TeamWorkTypeKey:
+      type: string
+      enum: [tickets, operational_tasks, initiatives, projects, timesheets]
+
+    TeamWorkType:
+      type: object
+      required: [id, departmentId, workType, isEnabled, requiresTimeTracking]
+      properties:
+        id: { type: integer }
+        departmentId: { type: integer }
+        workType: { $ref: "#/components/schemas/TeamWorkTypeKey" }
+        isEnabled: { type: boolean }
+        requiresTimeTracking: { type: boolean }
+
+    UpdateTeamWorkTypeInput:
+      type: object
+      description: |
+        Toggle one or both flags for a single (team, work-type) pair.
+        Server enforces the rule: if `isEnabled` becomes false, the row's
+        `requiresTimeTracking` is forced to false; setting
+        `requiresTimeTracking=true` while the row is disabled is a 400.
+      properties:
+        isEnabled: { type: boolean }
+        requiresTimeTracking: { type: boolean }
 
     UpdateDepartmentSettingsInput:
       type: object

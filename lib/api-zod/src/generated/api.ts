@@ -456,6 +456,67 @@ export const RemoveBoardMemberParams = zod.object({
 });
 
 /**
+ * @summary List the five work-type enablement rows for a team. Lazy-creates defaults if missing.
+ */
+export const ListTeamWorkTypesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListTeamWorkTypesResponseItem = zod.object({
+  id: zod.number(),
+  departmentId: zod.number(),
+  workType: zod.enum([
+    "tickets",
+    "operational_tasks",
+    "initiatives",
+    "projects",
+    "timesheets",
+  ]),
+  isEnabled: zod.boolean(),
+  requiresTimeTracking: zod.boolean(),
+});
+export const ListTeamWorkTypesResponse = zod.array(
+  ListTeamWorkTypesResponseItem,
+);
+
+/**
+ * @summary Toggle enablement / time-tracking for a single work type on this team (admin only)
+ */
+export const UpdateTeamWorkTypeParams = zod.object({
+  id: zod.coerce.number(),
+  workType: zod.enum([
+    "tickets",
+    "operational_tasks",
+    "initiatives",
+    "projects",
+    "timesheets",
+  ]),
+});
+
+export const UpdateTeamWorkTypeBody = zod
+  .object({
+    isEnabled: zod.boolean().optional(),
+    requiresTimeTracking: zod.boolean().optional(),
+  })
+  .describe(
+    "Toggle one or both flags for a single (team, work-type) pair.\nServer enforces the rule: if `isEnabled` becomes false, the row's\n`requiresTimeTracking` is forced to false; setting\n`requiresTimeTracking=true` while the row is disabled is a 400.\n",
+  );
+
+export const UpdateTeamWorkTypeResponse = zod.object({
+  id: zod.number(),
+  departmentId: zod.number(),
+  workType: zod.enum([
+    "tickets",
+    "operational_tasks",
+    "initiatives",
+    "projects",
+    "timesheets",
+  ]),
+  isEnabled: zod.boolean(),
+  requiresTimeTracking: zod.boolean(),
+});
+
+/**
  * @summary List category → default risk-level rules used to seed new tickets
  */
 export const ListRiskRulesResponseItem = zod.object({
