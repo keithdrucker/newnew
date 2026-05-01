@@ -56,7 +56,9 @@ export const risksTable = pgTable(
     likelihood: text("likelihood").notNull().default(""),
     // low | medium | high | critical
     impact: text("impact").notNull().default(""),
-    // individual | team | department | company_wide
+    // **Legacy** unstructured impact fields kept for back-compat with
+    // existing rows. The Analysis form no longer surfaces them — the
+    // structured Impact Assessment fields below replace them.
     impactScope: text("impact_scope").notNull().default(""),
     businessImpact: text("business_impact").notNull().default(""),
     // Derived from likelihood × impact. Persisted so list views are
@@ -64,6 +66,31 @@ export const risksTable = pgTable(
     // low | medium | high | critical
     riskRating: text("risk_rating").notNull().default(""),
     analysisNotes: text("analysis_notes").notNull().default(""),
+
+    // -- Structured Impact Assessment (replaces free-text impactScope/biz)
+    // none | low | medium | high
+    employeeImpact: text("employee_impact").notNull().default(""),
+    // Free-form so users can record either a number ("50000") or a
+    // range ("$50K-$100K") — the spec calls for an estimate, not a
+    // strict numeric.
+    financialImpact: text("financial_impact").notNull().default(""),
+    // low | medium | high
+    operationalImpact: text("operational_impact").notNull().default(""),
+    // yes | no
+    complianceImpact: text("compliance_impact").notNull().default(""),
+
+    // -- Asset Context (optional)
+    // physical | digital | process | vendor
+    assetType: text("asset_type").notNull().default(""),
+    // Optional numeric, stored as text for the same range/estimate
+    // flexibility as financialImpact.
+    assetValue: text("asset_value").notNull().default(""),
+    // low | medium | high | very_high
+    assetCriticality: text("asset_criticality").notNull().default(""),
+
+    // -- Risk Factors (one item per line, free-form short bullets)
+    threats: text("threats").notNull().default(""),
+    vulnerabilities: text("vulnerabilities").notNull().default(""),
 
     // ---------------- Treatment Decision (Under Treatment+) ---------
     // mitigation | acceptance | transfer | avoidance
@@ -77,6 +104,13 @@ export const risksTable = pgTable(
       .notNull()
       .default(""),
     avoidanceActionNotes: text("avoidance_action_notes").notNull().default(""),
+    // -- Mitigation-decision required fields. Required at approval-run-
+    // start time when treatmentDecision === "mitigation".
+    mitigationSummary: text("mitigation_summary").notNull().default(""),
+    mitigationProsCons: text("mitigation_pros_cons").notNull().default(""),
+    mitigationEstimatedCost: text("mitigation_estimated_cost")
+      .notNull()
+      .default(""),
 
     // Set when treatment = mitigation is approved — the project that
     // was atomically created. SET NULL on project deletion (mirrors

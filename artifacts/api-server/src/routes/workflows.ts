@@ -815,6 +815,21 @@ router.post(
       // the approval run is opened — keeps approvers from voting on
       // an incomplete proposal.
       if (
+        risk.treatmentDecision === "mitigation" &&
+        (!risk.mitigationSummary ||
+          risk.mitigationSummary.trim().length === 0 ||
+          !risk.mitigationProsCons ||
+          risk.mitigationProsCons.trim().length === 0 ||
+          !risk.mitigationEstimatedCost ||
+          risk.mitigationEstimatedCost.trim().length === 0)
+      ) {
+        return {
+          kind: "missing_field",
+          message:
+            "Mitigation summary, pros & cons, and estimated cost are required before approval.",
+        };
+      }
+      if (
         risk.treatmentDecision === "acceptance" &&
         (!risk.acceptanceJustification ||
           risk.acceptanceJustification.trim().length === 0)
@@ -1132,6 +1147,19 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
         ) {
           throw new FinalizeError(
             "Avoidance action notes are required to approve this risk.",
+          );
+        }
+        if (
+          decision === "mitigation" &&
+          (!risk.mitigationSummary ||
+            risk.mitigationSummary.trim().length === 0 ||
+            !risk.mitigationProsCons ||
+            risk.mitigationProsCons.trim().length === 0 ||
+            !risk.mitigationEstimatedCost ||
+            risk.mitigationEstimatedCost.trim().length === 0)
+        ) {
+          throw new FinalizeError(
+            "Mitigation summary, pros & cons, and estimated cost are all required to approve this risk.",
           );
         }
 

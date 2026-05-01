@@ -2360,11 +2360,23 @@ export interface Risk {
   businessImpact: string;
   riskRating: string;
   analysisNotes: string;
+  employeeImpact: string;
+  financialImpact: string;
+  operationalImpact: string;
+  complianceImpact: string;
+  assetType: string;
+  assetValue: string;
+  assetCriticality: string;
+  threats: string;
+  vulnerabilities: string;
   treatmentDecision: string;
   acceptanceJustification: string;
   transferMethod: string;
   transferResponsibleParty: string;
   avoidanceActionNotes: string;
+  mitigationSummary: string;
+  mitigationProsCons: string;
+  mitigationEstimatedCost: string;
   /** @nullable */
   createdProjectId?: number | null;
   createdAt: string;
@@ -2406,11 +2418,23 @@ export interface UpdateRiskInput {
   impactScope?: string;
   businessImpact?: string;
   analysisNotes?: string;
+  employeeImpact?: string;
+  financialImpact?: string;
+  operationalImpact?: string;
+  complianceImpact?: string;
+  assetType?: string;
+  assetValue?: string;
+  assetCriticality?: string;
+  threats?: string;
+  vulnerabilities?: string;
   treatmentDecision?: string;
   acceptanceJustification?: string;
   transferMethod?: string;
   transferResponsibleParty?: string;
   avoidanceActionNotes?: string;
+  mitigationSummary?: string;
+  mitigationProsCons?: string;
+  mitigationEstimatedCost?: string;
   transitionReason?: string;
 }
 

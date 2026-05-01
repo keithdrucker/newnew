@@ -88,6 +88,7 @@ import {
   X,
   Check,
   Star,
+  Info,
 } from "lucide-react";
 import { RiskWorkflowApproval } from "@/components/risk-workflow-approval";
 
@@ -239,6 +240,38 @@ const TREATMENT_DECISIONS = [
   { value: "acceptance", label: "Acceptance" },
   { value: "transfer", label: "Transfer" },
   { value: "avoidance", label: "Avoidance" },
+];
+
+const NLMH_LEVELS = [
+  { value: "none", label: "None" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+const LMH_LEVELS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+const YN_OPTIONS = [
+  { value: "no", label: "No" },
+  { value: "yes", label: "Yes" },
+];
+
+const ASSET_TYPES = [
+  { value: "physical", label: "Physical" },
+  { value: "digital", label: "Digital" },
+  { value: "process", label: "Process" },
+  { value: "vendor", label: "Vendor" },
+];
+
+const ASSET_CRITICALITY = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "very_high", label: "Very High" },
 ];
 
 function statusLabel(s: string): string {
@@ -1318,9 +1351,16 @@ function RiskDetailContent({
   const analysisSnapshot = (r: Risk) => ({
     likelihood: r.likelihood || "",
     impact: r.impact || "",
-    impactScope: r.impactScope || "",
-    businessImpact: r.businessImpact || "",
     analysisNotes: r.analysisNotes || "",
+    employeeImpact: r.employeeImpact || "",
+    financialImpact: r.financialImpact || "",
+    operationalImpact: r.operationalImpact || "",
+    complianceImpact: r.complianceImpact || "",
+    assetType: r.assetType || "",
+    assetValue: r.assetValue || "",
+    assetCriticality: r.assetCriticality || "",
+    threats: r.threats || "",
+    vulnerabilities: r.vulnerabilities || "",
   });
   const treatmentSnapshot = (r: Risk) => ({
     decision: r.treatmentDecision || "",
@@ -1328,6 +1368,9 @@ function RiskDetailContent({
     transferMethod: r.transferMethod || "",
     transferResponsibleParty: r.transferResponsibleParty || "",
     avoidanceActionNotes: r.avoidanceActionNotes || "",
+    mitigationSummary: r.mitigationSummary || "",
+    mitigationProsCons: r.mitigationProsCons || "",
+    mitigationEstimatedCost: r.mitigationEstimatedCost || "",
   });
 
   // Overview / Identified-phase fields
@@ -1350,12 +1393,29 @@ function RiskDetailContent({
   );
   const [likelihood, setLikelihood] = useState(analysisBaseline.likelihood);
   const [impact, setImpact] = useState(analysisBaseline.impact);
-  const [impactScope, setImpactScope] = useState(analysisBaseline.impactScope);
-  const [businessImpact, setBusinessImpact] = useState(
-    analysisBaseline.businessImpact,
-  );
   const [analysisNotes, setAnalysisNotes] = useState(
     analysisBaseline.analysisNotes,
+  );
+  const [employeeImpact, setEmployeeImpact] = useState(
+    analysisBaseline.employeeImpact,
+  );
+  const [financialImpact, setFinancialImpact] = useState(
+    analysisBaseline.financialImpact,
+  );
+  const [operationalImpact, setOperationalImpact] = useState(
+    analysisBaseline.operationalImpact,
+  );
+  const [complianceImpact, setComplianceImpact] = useState(
+    analysisBaseline.complianceImpact,
+  );
+  const [assetType, setAssetType] = useState(analysisBaseline.assetType);
+  const [assetValue, setAssetValue] = useState(analysisBaseline.assetValue);
+  const [assetCriticality, setAssetCriticality] = useState(
+    analysisBaseline.assetCriticality,
+  );
+  const [threats, setThreats] = useState(analysisBaseline.threats);
+  const [vulnerabilities, setVulnerabilities] = useState(
+    analysisBaseline.vulnerabilities,
   );
 
   // Treatment / Under-Treatment-phase fields
@@ -1375,6 +1435,15 @@ function RiskDetailContent({
   const [avoidanceActionNotes, setAvoidanceActionNotes] = useState(
     treatmentBaseline.avoidanceActionNotes,
   );
+  const [mitigationSummary, setMitigationSummary] = useState(
+    treatmentBaseline.mitigationSummary,
+  );
+  const [mitigationProsCons, setMitigationProsCons] = useState(
+    treatmentBaseline.mitigationProsCons,
+  );
+  const [mitigationEstimatedCost, setMitigationEstimatedCost] = useState(
+    treatmentBaseline.mitigationEstimatedCost,
+  );
 
   const overviewDirty =
     title !== overviewBaseline.title ||
@@ -1386,16 +1455,26 @@ function RiskDetailContent({
   const analysisDirty =
     likelihood !== analysisBaseline.likelihood ||
     impact !== analysisBaseline.impact ||
-    impactScope !== analysisBaseline.impactScope ||
-    businessImpact !== analysisBaseline.businessImpact ||
-    analysisNotes !== analysisBaseline.analysisNotes;
+    analysisNotes !== analysisBaseline.analysisNotes ||
+    employeeImpact !== analysisBaseline.employeeImpact ||
+    financialImpact !== analysisBaseline.financialImpact ||
+    operationalImpact !== analysisBaseline.operationalImpact ||
+    complianceImpact !== analysisBaseline.complianceImpact ||
+    assetType !== analysisBaseline.assetType ||
+    assetValue !== analysisBaseline.assetValue ||
+    assetCriticality !== analysisBaseline.assetCriticality ||
+    threats !== analysisBaseline.threats ||
+    vulnerabilities !== analysisBaseline.vulnerabilities;
 
   const treatmentDirty =
     decision !== treatmentBaseline.decision ||
     acceptanceJustification !== treatmentBaseline.acceptanceJustification ||
     transferMethod !== treatmentBaseline.transferMethod ||
     transferResponsibleParty !== treatmentBaseline.transferResponsibleParty ||
-    avoidanceActionNotes !== treatmentBaseline.avoidanceActionNotes;
+    avoidanceActionNotes !== treatmentBaseline.avoidanceActionNotes ||
+    mitigationSummary !== treatmentBaseline.mitigationSummary ||
+    mitigationProsCons !== treatmentBaseline.mitigationProsCons ||
+    mitigationEstimatedCost !== treatmentBaseline.mitigationEstimatedCost;
 
   const isAnyDirty = overviewDirty || analysisDirty || treatmentDirty;
 
@@ -1433,18 +1512,32 @@ function RiskDetailContent({
       const next = analysisSnapshot(risk);
       setLikelihood(next.likelihood);
       setImpact(next.impact);
-      setImpactScope(next.impactScope);
-      setBusinessImpact(next.businessImpact);
       setAnalysisNotes(next.analysisNotes);
+      setEmployeeImpact(next.employeeImpact);
+      setFinancialImpact(next.financialImpact);
+      setOperationalImpact(next.operationalImpact);
+      setComplianceImpact(next.complianceImpact);
+      setAssetType(next.assetType);
+      setAssetValue(next.assetValue);
+      setAssetCriticality(next.assetCriticality);
+      setThreats(next.threats);
+      setVulnerabilities(next.vulnerabilities);
       setAnalysisBaseline(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     risk.likelihood,
     risk.impact,
-    risk.impactScope,
-    risk.businessImpact,
     risk.analysisNotes,
+    risk.employeeImpact,
+    risk.financialImpact,
+    risk.operationalImpact,
+    risk.complianceImpact,
+    risk.assetType,
+    risk.assetValue,
+    risk.assetCriticality,
+    risk.threats,
+    risk.vulnerabilities,
   ]);
 
   useEffect(() => {
@@ -1455,6 +1548,9 @@ function RiskDetailContent({
       setTransferMethod(next.transferMethod);
       setTransferResponsibleParty(next.transferResponsibleParty);
       setAvoidanceActionNotes(next.avoidanceActionNotes);
+      setMitigationSummary(next.mitigationSummary);
+      setMitigationProsCons(next.mitigationProsCons);
+      setMitigationEstimatedCost(next.mitigationEstimatedCost);
       setTreatmentBaseline(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1464,6 +1560,9 @@ function RiskDetailContent({
     risk.transferMethod,
     risk.transferResponsibleParty,
     risk.avoidanceActionNotes,
+    risk.mitigationSummary,
+    risk.mitigationProsCons,
+    risk.mitigationEstimatedCost,
   ]);
 
   function refresh() {
@@ -1519,17 +1618,31 @@ function RiskDetailContent({
         data: {
           likelihood,
           impact,
-          impactScope,
-          businessImpact,
           analysisNotes,
+          employeeImpact,
+          financialImpact,
+          operationalImpact,
+          complianceImpact,
+          assetType,
+          assetValue,
+          assetCriticality,
+          threats,
+          vulnerabilities,
         },
       });
       setAnalysisBaseline({
         likelihood,
         impact,
-        impactScope,
-        businessImpact,
         analysisNotes,
+        employeeImpact,
+        financialImpact,
+        operationalImpact,
+        complianceImpact,
+        assetType,
+        assetValue,
+        assetCriticality,
+        threats,
+        vulnerabilities,
       });
       refresh();
       toast.success("Analysis saved.");
@@ -1552,6 +1665,9 @@ function RiskDetailContent({
           transferMethod,
           transferResponsibleParty,
           avoidanceActionNotes,
+          mitigationSummary,
+          mitigationProsCons,
+          mitigationEstimatedCost,
         },
       });
       setTreatmentBaseline({
@@ -1560,6 +1676,9 @@ function RiskDetailContent({
         transferMethod,
         transferResponsibleParty,
         avoidanceActionNotes,
+        mitigationSummary,
+        mitigationProsCons,
+        mitigationEstimatedCost,
       });
       refresh();
       toast.success("Treatment proposal saved.");
@@ -1603,22 +1722,28 @@ function RiskDetailContent({
     riskOwnerUserId,
     likelihood,
     impact,
-    impactScope,
-    businessImpact,
     analysisNotes,
+    employeeImpact,
+    financialImpact,
+    operationalImpact,
+    complianceImpact,
+    assetType,
+    assetValue,
+    assetCriticality,
+    threats,
+    vulnerabilities,
     decision,
     acceptanceJustification,
     transferMethod,
     transferResponsibleParty,
     avoidanceActionNotes,
+    mitigationSummary,
+    mitigationProsCons,
+    mitigationEstimatedCost,
   ]);
 
   const canMoveToTreatment =
-    risk.status === "under_analysis" &&
-    !!likelihood &&
-    !!impact &&
-    !!impactScope.trim() &&
-    !!businessImpact.trim();
+    risk.status === "under_analysis" && !!likelihood && !!impact;
 
   async function launchTreatmentPhase() {
     // Persist any pending analysis edits first, then transition. Only switch
@@ -1797,14 +1922,28 @@ function RiskDetailContent({
                 risk={risk}
                 likelihood={likelihood}
                 impact={impact}
-                impactScope={impactScope}
-                businessImpact={businessImpact}
                 analysisNotes={analysisNotes}
+                employeeImpact={employeeImpact}
+                financialImpact={financialImpact}
+                operationalImpact={operationalImpact}
+                complianceImpact={complianceImpact}
+                assetType={assetType}
+                assetValue={assetValue}
+                assetCriticality={assetCriticality}
+                threats={threats}
+                vulnerabilities={vulnerabilities}
                 onLikelihoodChange={setLikelihood}
                 onImpactChange={setImpact}
-                onImpactScopeChange={setImpactScope}
-                onBusinessImpactChange={setBusinessImpact}
                 onAnalysisNotesChange={setAnalysisNotes}
+                onEmployeeImpactChange={setEmployeeImpact}
+                onFinancialImpactChange={setFinancialImpact}
+                onOperationalImpactChange={setOperationalImpact}
+                onComplianceImpactChange={setComplianceImpact}
+                onAssetTypeChange={setAssetType}
+                onAssetValueChange={setAssetValue}
+                onAssetCriticalityChange={setAssetCriticality}
+                onThreatsChange={setThreats}
+                onVulnerabilitiesChange={setVulnerabilities}
                 onSave={saveAnalysis}
                 onLaunchTreatment={launchTreatmentPhase}
                 canMoveToTreatment={canMoveToTreatment}
@@ -1823,11 +1962,17 @@ function RiskDetailContent({
                 transferMethod={transferMethod}
                 transferResponsibleParty={transferResponsibleParty}
                 avoidanceActionNotes={avoidanceActionNotes}
+                mitigationSummary={mitigationSummary}
+                mitigationProsCons={mitigationProsCons}
+                mitigationEstimatedCost={mitigationEstimatedCost}
                 onDecisionChange={setDecision}
                 onAcceptanceJustificationChange={setAcceptanceJustification}
                 onTransferMethodChange={setTransferMethod}
                 onTransferResponsiblePartyChange={setTransferResponsibleParty}
                 onAvoidanceActionNotesChange={setAvoidanceActionNotes}
+                onMitigationSummaryChange={setMitigationSummary}
+                onMitigationProsConsChange={setMitigationProsCons}
+                onMitigationEstimatedCostChange={setMitigationEstimatedCost}
                 onSave={saveTreatment}
                 saving={updateRisk.isPending}
               />
@@ -2032,18 +2177,47 @@ function OverviewTab({
   );
 }
 
+function AnalysisSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3 rounded-md border p-4">
+      <h4 className="text-sm font-semibold tracking-tight">{title}</h4>
+      {children}
+    </section>
+  );
+}
+
 function AnalysisTab({
   risk,
   likelihood,
   impact,
-  impactScope,
-  businessImpact,
   analysisNotes,
+  employeeImpact,
+  financialImpact,
+  operationalImpact,
+  complianceImpact,
+  assetType,
+  assetValue,
+  assetCriticality,
+  threats,
+  vulnerabilities,
   onLikelihoodChange,
   onImpactChange,
-  onImpactScopeChange,
-  onBusinessImpactChange,
   onAnalysisNotesChange,
+  onEmployeeImpactChange,
+  onFinancialImpactChange,
+  onOperationalImpactChange,
+  onComplianceImpactChange,
+  onAssetTypeChange,
+  onAssetValueChange,
+  onAssetCriticalityChange,
+  onThreatsChange,
+  onVulnerabilitiesChange,
   onSave,
   onLaunchTreatment,
   canMoveToTreatment,
@@ -2052,14 +2226,28 @@ function AnalysisTab({
   risk: Risk;
   likelihood: string;
   impact: string;
-  impactScope: string;
-  businessImpact: string;
   analysisNotes: string;
+  employeeImpact: string;
+  financialImpact: string;
+  operationalImpact: string;
+  complianceImpact: string;
+  assetType: string;
+  assetValue: string;
+  assetCriticality: string;
+  threats: string;
+  vulnerabilities: string;
   onLikelihoodChange: (v: string) => void;
   onImpactChange: (v: string) => void;
-  onImpactScopeChange: (v: string) => void;
-  onBusinessImpactChange: (v: string) => void;
   onAnalysisNotesChange: (v: string) => void;
+  onEmployeeImpactChange: (v: string) => void;
+  onFinancialImpactChange: (v: string) => void;
+  onOperationalImpactChange: (v: string) => void;
+  onComplianceImpactChange: (v: string) => void;
+  onAssetTypeChange: (v: string) => void;
+  onAssetValueChange: (v: string) => void;
+  onAssetCriticalityChange: (v: string) => void;
+  onThreatsChange: (v: string) => void;
+  onVulnerabilitiesChange: (v: string) => void;
   onSave: () => Promise<boolean>;
   onLaunchTreatment: () => Promise<void>;
   canMoveToTreatment: boolean;
@@ -2069,6 +2257,7 @@ function AnalysisTab({
   // refine analysis fields after the risk has moved on. The server PATCH
   // accepts these fields at any status; only status TRANSITIONS are gated.
   const editable = true;
+  void risk;
 
   // Cheap client-side rating preview mirroring the server formula.
   const previewRating = useMemo(() => {
@@ -2090,74 +2279,205 @@ function AnalysisTab({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3">
+      <AnalysisSection title="Risk Scoring">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Likelihood</Label>
+            <Select
+              value={likelihood}
+              onValueChange={onLikelihoodChange}
+              disabled={!editable}
+            >
+              <SelectTrigger data-testid="select-likelihood">
+                <SelectValue placeholder="Pick…" />
+              </SelectTrigger>
+              <SelectContent>
+                {LEVELS.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Impact</Label>
+            <Select
+              value={impact}
+              onValueChange={onImpactChange}
+              disabled={!editable}
+            >
+              <SelectTrigger data-testid="select-impact">
+                <SelectValue placeholder="Pick…" />
+              </SelectTrigger>
+              <SelectContent>
+                {LEVELS.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {previewRating && (
+          <Badge className={ratingBadgeClass(previewRating)}>
+            Computed Rating: {previewRating.toUpperCase()}
+          </Badge>
+        )}
+      </AnalysisSection>
+
+      <AnalysisSection title="Impact Assessment">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Employee Impact</Label>
+            <Select
+              value={employeeImpact}
+              onValueChange={onEmployeeImpactChange}
+              disabled={!editable}
+            >
+              <SelectTrigger data-testid="select-employee-impact">
+                <SelectValue placeholder="Pick…" />
+              </SelectTrigger>
+              <SelectContent>
+                {NLMH_LEVELS.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Financial Impact</Label>
+            <Input
+              value={financialImpact}
+              onChange={(e) => onFinancialImpactChange(e.target.value)}
+              placeholder="$ amount or range"
+              disabled={!editable}
+              data-testid="input-financial-impact"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Operational Impact</Label>
+            <Select
+              value={operationalImpact}
+              onValueChange={onOperationalImpactChange}
+              disabled={!editable}
+            >
+              <SelectTrigger data-testid="select-operational-impact">
+                <SelectValue placeholder="Pick…" />
+              </SelectTrigger>
+              <SelectContent>
+                {LMH_LEVELS.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Compliance Impact</Label>
+            <Select
+              value={complianceImpact}
+              onValueChange={onComplianceImpactChange}
+              disabled={!editable}
+            >
+              <SelectTrigger data-testid="select-compliance-impact">
+                <SelectValue placeholder="Pick…" />
+              </SelectTrigger>
+              <SelectContent>
+                {YN_OPTIONS.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </AnalysisSection>
+
+      <AnalysisSection title="Asset Context">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Asset Type</Label>
+            <Select
+              value={assetType}
+              onValueChange={onAssetTypeChange}
+              disabled={!editable}
+            >
+              <SelectTrigger data-testid="select-asset-type">
+                <SelectValue placeholder="Pick…" />
+              </SelectTrigger>
+              <SelectContent>
+                {ASSET_TYPES.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Asset Value</Label>
+            <Input
+              value={assetValue}
+              onChange={(e) => onAssetValueChange(e.target.value)}
+              placeholder="$ amount or range"
+              disabled={!editable}
+              data-testid="input-asset-value"
+            />
+          </div>
+          <div className="space-y-1.5 col-span-2">
+            <Label>Asset Criticality</Label>
+            <Select
+              value={assetCriticality}
+              onValueChange={onAssetCriticalityChange}
+              disabled={!editable}
+            >
+              <SelectTrigger data-testid="select-asset-criticality">
+                <SelectValue placeholder="Pick…" />
+              </SelectTrigger>
+              <SelectContent>
+                {ASSET_CRITICALITY.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </AnalysisSection>
+
+      <AnalysisSection title="Risk Factors">
         <div className="space-y-1.5">
-          <Label>Likelihood</Label>
-          <Select
-            value={likelihood}
-            onValueChange={onLikelihoodChange}
+          <Label>Threats</Label>
+          <Textarea
+            rows={3}
+            value={threats}
+            onChange={(e) => onThreatsChange(e.target.value)}
+            placeholder="One threat per line"
             disabled={!editable}
-          >
-            <SelectTrigger data-testid="select-likelihood">
-              <SelectValue placeholder="Pick…" />
-            </SelectTrigger>
-            <SelectContent>
-              {LEVELS.map((l) => (
-                <SelectItem key={l.value} value={l.value}>
-                  {l.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            data-testid="input-threats"
+          />
         </div>
         <div className="space-y-1.5">
-          <Label>Impact</Label>
-          <Select
-            value={impact}
-            onValueChange={onImpactChange}
+          <Label>Vulnerabilities</Label>
+          <Textarea
+            rows={3}
+            value={vulnerabilities}
+            onChange={(e) => onVulnerabilitiesChange(e.target.value)}
+            placeholder="One vulnerability per line"
             disabled={!editable}
-          >
-            <SelectTrigger data-testid="select-impact">
-              <SelectValue placeholder="Pick…" />
-            </SelectTrigger>
-            <SelectContent>
-              {LEVELS.map((l) => (
-                <SelectItem key={l.value} value={l.value}>
-                  {l.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            data-testid="input-vulnerabilities"
+          />
         </div>
-      </div>
-      {previewRating && (
-        <Badge className={ratingBadgeClass(previewRating)}>
-          Computed Rating: {previewRating.toUpperCase()}
-        </Badge>
-      )}
-      <div className="space-y-1.5">
-        <Label>Impact Scope</Label>
-        <Input
-          value={impactScope}
-          onChange={(e) => onImpactScopeChange(e.target.value)}
-          placeholder="What systems / users / processes are affected?"
-          disabled={!editable}
-          data-testid="input-impact-scope"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Business Impact</Label>
-        <Textarea
-          rows={3}
-          value={businessImpact}
-          onChange={(e) => onBusinessImpactChange(e.target.value)}
-          placeholder="What happens to the business if this risk materializes?"
-          disabled={!editable}
-          data-testid="input-business-impact"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Analysis Notes</Label>
+      </AnalysisSection>
+
+      <AnalysisSection title="Analysis Notes">
         <Textarea
           rows={4}
           value={analysisNotes}
@@ -2166,7 +2486,8 @@ function AnalysisTab({
           disabled={!editable}
           data-testid="input-analysis-notes"
         />
-      </div>
+      </AnalysisSection>
+
       {editable && (
         <div className="flex flex-wrap gap-2 pt-2 border-t">
           <Button
@@ -2206,11 +2527,17 @@ function TreatmentTab({
   transferMethod,
   transferResponsibleParty,
   avoidanceActionNotes,
+  mitigationSummary,
+  mitigationProsCons,
+  mitigationEstimatedCost,
   onDecisionChange,
   onAcceptanceJustificationChange,
   onTransferMethodChange,
   onTransferResponsiblePartyChange,
   onAvoidanceActionNotesChange,
+  onMitigationSummaryChange,
+  onMitigationProsConsChange,
+  onMitigationEstimatedCostChange,
   onSave,
   saving,
 }: {
@@ -2220,11 +2547,17 @@ function TreatmentTab({
   transferMethod: string;
   transferResponsibleParty: string;
   avoidanceActionNotes: string;
+  mitigationSummary: string;
+  mitigationProsCons: string;
+  mitigationEstimatedCost: string;
   onDecisionChange: (v: string) => void;
   onAcceptanceJustificationChange: (v: string) => void;
   onTransferMethodChange: (v: string) => void;
   onTransferResponsiblePartyChange: (v: string) => void;
   onAvoidanceActionNotesChange: (v: string) => void;
+  onMitigationSummaryChange: (v: string) => void;
+  onMitigationProsConsChange: (v: string) => void;
+  onMitigationEstimatedCostChange: (v: string) => void;
   onSave: () => Promise<boolean>;
   saving: boolean;
 }) {
@@ -2248,8 +2581,22 @@ function TreatmentTab({
     );
   }
 
+  const mitigationIncomplete =
+    decision === "mitigation" &&
+    (!mitigationSummary.trim() ||
+      !mitigationProsCons.trim() ||
+      !mitigationEstimatedCost.trim());
+
   return (
     <>
+      <div
+        className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        data-testid="banner-treatment-approval"
+      >
+        <Info className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>This decision requires Team Manager approval.</span>
+      </div>
+
       <div className="space-y-1.5">
         <Label>Treatment Decision</Label>
         <Select
@@ -2271,10 +2618,46 @@ function TreatmentTab({
       </div>
 
       {decision === "mitigation" && (
-        <p className="text-sm text-muted-foreground">
-          On approval, a Project will be auto-created for the mitigation work
-          (named “Risk Mitigation: {risk.title}”), inheriting team and owner.
-        </p>
+        <>
+          <p className="text-sm text-muted-foreground">
+            On approval, a Project will be auto-created for the mitigation work
+            (named “Risk Mitigation: {risk.title}”), inheriting team and owner.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Mitigation Summary</Label>
+            <Textarea
+              rows={3}
+              value={mitigationSummary}
+              onChange={(e) => onMitigationSummaryChange(e.target.value)}
+              placeholder="Brief description of the mitigation approach"
+              disabled={!editable}
+              data-testid="input-mitigation-summary"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Pros &amp; Cons</Label>
+            <Textarea
+              rows={4}
+              value={mitigationProsCons}
+              onChange={(e) => onMitigationProsConsChange(e.target.value)}
+              placeholder="Trade-offs the approver should weigh"
+              disabled={!editable}
+              data-testid="input-mitigation-pros-cons"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Estimated Cost</Label>
+            <Input
+              value={mitigationEstimatedCost}
+              onChange={(e) =>
+                onMitigationEstimatedCostChange(e.target.value)
+              }
+              placeholder="$ amount or range"
+              disabled={!editable}
+              data-testid="input-mitigation-estimated-cost"
+            />
+          </div>
+        </>
       )}
       {decision === "acceptance" && (
         <div className="space-y-1.5">
@@ -2349,6 +2732,15 @@ function TreatmentTab({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Approval
         </p>
+        {mitigationIncomplete && (
+          <p
+            className="text-xs text-amber-700"
+            data-testid="hint-mitigation-incomplete"
+          >
+            Mitigation Summary, Pros &amp; Cons, and Estimated Cost are all
+            required before approval can be requested.
+          </p>
+        )}
         <RiskWorkflowApproval row={risk} />
       </div>
     </>
@@ -2365,8 +2757,8 @@ function LinkedWorkTab({
   if (risk.createdProjectId == null) {
     return (
       <p className="text-sm text-muted-foreground">
-        No linked Project yet. Approving a Mitigation treatment will
-        automatically create one.
+        No linked work yet. Projects are only created for approved Risk
+        Mitigation.
       </p>
     );
   }

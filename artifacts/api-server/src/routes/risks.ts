@@ -83,14 +83,14 @@ const TRANSITIONS: Record<string, Record<string, TransitionRule>> = {
       action: "treat",
       allowedViaPatch: true,
       preconditions: (body, existing) => {
+        // Per spec, only Likelihood + Impact gate the move to Treatment.
+        // The richer Impact-Assessment / Asset-Context / Risk-Factor fields
+        // are encouraged but not required, so users aren't blocked from
+        // progressing while still gathering detail.
         const lik = (body["likelihood"] as string) ?? existing.likelihood;
         const imp = (body["impact"] as string) ?? existing.impact;
-        const scope =
-          (body["impactScope"] as string) ?? existing.impactScope;
-        const biz =
-          (body["businessImpact"] as string) ?? existing.businessImpact;
-        if (!lik || !imp || !scope || !biz) {
-          return "likelihood, impact, impactScope, and businessImpact must be set before moving to Under Treatment.";
+        if (!lik || !imp) {
+          return "likelihood and impact must be set before moving to Under Treatment.";
         }
         return null;
       },
@@ -291,11 +291,23 @@ async function hydrate(rows: RiskRow[]): Promise<unknown[]> {
     businessImpact: r.businessImpact,
     riskRating: r.riskRating,
     analysisNotes: r.analysisNotes,
+    employeeImpact: r.employeeImpact,
+    financialImpact: r.financialImpact,
+    operationalImpact: r.operationalImpact,
+    complianceImpact: r.complianceImpact,
+    assetType: r.assetType,
+    assetValue: r.assetValue,
+    assetCriticality: r.assetCriticality,
+    threats: r.threats,
+    vulnerabilities: r.vulnerabilities,
     treatmentDecision: r.treatmentDecision,
     acceptanceJustification: r.acceptanceJustification,
     transferMethod: r.transferMethod,
     transferResponsibleParty: r.transferResponsibleParty,
     avoidanceActionNotes: r.avoidanceActionNotes,
+    mitigationSummary: r.mitigationSummary,
+    mitigationProsCons: r.mitigationProsCons,
+    mitigationEstimatedCost: r.mitigationEstimatedCost,
     createdProjectId: r.createdProjectId ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
@@ -438,6 +450,9 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
       "transferMethod",
       "transferResponsibleParty",
       "avoidanceActionNotes",
+      "mitigationSummary",
+      "mitigationProsCons",
+      "mitigationEstimatedCost",
     ] as const;
     const wantsTreatmentEdit = treatmentLockFields.some((f) => {
       const v = (body.data as Record<string, unknown>)[f];
@@ -533,6 +548,24 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
     if (b.impactScope !== undefined) patch.impactScope = b.impactScope;
     if (b.businessImpact !== undefined) patch.businessImpact = b.businessImpact;
     if (b.analysisNotes !== undefined) patch.analysisNotes = b.analysisNotes;
+    // Structured Impact Assessment
+    if (b.employeeImpact !== undefined)
+      patch.employeeImpact = b.employeeImpact;
+    if (b.financialImpact !== undefined)
+      patch.financialImpact = b.financialImpact;
+    if (b.operationalImpact !== undefined)
+      patch.operationalImpact = b.operationalImpact;
+    if (b.complianceImpact !== undefined)
+      patch.complianceImpact = b.complianceImpact;
+    // Asset Context
+    if (b.assetType !== undefined) patch.assetType = b.assetType;
+    if (b.assetValue !== undefined) patch.assetValue = b.assetValue;
+    if (b.assetCriticality !== undefined)
+      patch.assetCriticality = b.assetCriticality;
+    // Risk Factors
+    if (b.threats !== undefined) patch.threats = b.threats;
+    if (b.vulnerabilities !== undefined)
+      patch.vulnerabilities = b.vulnerabilities;
     // Recompute risk rating whenever either axis changes (or both are set
     // by the request); keeps the persisted value consistent with inputs.
     {
@@ -555,6 +588,12 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
       patch.transferResponsibleParty = b.transferResponsibleParty;
     if (b.avoidanceActionNotes !== undefined)
       patch.avoidanceActionNotes = b.avoidanceActionNotes;
+    if (b.mitigationSummary !== undefined)
+      patch.mitigationSummary = b.mitigationSummary;
+    if (b.mitigationProsCons !== undefined)
+      patch.mitigationProsCons = b.mitigationProsCons;
+    if (b.mitigationEstimatedCost !== undefined)
+      patch.mitigationEstimatedCost = b.mitigationEstimatedCost;
 
     let auditReason = "";
     if (incomingStatus && incomingStatus !== currentStatus && rule) {

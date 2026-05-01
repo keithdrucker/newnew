@@ -4643,16 +4643,33 @@ components:
         # Analysis
         likelihood: { type: string }
         impact: { type: string }
+        # Legacy unstructured fields, no longer surfaced in the UI but
+        # still exposed for back-compat with existing rows.
         impactScope: { type: string }
         businessImpact: { type: string }
         riskRating: { type: string }
         analysisNotes: { type: string }
+        # Structured Impact Assessment
+        employeeImpact: { type: string }
+        financialImpact: { type: string }
+        operationalImpact: { type: string }
+        complianceImpact: { type: string }
+        # Asset Context
+        assetType: { type: string }
+        assetValue: { type: string }
+        assetCriticality: { type: string }
+        # Risk Factors (one bullet per line)
+        threats: { type: string }
+        vulnerabilities: { type: string }
         # Treatment
         treatmentDecision: { type: string }
         acceptanceJustification: { type: string }
         transferMethod: { type: string }
         transferResponsibleParty: { type: string }
         avoidanceActionNotes: { type: string }
+        mitigationSummary: { type: string }
+        mitigationProsCons: { type: string }
+        mitigationEstimatedCost: { type: string }
         # Linked work
         createdProjectId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
@@ -4676,11 +4693,23 @@ components:
         - businessImpact
         - riskRating
         - analysisNotes
+        - employeeImpact
+        - financialImpact
+        - operationalImpact
+        - complianceImpact
+        - assetType
+        - assetValue
+        - assetCriticality
+        - threats
+        - vulnerabilities
         - treatmentDecision
         - acceptanceJustification
         - transferMethod
         - transferResponsibleParty
         - avoidanceActionNotes
+        - mitigationSummary
+        - mitigationProsCons
+        - mitigationEstimatedCost
         - auditEvents
         - workflowRuns
         - createdAt
@@ -4717,12 +4746,27 @@ components:
         impactScope: { type: string }
         businessImpact: { type: string }
         analysisNotes: { type: string }
+        # Structured Impact Assessment
+        employeeImpact: { type: string }
+        financialImpact: { type: string }
+        operationalImpact: { type: string }
+        complianceImpact: { type: string }
+        # Asset Context
+        assetType: { type: string }
+        assetValue: { type: string }
+        assetCriticality: { type: string }
+        # Risk Factors (one bullet per line)
+        threats: { type: string }
+        vulnerabilities: { type: string }
         # Treatment
         treatmentDecision: { type: string }
         acceptanceJustification: { type: string }
         transferMethod: { type: string }
         transferResponsibleParty: { type: string }
         avoidanceActionNotes: { type: string }
+        mitigationSummary: { type: string }
+        mitigationProsCons: { type: string }
+        mitigationEstimatedCost: { type: string }
         # Reason captured on the audit event for close transitions.
         transitionReason: { type: string }
 

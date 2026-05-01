@@ -1,0 +1,221 @@
+You are enhancing an existing Risk Register in an ITSM platform.
+The Risk Register already exists with a board view (Identified → Under Analysis → Under Treatment → Mitigation → Accepted → Transferred → Avoided → Closed) and a modal detail view with tabs.
+Your task is to simplify and structure the Risk Analysis and Treatment workflow, inspired by a detailed spreadsheet model, while making it intuitive and low‑friction for daily use.
+
+
+1️⃣ Do NOT Rebuild the Risk Register
+Constraints:
+
+✅ Keep the existing board layout
+✅ Keep the existing risk lifecycle states
+✅ Keep the existing modal + tab structure
+❌ Do NOT introduce Risk Register as a Work Type
+❌ Do NOT convert risks into tasks or tickets
+
+You are refining, not redesigning.
+
+2️⃣ Risk Detail Modal – Tabs (Must Exist)
+Each risk opens a modal with these tabs:
+Overview
+Analysis
+Treatment
+Linked Work
+History
+
+Reuse existing UI components wherever possible.
+
+3️⃣ Update the ANALYSIS Tab (Primary Change)
+The current Analysis tab exists but is too unstructured.
+Replace it with the following guided, structured layout.
+
+✅ Analysis Tab – Required Structure
+Section 1: Risk Scoring (Top)
+Fields:
+
+Likelihood (Required – dropdown)
+Impact (Required – dropdown)
+Risk Rating (Auto‑calculated, read‑only badge)
+
+
+Section 2: Impact Assessment
+Use structured inputs, not long free‑text fields.
+Fields:
+
+Employee Impact
+
+None / Low / Medium / High
+
+
+Financial Impact (Estimate)
+
+Numeric value or range
+
+
+Operational Impact
+
+Low / Medium / High
+
+
+Compliance / Legal Impact
+
+Yes / No
+
+
+
+
+Section 3: Asset Context (Optional but Visible)
+Fields:
+
+Asset Type
+
+Physical / Digital / Process / Vendor
+
+
+Quantitative Asset Value (Optional numeric)
+Asset Criticality
+
+Low / Medium / High / Very High
+
+
+
+
+Section 4: Risk Factors
+Fields:
+
+Threats
+
+Multi‑select or short bullet entries
+
+
+Vulnerabilities
+
+Multi‑select or short bullet entries
+
+
+
+
+Section 5: Analysis Notes (Optional)
+Single free‑text field for:
+
+References
+Root cause
+Dependencies
+Additional context
+
+This field should be optional and visually de‑emphasized.
+
+✅ Actions
+Buttons:
+
+Save Analysis
+Move to Risk Treatment
+
+Validation:
+
+Likelihood + Impact are required before progressing
+
+
+4️⃣ Treatment Tab – Decision + Approval
+Refine (do not replace) the existing Treatment tab.
+
+✅ Treatment Decision (Mandatory)
+Require selection of exactly one:
+
+Risk Mitigation
+Risk Acceptance
+Risk Transfer
+Risk Avoidance
+
+Display a banner:
+
+“This decision requires Team Manager approval”
+
+Approval rules:
+
+Approver = Team Manager of the owning team
+Approval captured via existing workflow engine
+Approval comment required
+Approval date auto‑stored
+
+
+✅ Conditional Fields by Selection
+Risk Mitigation
+Require:
+
+Mitigation summary
+Pros & Cons (bulleted)
+Estimated cost to mitigate
+
+After approval:
+
+✅ Auto‑create a Project
+✅ Link Project to Risk
+✅ Show View Project button (same behavior as Approved Initiatives)
+
+
+Risk Acceptance
+Require:
+
+Acceptance justification
+
+
+Risk Transfer
+Require:
+
+Transfer method
+Responsible party
+
+
+Risk Avoidance
+Require:
+
+Avoidance action notes
+
+
+5️⃣ Linked Work Tab (Minor Enhancement)
+Behavior:
+
+Empty state text:
+
+“No linked work yet. Projects are only created for approved Risk Mitigation.”
+
+
+If mitigation approved:
+
+Show Project card
+Show status, owner
+Provide View Project action
+
+
+
+
+6️⃣ Risk Register Board Enhancements
+The board view should continue to show:
+
+Risk title
+Priority
+Risk rating
+Owning team
+Current status
+
+Do NOT add all spreadsheet fields to the board view.
+
+7️⃣ Design & UX Rules
+
+Progressive disclosure is mandatory
+Avoid long essay‑style text fields unless optional
+Risk analysis ≠ risk treatment ≠ execution
+Only Risk Mitigation creates Projects
+Keep the UI aligned with Initiatives patterns for familiarity
+
+
+✅ Expected Outcome
+After implementation:
+
+The Risk Register retains its existing structure
+Spreadsheet‑level rigor is embedded through workflow
+Users provide the right data at the right stage
+Risks remain governance objects, not execution work
+Mitigation projects are clearly traceable and auditable
+
+Do not add additional lifecycle states or approvals beyond what’s defined above.
