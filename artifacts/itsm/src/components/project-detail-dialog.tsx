@@ -958,7 +958,12 @@ function DetailInner({
                     )}
                     data-testid={`tab-phase-${t}`}
                   >
-                    {PHASE_LABEL[t]}
+                    {/* Tab-only short label for the Backlog phase — the
+                        full "Backlog / Needs Assignment" name still
+                        appears in the dialog header badge and toasts. */}
+                    {t === "backlog_needs_assignment"
+                      ? "Backlog"
+                      : PHASE_LABEL[t]}
                   </TabsTrigger>
                 ))}
                 {/* Trailing untyped tabs — same pattern as the Risks dialog
@@ -990,22 +995,13 @@ function DetailInner({
                 forceMount
                 className="space-y-4 pt-2 data-[state=inactive]:hidden"
               >
-            {/* ---- Backlog / Needs Assignment ---- */}
-            <Section
-              title="Backlog · Needs Assignment"
-              defaultOpen={phase === "backlog_needs_assignment"}
-              tone={
-                phase === "backlog_needs_assignment"
-                  ? "active"
-                  : phase === "planning" ||
-                      phase === "in_progress" ||
-                      phase === "on_hold" ||
-                      phase === "completed" ||
-                      phase === "closed"
-                    ? "done"
-                    : "default"
-              }
-            >
+            {/* ---- Backlog / Needs Assignment ----
+                Rendered flat (no collapsible Section header), mirroring
+                the Implementation tab. The amber TabsTrigger is enough
+                indication of the active phase, and previously-completed
+                phase fields stay editable so a triage value can be
+                corrected after launch. */}
+            <div className="rounded-md border border-zinc-200 bg-white p-3 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Team">
                   <Select
@@ -1119,7 +1115,7 @@ function DetailInner({
                   </Button>
                 )}
               </div>
-            </Section>
+            </div>
 
             {/* When the project is cancelled, defaultTabForPhase routes
                 the user here. Show the Cancelled details inside this tab
