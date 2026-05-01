@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
 import { desc, eq, sql } from "drizzle-orm";
-import { z } from "zod";
 import {
   db,
   departmentsTable,
@@ -73,36 +72,30 @@ async function nextRequestKey(): Promise<string> {
   return `REQ-${String(next).padStart(3, "0")}`;
 }
 
+const VALID_PRIORITIES = new Set(["low", "medium", "high", "urgent"]);
+
 // ---------------------------------------------------------------------------
 // POST /bot/tickets
 // Creates an ITSM ticket on behalf of a portal user (identified by email).
 // ---------------------------------------------------------------------------
-const CreateBotTicketBody = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().min(1),
-  category: z.string().optional().nullable(),
-  priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
-  departmentId: z.number().int().positive(),
-  reporterEmail: z.string().email(),
-  initialMessages: z
-    .array(
-      z.object({
-        sender: z.enum(["user", "system"]),
-        content: z.string(),
-      }),
-    )
-    .optional(),
-});
-
 router.post("/bot/tickets", async (req, res): Promise<void> => {
-  const parsed = CreateBotTicketBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const body = req.body as Record<string, unknown>;
+  const title = typeof body["title"] === "string" ? body["title"].trim() : "";
+  const description = typeof body["description"] === "string" ? body["description"].trim() : "";
+  const reporterEmail = typeof body["reporterEmail"] === "string" ? body["reporterEmail"].trim() : "";
+  const departmentId = typeof body["departmentId"] === "number" ? body["departmentId"] : NaN;
+
+  if (!title || !description || !reporterEmail || Number.isNaN(departmentId)) {
+    res.status(400).json({ error: "title, description, reporterEmail, and departmentId are required" });
     return;
   }
 
-  const { title, description, category, priority, departmentId, reporterEmail, initialMessages } =
-    parsed.data;
+  const rawPriority = typeof body["priority"] === "string" ? body["priority"] : "medium";
+  const priority = VALID_PRIORITIES.has(rawPriority) ? rawPriority : "medium";
+  const category = typeof body["category"] === "string" ? body["category"] : null;
+  const initialMessages = Array.isArray(body["initialMessages"])
+    ? (body["initialMessages"] as Array<{ sender: string; content: string }>)
+    : undefined;
 
   const [reporter] = await db
     .select()
