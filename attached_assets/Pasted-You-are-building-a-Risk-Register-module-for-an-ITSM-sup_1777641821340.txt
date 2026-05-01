@@ -1,0 +1,166 @@
+You are building a Risk Register module for an ITSM / support‑operations platform.
+ This module must follow a strict lifecycle model, integrate with Teams, Initiatives, Projects, and Workflows, and reuse existing UI patterns wherever possible.
+
+1️⃣ Purpose & Scope
+Implement a Risk Register that allows teams to:
+Identify risks early
+Analyze impact and likelihood
+Make explicit treatment decisions
+Maintain auditability
+Automatically create Projects only when risk mitigation is approved
+This system must not convert every risk into a project.
+
+2️⃣ Module Placement & Navigation
+Add a top‑level navigation item: Risk Register
+Risk Register is operational, not a Settings feature
+UI should mirror Initiatives, including:
+State‑based tabs
+Detail modal / page
+“View Project” action when applicable
+
+3️⃣ Risk Lifecycle (State Machine)
+Each Risk MUST move through the following states in order:
+Identified
+Under Analysis
+Under Treatment
+Mitigation
+Accepted
+Transferred
+Avoided
+Closed
+Rules:
+Transitions must be validated
+All transitions must be logged for audit history
+Only Approved Risk Mitigation creates a Project
+
+4️⃣ Risk Register Views (Index Page)
+Provide filtered views similar to Initiatives:
+All Risks
+Identified
+Under Analysis
+Under Treatment
+Mitigation
+Accepted
+Transferred
+Avoided
+Closed
+
+Each row shows:
+Risk Name
+Risk Type
+Owning Team
+Risk Rating
+Current Status
+Linked Project (if Mitigation)
+
+5️⃣ Create New Risk (Identified)
+Required fields
+Risk Title
+Risk Type (Security, Operational, Compliance, Financial, etc.)
+Description
+Owning Team
+Risk Owner (optional; defaults to team)
+Behavior:
+New risks start in Identified
+Creation must be fast and lightweight
+
+6️⃣ Risk Analysis (Under Analysis)
+When moved to Under Analysis, display an analysis screen visually identical to the Initiatives backlog/triage modal.
+Required fields:
+Likelihood
+Impact
+Impact Scope
+Business Impact
+Calculated Risk Rating (derived)
+Optional:
+Notes
+Evidence / Attachments
+Rules:
+Analysis fields must be completed before proceeding
+No approvals required at this stage
+Actions:
+Save Analysis
+Move to Risk Treatment
+Close (Invalid / Duplicate)
+
+7️⃣ Risk Treatment Decision (Governance Point)
+State: Under Treatment
+Required Selection (One)
+Risk Mitigation
+Risk Acceptance
+Risk Transfer
+Risk Avoidance
+This decision requires approval.
+Approval rules:
+Approver = Team Manager of the owning team
+Approval handled via Workflow system
+Optional comments allowed
+Approval is required before transition
+
+8️⃣ Treatment Outcomes (Critical Behavior)
+✅ Risk Mitigation
+Create a Project
+Link Project ↔ Risk
+Move Risk to Mitigation
+Display “View Project” action on the Risk
+Must behave exactly like “Approved Initiatives → View Project”
+Project appears in the Projects module
+⚠️ This is the only treatment that creates a Project.
+
+✅ Risk Acceptance
+Move Risk to Accepted
+Require justification notes
+No Project created
+
+✅ Risk Transfer
+Move Risk to Transferred
+Capture:
+Transfer method
+Responsible party
+No Project created
+
+✅ Risk Avoidance
+Move Risk to Avoided
+Capture avoidance action notes
+Risk is considered eliminated
+No Project created
+
+9️⃣ Risk Detail View (Single Risk)
+Each Risk must have a detail page with tabs:
+Overview
+Analysis
+Treatment
+Linked Work
+History
+
+Linked Work
+Show linked Project (Mitigation only)
+Provide View Project button
+
+🔟 Role & Permission Rules
+Risk visibility is inherited from Owning Team
+Approval actions:
+Restricted to Team Manager (or backup manager)
+State transitions require appropriate permissions
+Full audit log required
+
+1️⃣1️⃣ Design & UX Constraints
+Reuse Initiative UI components where possible
+Do not introduce unnecessary approvals
+Do not treat Risks as Tasks or Tickets
+Avoid compliance‑heavy language in the UI
+Make decisions explicit and traceable
+
+✅ Expected Output
+Implement:
+Data model for Risks
+Valid state machine
+Approval integration using Team Manager
+Project creation logic for Mitigation only
+UI components aligned with Initiatives
+The Risk Register should feel native, governed, and support‑friendly.
+
+Optional Follow‑ups (Do NOT implement unless asked)
+Risk scoring formulas
+Compliance mappings (ISO / NIST)
+Risk heatmaps
