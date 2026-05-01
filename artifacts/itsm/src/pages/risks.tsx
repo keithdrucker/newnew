@@ -1842,24 +1842,11 @@ function RiskDetailContent({
         </ScrollArea>
       </Tabs>
 
-      {(risk.status === "under_analysis" || isAnyDirty) && (
+      {isAnyDirty && (
         <div className="px-6 py-3 border-t bg-muted/40 flex items-center justify-end gap-2">
-          {isAnyDirty && (
-            <span className="text-xs text-muted-foreground mr-auto">
-              You have unsaved changes.
-            </span>
-          )}
-          {risk.status === "under_analysis" && (
-            <Button
-              size="sm"
-              onClick={launchTreatmentPhase}
-              disabled={!canMoveToTreatment || updateRisk.isPending}
-              data-testid="button-launch-treatment-phase"
-            >
-              <ArrowRight className="h-4 w-4 mr-1.5" />
-              Launch Treatment Phase
-            </Button>
-          )}
+          <span className="text-xs text-muted-foreground mr-auto">
+            You have unsaved changes.
+          </span>
         </div>
       )}
     </>
