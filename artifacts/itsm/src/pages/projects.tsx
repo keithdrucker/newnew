@@ -66,6 +66,13 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  PlanningYearFilter,
+  usePlanningYear,
+  planningYearHelperText,
+  planningYearEmptyText,
+  currentPlanningYear,
+} from "@/components/planning-year-filter";
 
 // Phase board columns, in canonical order. The board is global — every
 // project is shown in exactly one column based on its `phase`.
@@ -456,7 +463,10 @@ export default function ProjectsPage() {
   // is selected via URL we just narrow the result set to that dept.
   // Search is applied fully client-side below so it can match across more
   // fields than the backend's name+description-only `q=` parameter.
-  const { data: projects, isLoading } = useListProjects({});
+  // Planning Year filter — server enforces the visibility rule (open
+  // projects always shown when current year is selected).
+  const [planningYear, setPlanningYear] = usePlanningYear("projects");
+  const { data: projects, isLoading } = useListProjects({ planningYear });
 
   const activeFilterCount = useMemo(
     () =>
@@ -686,18 +696,30 @@ export default function ProjectsPage() {
             Completed. Click a card to assign owners, manage the
             checklist, and post status updates.
           </p>
-        </div>
-        {canCreate && (
-          <Button
-            variant="outline"
-            data-testid="button-import-project"
-            onClick={() => setCreateOpen(true)}
-            disabled={scope.loading || scope.accessible.length === 0}
-            title="Backfill an existing in-flight project"
+          <p
+            className="text-[12px] text-muted-foreground mt-1"
+            data-testid="text-planning-year-helper"
           >
-            <Upload className="h-4 w-4 mr-1.5" /> Import project
-          </Button>
-        )}
+            {planningYearHelperText(planningYear)}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <PlanningYearFilter
+            value={planningYear}
+            onChange={setPlanningYear}
+          />
+          {canCreate && (
+            <Button
+              variant="outline"
+              data-testid="button-import-project"
+              onClick={() => setCreateOpen(true)}
+              disabled={scope.loading || scope.accessible.length === 0}
+              title="Backfill an existing in-flight project"
+            >
+              <Upload className="h-4 w-4 mr-1.5" /> Import project
+            </Button>
+          )}
+        </div>
       </div>
 
       <div
@@ -723,6 +745,7 @@ export default function ProjectsPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         defaultDepartmentId={activeDept?.id ?? null}
+        defaultPlanningYear={planningYear}
       />
 
       <div className="flex items-center gap-2 mb-5 flex-wrap">
@@ -958,13 +981,29 @@ export default function ProjectsPage() {
       )}
 
       {!isLoading && filtered.length === 0 && (
-        <div className="rounded-xl border border-dashed bg-muted/30 p-12 text-center">
+        <div
+          className="rounded-xl border border-dashed bg-muted/30 p-12 text-center"
+          data-testid="empty-state-projects"
+        >
           <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
             <KanbanSquare className="h-6 w-6 text-primary" />
           </div>
-          <p className="font-medium">No projects yet</p>
+          <p className="font-medium">No projects to show</p>
           <p className="text-[13px] text-muted-foreground mt-1">
-            Approved initiatives appear here as projects.
+            {planningYearEmptyText(planningYear)}
+            {planningYear !== currentPlanningYear() ? (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  className="text-foreground underline underline-offset-2 hover:text-primary"
+                  onClick={() => setPlanningYear(currentPlanningYear())}
+                  data-testid="button-jump-to-current-year"
+                >
+                  Jump to {currentPlanningYear()} (current).
+                </button>
+              </>
+            ) : null}
             {canCreate &&
               " Use \u201CImport project\u201D to backfill any work that\u2019s already in flight."}
           </p>

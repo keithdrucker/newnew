@@ -59,6 +59,7 @@ export interface Risk {
   mitigationControlDescription: string;
   /** @nullable */
   createdProjectId?: number | null;
+  reviewDecisionYear: number;
   createdAt: Date;
   updatedAt: Date;
   auditEvents: RiskAuditEvent[];

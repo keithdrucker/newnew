@@ -6265,7 +6265,15 @@ export const useDeleteVendor = <
 };
 
 /**
- * @summary List projects (boards)
+ * @summary List projects (boards). When `planningYear` is supplied, applies
+the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns projects whose `phase` is NOT terminal (`closed` /
+  `cancelled`) **OR** whose `plannedStartYear` equals the
+  supplied year;
+- otherwise returns only projects whose `plannedStartYear`
+  equals the supplied year (regardless of phase).
+
  */
 export const getListProjectsUrl = (params?: ListProjectsParams) => {
   const normalizedParams = new URLSearchParams();
@@ -6332,7 +6340,15 @@ export type ListProjectsQueryResult = NonNullable<
 export type ListProjectsQueryError = ErrorType<unknown>;
 
 /**
- * @summary List projects (boards)
+ * @summary List projects (boards). When `planningYear` is supplied, applies
+the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns projects whose `phase` is NOT terminal (`closed` /
+  `cancelled`) **OR** whose `plannedStartYear` equals the
+  supplied year;
+- otherwise returns only projects whose `plannedStartYear`
+  equals the supplied year (regardless of phase).
+
  */
 
 export function useListProjects<
@@ -7129,7 +7145,15 @@ export const useReorderProjectChecklist = <
 };
 
 /**
- * @summary List initiatives, newest first.
+ * @summary List initiatives, newest first. When `planningYear` is supplied,
+applies the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns initiatives whose `status` is NOT terminal
+  (`approved`/`rejected_deferred`) **OR** whose
+  `plannedStartYear` equals the supplied year (union);
+- otherwise returns only initiatives whose `plannedStartYear`
+  equals the supplied year (regardless of status).
+
  */
 export const getListInitiativesUrl = (params?: ListInitiativesParams) => {
   const normalizedParams = new URLSearchParams();
@@ -7196,7 +7220,15 @@ export type ListInitiativesQueryResult = NonNullable<
 export type ListInitiativesQueryError = ErrorType<unknown>;
 
 /**
- * @summary List initiatives, newest first.
+ * @summary List initiatives, newest first. When `planningYear` is supplied,
+applies the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns initiatives whose `status` is NOT terminal
+  (`approved`/`rejected_deferred`) **OR** whose
+  `plannedStartYear` equals the supplied year (union);
+- otherwise returns only initiatives whose `plannedStartYear`
+  equals the supplied year (regardless of status).
+
  */
 
 export function useListInitiatives<
@@ -7568,7 +7600,15 @@ export const useDeleteInitiative = <
 };
 
 /**
- * @summary List risks, newest first.
+ * @summary List risks, newest first. When `planningYear` is supplied,
+applies the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns risks whose `status` is NOT terminal
+  (`mitigation`/`accepted`/`transferred`/`avoided`/`closed`)
+  **OR** whose `reviewDecisionYear` equals the supplied year;
+- otherwise returns only risks whose `reviewDecisionYear`
+  equals the supplied year (regardless of status).
+
  */
 export const getListRisksUrl = (params?: ListRisksParams) => {
   const normalizedParams = new URLSearchParams();
@@ -7635,7 +7675,15 @@ export type ListRisksQueryResult = NonNullable<
 export type ListRisksQueryError = ErrorType<unknown>;
 
 /**
- * @summary List risks, newest first.
+ * @summary List risks, newest first. When `planningYear` is supplied,
+applies the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns risks whose `status` is NOT terminal
+  (`mitigation`/`accepted`/`transferred`/`avoided`/`closed`)
+  **OR** whose `reviewDecisionYear` equals the supplied year;
+- otherwise returns only risks whose `reviewDecisionYear`
+  equals the supplied year (regardless of status).
+
  */
 
 export function useListRisks<

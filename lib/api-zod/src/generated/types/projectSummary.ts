@@ -87,6 +87,7 @@ export interface ProjectSummary {
   checklistTotal: number;
   checklistDone: number;
   commentCount: number;
+  plannedStartYear: number;
   createdAt: Date;
   updatedAt: Date;
 }

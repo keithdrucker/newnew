@@ -145,6 +145,13 @@ export const risksTable = pgTable(
       { onDelete: "set null" },
     ),
 
+    // Planning Year — see replit.md "Planning Year filter".
+    // For risks the axis is the year the risk is targeted for review /
+    // treatment-decision rather than a "start" year. Active risks
+    // (anything before mitigation/accepted/transferred/avoided/closed)
+    // stay visible in the current-year view regardless of this value.
+    reviewDecisionYear: integer("review_decision_year").notNull().default(2026),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

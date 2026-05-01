@@ -139,6 +139,16 @@ export const initiativesTable = pgTable(
       { onDelete: "set null" },
     ),
 
+    // Planning Year — see replit.md "Planning Year filter".
+    // The authoritative date axis used to group initiatives by planning
+    // window. Independent of status: when the *current* calendar year is
+    // selected the visibility rule unions "all open initiatives" with
+    // "anything planned for this year", so a long-running initiative
+    // planned for 2024 still appears in the 2026 view as long as it's
+    // still open. NOT NULL with a default of 2026 so existing rows
+    // survive the migration unchanged.
+    plannedStartYear: integer("planned_start_year").notNull().default(2026),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

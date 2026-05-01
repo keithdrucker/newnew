@@ -70,6 +70,7 @@ export interface Initiative {
   revisitDate?: Date | null;
   /** @nullable */
   createdProjectId?: number | null;
+  plannedStartYear: number;
   createdAt: Date;
   updatedAt: Date;
   auditEvents: InitiativeAuditEvent[];

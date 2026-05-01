@@ -1,0 +1,174 @@
+You are enhancing an existing ITSM platform to support multi‑year planning across Initiatives, Projects, and the Risk Register.
+Your task is to implement a Planning Year filter that supports planning across time without hiding open work when the calendar year changes.
+
+This feature must balance planning context with operational reality.
+
+1️⃣ Scope & Constraints
+Applies to:
+
+Initiatives
+Projects
+Risk Register
+
+Do NOT:
+
+Add arbitrary date‑range pickers
+Add fiscal‑year logic
+Treat this as reporting or analytics
+Hide open items due to year boundaries
+
+
+2️⃣ Planning Year Filter – UI Placement
+
+Place the filter in the top‑right of each module’s main view
+Implement as a single dropdown
+
+Label (Required)
+
+Planning Year
+
+Avoid:
+
+Date Range
+Reporting Period
+Fiscal Year
+
+
+3️⃣ Planning Year Range (Explicit)
+The dropdown MUST be dynamically generated and strictly limited to:
+📅 This Year
+• 2026 (Current)
+
+📁 Previous Years
+• 2025
+• 2024
+• 2023
+
+🚀 Future Years
+• 2027
+• 2028
+• 2029
+
+Rules:
+
+Current calendar year selected by default
+Show only the previous 3 calendar years
+Show only the next 3 calendar years
+No additional years outside this window
+
+
+4️⃣ Authoritative Date Fields (Per Module)
+Use exactly one authoritative date field per module:
+
+Initiatives → Planned Start Year
+Projects → Planned Start Year
+Risk Register → Review / Decision Year
+
+These fields define the Planning Year category, not visibility.
+
+5️⃣ CRITICAL RULE: Open‑Item Carryover ✅
+Golden Rule
+
+Open items must always be visible in the current year, regardless of their Planning Year.
+
+This rule is mandatory.
+
+Visibility Logic (Authoritative)
+When a user selects:
+✅ Current Year (e.g., 2026)
+Show:
+
+✅ All items with Status ≠ Closed, regardless of Planning Year
+✅ PLUS any items planned for the current year
+
+This ensures:
+
+Long‑running projects remain visible
+Initiatives started last year but still open do not “disappear”
+Active risks remain visible until explicitly closed
+
+
+✅ Previous Year (e.g., 2025)
+Show:
+
+Items whose Planning Year = 2025
+Includes both open and closed items
+Does NOT auto‑include open items from other years
+
+Purpose: historical review and audit context.
+
+✅ Future Year (e.g., 2027)
+Show:
+
+Items whose Planning Year = 2027
+Includes planned initiatives, projects, or risks
+DO NOT include current open work unless it is planned for that year
+
+Purpose: planning and roadmap visibility.
+
+6️⃣ Creating Items for Future Years ✅
+Users must be able to:
+
+Create Initiatives for future years (within +3 years)
+Create Projects planned for future years
+Create Risks with future review/decision years
+
+Rules:
+
+New items default to the currently selected Planning Year
+Users may override the year during creation (within allowed range)
+Do NOT block future‑year creation
+
+
+7️⃣ Defaults & Persistence
+
+Default Planning Year = current calendar year
+Preserve the selected Planning Year:
+
+Across navigation within the session
+
+
+On January 1:
+
+Default filter rolls forward automatically
+Year window shifts forward
+No items are auto‑archived or hidden
+
+
+
+
+8️⃣ UX Messaging (Required)
+To avoid confusion, include contextual messaging.
+Header / Helper Text Example
+
+“Showing all open items, plus items planned for 2026.”
+
+Empty State Example
+
+“No initiatives planned for 2028 yet.”
+
+
+9️⃣ Explicit Non‑Goals
+This feature must NOT:
+
+Affect SLA calculations
+Affect performance reporting
+Affect audit logs or history
+Introduce budgeting, cost tracking, or finance logic
+Introduce fiscal calendars
+
+This is planning visibility, not analytics.
+
+✅ Expected Outcome
+After implementation:
+
+Open Initiatives, Projects, and Risks are never hidden due to year rollover
+Planning Year provides meaningful organization without risk
+Future‑year planning feels intentional and supported
+The system reflects real operational behavior
+
+Do not introduce additional filters or year logic beyond what is defined here.
+
+✅ Design Principle to Enforce
+
+Status determines visibility. Planning Year determines grouping.

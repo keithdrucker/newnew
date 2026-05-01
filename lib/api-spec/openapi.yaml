@@ -1367,7 +1367,15 @@ paths:
     get:
       operationId: listProjects
       tags: [projects]
-      summary: List projects (boards)
+      summary: |
+        List projects (boards). When `planningYear` is supplied, applies
+        the Planning Year visibility rule:
+        - if `planningYear` equals the server's current calendar year,
+          returns projects whose `phase` is NOT terminal (`closed` /
+          `cancelled`) **OR** whose `plannedStartYear` equals the
+          supplied year;
+        - otherwise returns only projects whose `plannedStartYear`
+          equals the supplied year (regardless of phase).
       parameters:
         - in: query
           name: status
@@ -1380,6 +1388,15 @@ paths:
         - in: query
           name: q
           schema: { type: string }
+        - in: query
+          name: planningYear
+          description: |
+            Planning-year filter. Server expects values in the rolling
+            window [currentCalendarYear-3, currentCalendarYear+3]; values
+            outside that window will simply match no rows. The static
+            2000..2100 sanity bound is a defensive guard, not the active
+            policy.
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
       responses:
         "200":
           description: Projects
@@ -1577,7 +1594,15 @@ paths:
     get:
       operationId: listInitiatives
       tags: [initiatives]
-      summary: List initiatives, newest first.
+      summary: |
+        List initiatives, newest first. When `planningYear` is supplied,
+        applies the Planning Year visibility rule:
+        - if `planningYear` equals the server's current calendar year,
+          returns initiatives whose `status` is NOT terminal
+          (`approved`/`rejected_deferred`) **OR** whose
+          `plannedStartYear` equals the supplied year (union);
+        - otherwise returns only initiatives whose `plannedStartYear`
+          equals the supplied year (regardless of status).
       parameters:
         - in: query
           name: status
@@ -1585,6 +1610,15 @@ paths:
         - in: query
           name: departmentId
           schema: { type: integer }
+        - in: query
+          name: planningYear
+          description: |
+            Planning-year filter. Server expects values in the rolling
+            window [currentCalendarYear-3, currentCalendarYear+3]; values
+            outside that window will simply match no rows. The static
+            2000..2100 sanity bound is a defensive guard, not the active
+            policy.
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
       responses:
         "200":
           description: Initiatives
@@ -1678,7 +1712,15 @@ paths:
     get:
       operationId: listRisks
       tags: [risks]
-      summary: List risks, newest first.
+      summary: |
+        List risks, newest first. When `planningYear` is supplied,
+        applies the Planning Year visibility rule:
+        - if `planningYear` equals the server's current calendar year,
+          returns risks whose `status` is NOT terminal
+          (`mitigation`/`accepted`/`transferred`/`avoided`/`closed`)
+          **OR** whose `reviewDecisionYear` equals the supplied year;
+        - otherwise returns only risks whose `reviewDecisionYear`
+          equals the supplied year (regardless of status).
       parameters:
         - in: query
           name: status
@@ -1686,6 +1728,15 @@ paths:
         - in: query
           name: owningDepartmentId
           schema: { type: integer }
+        - in: query
+          name: planningYear
+          description: |
+            Planning-year filter. Server expects values in the rolling
+            window [currentCalendarYear-3, currentCalendarYear+3]; values
+            outside that window will simply match no rows. The static
+            2000..2100 sanity bound is a defensive guard, not the active
+            policy.
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
       responses:
         "200":
           description: Risks
@@ -4196,6 +4247,8 @@ components:
         checklistTotal: { type: integer }
         checklistDone: { type: integer }
         commentCount: { type: integer }
+        # Planning Year — see /projects GET docs for the visibility rule.
+        plannedStartYear: { type: integer }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required:
@@ -4230,6 +4283,7 @@ components:
         - checklistTotal
         - checklistDone
         - commentCount
+        - plannedStartYear
         - createdAt
         - updatedAt
 
@@ -4340,6 +4394,18 @@ components:
           items: { type: integer }
         additionalComments: { type: string }
         completedYear: { type: ["integer", "null"] }
+        # Planning Year — defaults to the server's current calendar year
+        # when omitted. Must fall within the rolling [currentYear − 3,
+        # currentYear + 3] window or the server returns 400.
+        plannedStartYear:
+          type: integer
+          minimum: 2000
+          maximum: 2100
+          description: |
+            Optional on create; defaults to the server's current calendar year.
+            On create or patch, the server enforces a runtime ±3-year window
+            around the current calendar year and returns 400 outside it.
+            The 2000..2100 bound is a static sanity guard.
         labels:
           type: array
           items: { $ref: "#/components/schemas/TaskLabel" }
@@ -4381,6 +4447,17 @@ components:
           items: { type: integer }
         additionalComments: { type: string }
         completedYear: { type: ["integer", "null"] }
+        # Planning Year — patchable in-place, validated against the
+        # rolling [currentYear − 3, currentYear + 3] window.
+        plannedStartYear:
+          type: integer
+          minimum: 2000
+          maximum: 2100
+          description: |
+            Optional on create; defaults to the server's current calendar year.
+            On create or patch, the server enforces a runtime ±3-year window
+            around the current calendar year and returns 400 outside it.
+            The 2000..2100 bound is a static sanity guard.
         labels:
           type: array
           items: { $ref: "#/components/schemas/TaskLabel" }
@@ -4510,6 +4587,8 @@ components:
         decidedByName: { type: ["string", "null"] }
         revisitDate: { type: ["string", "null"], format: date }
         createdProjectId: { type: ["integer", "null"] }
+        # Planning Year — see /initiatives GET docs for the visibility rule.
+        plannedStartYear: { type: integer }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         auditEvents:
@@ -4547,6 +4626,7 @@ components:
         - riskNotes
         - finalDecision
         - decisionReason
+        - plannedStartYear
         - auditEvents
         - workflowRuns
         - createdAt
@@ -4566,6 +4646,18 @@ components:
         departmentId: { type: ["integer", "null"] }
         reporterId: { type: ["integer", "null"] }
         assigneeId: { type: ["integer", "null"] }
+        # Planning Year — defaults to the server's current calendar year
+        # when omitted. Must fall within the rolling [currentYear − 3,
+        # currentYear + 3] window or the server returns 400.
+        plannedStartYear:
+          type: integer
+          minimum: 2000
+          maximum: 2100
+          description: |
+            Optional on create; defaults to the server's current calendar year.
+            On create or patch, the server enforces a runtime ±3-year window
+            around the current calendar year and returns 400 outside it.
+            The 2000..2100 bound is a static sanity guard.
       required: [title, problemOpportunity, expectedBenefit, impactScope]
 
     UpdateInitiativeInput:
@@ -4614,6 +4706,17 @@ components:
         finalDecision: { type: string }
         decisionReason: { type: string }
         revisitDate: { type: ["string", "null"], format: date }
+        # Planning Year — patchable in-place, validated against the
+        # rolling [currentYear − 3, currentYear + 3] window.
+        plannedStartYear:
+          type: integer
+          minimum: 2000
+          maximum: 2100
+          description: |
+            Optional on create; defaults to the server's current calendar year.
+            On create or patch, the server enforces a runtime ±3-year window
+            around the current calendar year and returns 400 outside it.
+            The 2000..2100 bound is a static sanity guard.
         # Reason captured on the audit event for reopen / move-back /
         # close transitions. Required for those status changes.
         transitionReason: { type: string }
@@ -4707,6 +4810,9 @@ components:
         mitigationControlDescription: { type: string }
         # Linked work
         createdProjectId: { type: ["integer", "null"] }
+        # Planning Year — see /risks GET docs for the visibility rule.
+        # Indicates the year the risk is targeted for review/decision.
+        reviewDecisionYear: { type: integer }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         auditEvents:
@@ -4749,6 +4855,7 @@ components:
         - mitigationEstimatedCost
         - mitigationControlType
         - mitigationControlDescription
+        - reviewDecisionYear
         - auditEvents
         - workflowRuns
         - createdAt
@@ -4762,6 +4869,18 @@ components:
         description: { type: string }
         owningDepartmentId: { type: integer }
         riskOwnerUserId: { type: ["integer", "null"] }
+        # Planning Year — defaults to the server's current calendar year
+        # when omitted. Must fall within the rolling [currentYear − 3,
+        # currentYear + 3] window or the server returns 400.
+        reviewDecisionYear:
+          type: integer
+          minimum: 2000
+          maximum: 2100
+          description: |
+            Optional on create; defaults to the server's current calendar year.
+            On create or patch, the server enforces a runtime ±3-year window
+            around the current calendar year and returns 400 outside it.
+            The 2000..2100 bound is a static sanity guard.
       required: [title, riskType, owningDepartmentId]
 
     UpdateRiskInput:
@@ -4818,6 +4937,17 @@ components:
           type: string
           enum: ["", "security_control", "compensating_control"]
         mitigationControlDescription: { type: string }
+        # Planning Year — patchable in-place, validated against the
+        # rolling [currentYear − 3, currentYear + 3] window.
+        reviewDecisionYear:
+          type: integer
+          minimum: 2000
+          maximum: 2100
+          description: |
+            Optional on create; defaults to the server's current calendar year.
+            On create or patch, the server enforces a runtime ±3-year window
+            around the current calendar year and returns 400 outside it.
+            The 2000..2100 bound is a static sanity guard.
         # Reason captured on the audit event for close transitions.
         transitionReason: { type: string }
 

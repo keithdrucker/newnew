@@ -78,6 +78,7 @@ import {
 } from "lucide-react";
 import { backlogSubStatus, startDateLabel } from "@/pages/projects";
 import { downloadProjectReport } from "@/components/project-closeout-report";
+import { PlanningYearMiniSelect } from "@/components/planning-year-filter";
 
 // ----- Constants -----------------------------------------------------------
 
@@ -130,10 +131,14 @@ export function ProjectImportDialog({
   open,
   onOpenChange,
   defaultDepartmentId,
+  defaultPlanningYear,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   defaultDepartmentId?: number | null;
+  // Page-level planning year. Imported projects inherit this so the
+  // newly-imported row shows up in the same view the user is on.
+  defaultPlanningYear: number;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -159,6 +164,8 @@ export function ProjectImportDialog({
   const [phase, setPhase] = useState<ProjectPhase>("in_progress");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [plannedStartYear, setPlannedStartYear] =
+    useState<number>(defaultPlanningYear);
 
   useEffect(() => {
     if (open) {
@@ -170,8 +177,9 @@ export function ProjectImportDialog({
       setPhase("in_progress");
       setStartDate("");
       setEndDate("");
+      setPlannedStartYear(defaultPlanningYear);
     }
-  }, [open, defaultDepartmentId, session?.userId]);
+  }, [open, defaultDepartmentId, session?.userId, defaultPlanningYear]);
 
   const submit = () => {
     if (!name.trim()) {
@@ -193,6 +201,7 @@ export function ProjectImportDialog({
           priority: priority as "low" | "medium" | "high" | "urgent",
           startDate: startDate || null,
           endDate: endDate || null,
+          plannedStartYear,
         },
       },
       {
@@ -317,7 +326,7 @@ export function ProjectImportDialog({
               </Select>
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Field label="Start date">
               <Input
                 type="date"
@@ -332,6 +341,13 @@ export function ProjectImportDialog({
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 data-testid="input-project-end"
+              />
+            </Field>
+            <Field label="Planning year">
+              <PlanningYearMiniSelect
+                value={plannedStartYear}
+                onChange={setPlannedStartYear}
+                testId="select-project-planning-year"
               />
             </Field>
           </div>
@@ -458,6 +474,12 @@ function DetailInner({
     row.completionSummary,
   );
   const [keyTakeaway, setKeyTakeaway] = useState(row.keyTakeaway);
+  // Planning year — server enforces ±3 of current year; the dropdown
+  // restricts choices to the same window so the user can't pick a
+  // year the server will reject.
+  const [plannedStartYear, setPlannedStartYear] = useState<number>(
+    row.plannedStartYear,
+  );
 
   useEffect(() => {
     setDepartmentId(row.departmentId ?? null);
@@ -470,6 +492,7 @@ function DetailInner({
     setStatusUpdate(row.statusUpdate);
     setCompletionSummary(row.completionSummary);
     setKeyTakeaway(row.keyTakeaway);
+    setPlannedStartYear(row.plannedStartYear);
   }, [row.id, row]);
 
   // ---- Unsaved-changes protection ---------------------------------
@@ -491,6 +514,7 @@ function DetailInner({
       statusUpdate: row.statusUpdate,
       completionSummary: row.completionSummary,
       keyTakeaway: row.keyTakeaway,
+      plannedStartYear: row.plannedStartYear,
     }),
     [row],
   );
@@ -505,6 +529,7 @@ function DetailInner({
     statusUpdate,
     completionSummary,
     keyTakeaway,
+    plannedStartYear,
   };
   // Compare current local state against either the row's baseline
   // OR the values we most recently persisted. The "saved" comparison
@@ -575,6 +600,7 @@ function DetailInner({
           statusUpdate,
           completionSummary,
           keyTakeaway,
+          plannedStartYear,
         },
       });
       // Commit the post-save snapshot before closing so dirty
@@ -606,6 +632,7 @@ function DetailInner({
         endDate: endDate || null,
         planningNotes,
         statusUpdate,
+        plannedStartYear,
       },
     });
     toast({ title: msg });
@@ -875,7 +902,7 @@ function DetailInner({
                   data-testid="input-assigned-team"
                 />
               </Field>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Field label="Priority">
                   <Select value={priority} onValueChange={setPriority}>
                     <SelectTrigger data-testid="select-priority">
@@ -906,6 +933,13 @@ function DetailInner({
                     onChange={(e) => setEndDate(e.target.value)}
                     data-testid="input-end-date"
                     disabled={phase !== "backlog_needs_assignment"}
+                  />
+                </Field>
+                <Field label="Planning year">
+                  <PlanningYearMiniSelect
+                    value={plannedStartYear}
+                    onChange={setPlannedStartYear}
+                    testId="select-detail-planning-year"
                   />
                 </Field>
               </div>

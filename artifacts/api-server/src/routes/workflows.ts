@@ -1226,6 +1226,9 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
               rationale:
                 `Created from approved risk-mitigation decision. ` +
                 `Risk rating at decision time: ${risk.riskRating || "—"}.`,
+              // Carry the risk's planning year onto the new project
+              // so it shows up in the same Planning Year view.
+              plannedStartYear: risk.reviewDecisionYear,
             })
             .returning();
           createdProjectId = createdProject.id;
@@ -1338,6 +1341,9 @@ router.post("/workflow-runs/:id/decision", async (req, res): Promise<void> => {
               initiative.businessValueSummary ||
               initiative.expectedBenefit ||
               "",
+            // Carry the initiative's planning year onto the new
+            // project so it shows up in the same Planning Year view.
+            plannedStartYear: initiative.plannedStartYear,
           })
           .returning();
         createdProjectId = createdProject.id;

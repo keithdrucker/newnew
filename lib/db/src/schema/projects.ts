@@ -185,6 +185,11 @@ export const projectsTable = pgTable(
       .default([]),
     additionalComments: text("additional_comments").notNull().default(""),
     completedYear: integer("completed_year"),
+    // Planning Year — see replit.md "Planning Year filter".
+    // Independent of phase: open projects (anything not closed/cancelled)
+    // remain visible when the current calendar year is selected, even
+    // when their plannedStartYear belongs to an earlier window.
+    plannedStartYear: integer("planned_start_year").notNull().default(2026),
     labels: jsonb("labels").$type<TaskLabel[]>().notNull().default([]),
 
     // The work-steps to deliver this project. Stable per-item ids

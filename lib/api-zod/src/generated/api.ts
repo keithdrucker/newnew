@@ -2430,12 +2430,31 @@ export const DeleteVendorParams = zod.object({
 });
 
 /**
- * @summary List projects (boards)
+ * @summary List projects (boards). When `planningYear` is supplied, applies
+the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns projects whose `phase` is NOT terminal (`closed` /
+  `cancelled`) **OR** whose `plannedStartYear` equals the
+  supplied year;
+- otherwise returns only projects whose `plannedStartYear`
+  equals the supplied year (regardless of phase).
+
  */
+export const listProjectsQueryPlanningYearMin = 2000;
+export const listProjectsQueryPlanningYearMax = 2100;
+
 export const ListProjectsQueryParams = zod.object({
   status: zod.enum(["active", "on_hold", "completed", "archived"]).optional(),
   departmentId: zod.coerce.number().optional(),
   q: zod.coerce.string().optional(),
+  planningYear: zod.coerce
+    .number()
+    .min(listProjectsQueryPlanningYearMin)
+    .max(listProjectsQueryPlanningYearMax)
+    .optional()
+    .describe(
+      "Planning-year filter. Server expects values in the rolling\nwindow [currentCalendarYear-3, currentCalendarYear+3]; values\noutside that window will simply match no rows. The static\n2000..2100 sanity bound is a defensive guard, not the active\npolicy.\n",
+    ),
 });
 
 export const ListProjectsResponseItem = zod.object({
@@ -2515,10 +2534,14 @@ export const ListProjectsResponseItem = zod.object({
   checklistTotal: zod.number(),
   checklistDone: zod.number(),
   commentCount: zod.number(),
+  plannedStartYear: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
 export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
+
+export const createProjectBodyPlannedStartYearMin = 2000;
+export const createProjectBodyPlannedStartYearMax = 2100;
 
 export const CreateProjectBody = zod.object({
   name: zod.string(),
@@ -2555,6 +2578,14 @@ export const CreateProjectBody = zod.object({
   impactedDepartmentIds: zod.array(zod.number()).optional(),
   additionalComments: zod.string().optional(),
   completedYear: zod.number().nullish(),
+  plannedStartYear: zod
+    .number()
+    .min(createProjectBodyPlannedStartYearMin)
+    .max(createProjectBodyPlannedStartYearMax)
+    .optional()
+    .describe(
+      "Optional on create; defaults to the server's current calendar year.\nOn create or patch, the server enforces a runtime ±3-year window\naround the current calendar year and returns 400 outside it.\nThe 2000..2100 bound is a static sanity guard.\n",
+    ),
   labels: zod
     .array(
       zod.object({
@@ -2661,6 +2692,7 @@ export const GetProjectResponse = zod
     checklistTotal: zod.number(),
     checklistDone: zod.number(),
     commentCount: zod.number(),
+    plannedStartYear: zod.number(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -2686,6 +2718,9 @@ export const UpdateProjectParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const updateProjectBodyPlannedStartYearMin = 2000;
+export const updateProjectBodyPlannedStartYearMax = 2100;
+
 export const UpdateProjectBody = zod.object({
   name: zod.string().optional(),
   description: zod.string().optional(),
@@ -2709,6 +2744,14 @@ export const UpdateProjectBody = zod.object({
   impactedDepartmentIds: zod.array(zod.number()).optional(),
   additionalComments: zod.string().optional(),
   completedYear: zod.number().nullish(),
+  plannedStartYear: zod
+    .number()
+    .min(updateProjectBodyPlannedStartYearMin)
+    .max(updateProjectBodyPlannedStartYearMax)
+    .optional()
+    .describe(
+      "Optional on create; defaults to the server's current calendar year.\nOn create or patch, the server enforces a runtime ±3-year window\naround the current calendar year and returns 400 outside it.\nThe 2000..2100 bound is a static sanity guard.\n",
+    ),
   labels: zod
     .array(
       zod.object({
@@ -2811,6 +2854,7 @@ export const UpdateProjectResponse = zod
     checklistTotal: zod.number(),
     checklistDone: zod.number(),
     commentCount: zod.number(),
+    plannedStartYear: zod.number(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -2955,6 +2999,7 @@ export const ChangeProjectPhaseResponse = zod
     checklistTotal: zod.number(),
     checklistDone: zod.number(),
     commentCount: zod.number(),
+    plannedStartYear: zod.number(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -3065,6 +3110,7 @@ export const AddProjectChecklistItemResponse = zod
     checklistTotal: zod.number(),
     checklistDone: zod.number(),
     commentCount: zod.number(),
+    plannedStartYear: zod.number(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -3177,6 +3223,7 @@ export const UpdateProjectChecklistItemResponse = zod
     checklistTotal: zod.number(),
     checklistDone: zod.number(),
     commentCount: zod.number(),
+    plannedStartYear: zod.number(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -3281,6 +3328,7 @@ export const DeleteProjectChecklistItemResponse = zod
     checklistTotal: zod.number(),
     checklistDone: zod.number(),
     commentCount: zod.number(),
+    plannedStartYear: zod.number(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -3388,6 +3436,7 @@ export const ReorderProjectChecklistResponse = zod
     checklistTotal: zod.number(),
     checklistDone: zod.number(),
     commentCount: zod.number(),
+    plannedStartYear: zod.number(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
   })
@@ -3410,13 +3459,32 @@ export const ReorderProjectChecklistResponse = zod
   );
 
 /**
- * @summary List initiatives, newest first.
+ * @summary List initiatives, newest first. When `planningYear` is supplied,
+applies the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns initiatives whose `status` is NOT terminal
+  (`approved`/`rejected_deferred`) **OR** whose
+  `plannedStartYear` equals the supplied year (union);
+- otherwise returns only initiatives whose `plannedStartYear`
+  equals the supplied year (regardless of status).
+
  */
+export const listInitiativesQueryPlanningYearMin = 2000;
+export const listInitiativesQueryPlanningYearMax = 2100;
+
 export const ListInitiativesQueryParams = zod.object({
   status: zod
     .enum(["backlog", "under_review", "approved", "rejected_deferred"])
     .optional(),
   departmentId: zod.coerce.number().optional(),
+  planningYear: zod.coerce
+    .number()
+    .min(listInitiativesQueryPlanningYearMin)
+    .max(listInitiativesQueryPlanningYearMax)
+    .optional()
+    .describe(
+      "Planning-year filter. Server expects values in the rolling\nwindow [currentCalendarYear-3, currentCalendarYear+3]; values\noutside that window will simply match no rows. The static\n2000..2100 sanity bound is a defensive guard, not the active\npolicy.\n",
+    ),
 });
 
 export const ListInitiativesResponseItem = zod.object({
@@ -3469,6 +3537,7 @@ export const ListInitiativesResponseItem = zod.object({
   decidedByName: zod.string().nullish(),
   revisitDate: zod.coerce.date().nullish(),
   createdProjectId: zod.number().nullish(),
+  plannedStartYear: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   auditEvents: zod.array(
@@ -3539,6 +3608,9 @@ export const ListInitiativesResponseItem = zod.object({
 });
 export const ListInitiativesResponse = zod.array(ListInitiativesResponseItem);
 
+export const createInitiativeBodyPlannedStartYearMin = 2000;
+export const createInitiativeBodyPlannedStartYearMax = 2100;
+
 export const CreateInitiativeBody = zod.object({
   title: zod.string().min(1),
   problemOpportunity: zod.string().min(1),
@@ -3549,6 +3621,14 @@ export const CreateInitiativeBody = zod.object({
   departmentId: zod.number().nullish(),
   reporterId: zod.number().nullish(),
   assigneeId: zod.number().nullish(),
+  plannedStartYear: zod
+    .number()
+    .min(createInitiativeBodyPlannedStartYearMin)
+    .max(createInitiativeBodyPlannedStartYearMax)
+    .optional()
+    .describe(
+      "Optional on create; defaults to the server's current calendar year.\nOn create or patch, the server enforces a runtime ±3-year window\naround the current calendar year and returns 400 outside it.\nThe 2000..2100 bound is a static sanity guard.\n",
+    ),
 });
 
 export const GetInitiativeParams = zod.object({
@@ -3605,6 +3685,7 @@ export const GetInitiativeResponse = zod.object({
   decidedByName: zod.string().nullish(),
   revisitDate: zod.coerce.date().nullish(),
   createdProjectId: zod.number().nullish(),
+  plannedStartYear: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   auditEvents: zod.array(
@@ -3691,6 +3772,9 @@ export const UpdateInitiativeParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const updateInitiativeBodyPlannedStartYearMin = 2000;
+export const updateInitiativeBodyPlannedStartYearMax = 2100;
+
 export const UpdateInitiativeBody = zod
   .object({
     title: zod.string().min(1).optional(),
@@ -3727,6 +3811,14 @@ export const UpdateInitiativeBody = zod
     finalDecision: zod.string().optional(),
     decisionReason: zod.string().optional(),
     revisitDate: zod.coerce.date().nullish(),
+    plannedStartYear: zod
+      .number()
+      .min(updateInitiativeBodyPlannedStartYearMin)
+      .max(updateInitiativeBodyPlannedStartYearMax)
+      .optional()
+      .describe(
+        "Optional on create; defaults to the server's current calendar year.\nOn create or patch, the server enforces a runtime ±3-year window\naround the current calendar year and returns 400 outside it.\nThe 2000..2100 bound is a static sanity guard.\n",
+      ),
     transitionReason: zod.string().optional(),
   })
   .describe(
@@ -3783,6 +3875,7 @@ export const UpdateInitiativeResponse = zod.object({
   decidedByName: zod.string().nullish(),
   revisitDate: zod.coerce.date().nullish(),
   createdProjectId: zod.number().nullish(),
+  plannedStartYear: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   auditEvents: zod.array(
@@ -3857,8 +3950,19 @@ export const DeleteInitiativeParams = zod.object({
 });
 
 /**
- * @summary List risks, newest first.
+ * @summary List risks, newest first. When `planningYear` is supplied,
+applies the Planning Year visibility rule:
+- if `planningYear` equals the server's current calendar year,
+  returns risks whose `status` is NOT terminal
+  (`mitigation`/`accepted`/`transferred`/`avoided`/`closed`)
+  **OR** whose `reviewDecisionYear` equals the supplied year;
+- otherwise returns only risks whose `reviewDecisionYear`
+  equals the supplied year (regardless of status).
+
  */
+export const listRisksQueryPlanningYearMin = 2000;
+export const listRisksQueryPlanningYearMax = 2100;
+
 export const ListRisksQueryParams = zod.object({
   status: zod
     .enum([
@@ -3873,6 +3977,14 @@ export const ListRisksQueryParams = zod.object({
     ])
     .optional(),
   owningDepartmentId: zod.coerce.number().optional(),
+  planningYear: zod.coerce
+    .number()
+    .min(listRisksQueryPlanningYearMin)
+    .max(listRisksQueryPlanningYearMax)
+    .optional()
+    .describe(
+      "Planning-year filter. Server expects values in the rolling\nwindow [currentCalendarYear-3, currentCalendarYear+3]; values\noutside that window will simply match no rows. The static\n2000..2100 sanity bound is a defensive guard, not the active\npolicy.\n",
+    ),
 });
 
 export const ListRisksResponseItem = zod.object({
@@ -3928,6 +4040,7 @@ export const ListRisksResponseItem = zod.object({
   ]),
   mitigationControlDescription: zod.string(),
   createdProjectId: zod.number().nullish(),
+  reviewDecisionYear: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   auditEvents: zod.array(
@@ -4006,12 +4119,23 @@ export const ListRisksResponseItem = zod.object({
 });
 export const ListRisksResponse = zod.array(ListRisksResponseItem);
 
+export const createRiskBodyReviewDecisionYearMin = 2000;
+export const createRiskBodyReviewDecisionYearMax = 2100;
+
 export const CreateRiskBody = zod.object({
   title: zod.string().min(1),
   riskType: zod.string().min(1),
   description: zod.string().optional(),
   owningDepartmentId: zod.number(),
   riskOwnerUserId: zod.number().nullish(),
+  reviewDecisionYear: zod
+    .number()
+    .min(createRiskBodyReviewDecisionYearMin)
+    .max(createRiskBodyReviewDecisionYearMax)
+    .optional()
+    .describe(
+      "Optional on create; defaults to the server's current calendar year.\nOn create or patch, the server enforces a runtime ±3-year window\naround the current calendar year and returns 400 outside it.\nThe 2000..2100 bound is a static sanity guard.\n",
+    ),
 });
 
 export const GetRiskParams = zod.object({
@@ -4071,6 +4195,7 @@ export const GetRiskResponse = zod.object({
   ]),
   mitigationControlDescription: zod.string(),
   createdProjectId: zod.number().nullish(),
+  reviewDecisionYear: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   auditEvents: zod.array(
@@ -4165,6 +4290,9 @@ export const UpdateRiskParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const updateRiskBodyReviewDecisionYearMin = 2000;
+export const updateRiskBodyReviewDecisionYearMax = 2100;
+
 export const UpdateRiskBody = zod
   .object({
     title: zod.string().min(1).optional(),
@@ -4212,6 +4340,14 @@ export const UpdateRiskBody = zod
       .enum(["", "security_control", "compensating_control"])
       .optional(),
     mitigationControlDescription: zod.string().optional(),
+    reviewDecisionYear: zod
+      .number()
+      .min(updateRiskBodyReviewDecisionYearMin)
+      .max(updateRiskBodyReviewDecisionYearMax)
+      .optional()
+      .describe(
+        "Optional on create; defaults to the server's current calendar year.\nOn create or patch, the server enforces a runtime ±3-year window\naround the current calendar year and returns 400 outside it.\nThe 2000..2100 bound is a static sanity guard.\n",
+      ),
     transitionReason: zod.string().optional(),
   })
   .describe(
@@ -4271,6 +4407,7 @@ export const UpdateRiskResponse = zod.object({
   ]),
   mitigationControlDescription: zod.string(),
   createdProjectId: zod.number().nullish(),
+  reviewDecisionYear: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   auditEvents: zod.array(
@@ -4452,6 +4589,7 @@ export const GetDepartmentBoardResponse = zod.object({
               checklistTotal: zod.number(),
               checklistDone: zod.number(),
               commentCount: zod.number(),
+              plannedStartYear: zod.number(),
               createdAt: zod.coerce.date(),
               updatedAt: zod.coerce.date(),
             }),
@@ -4537,6 +4675,7 @@ export const GetDepartmentBoardResponse = zod.object({
       checklistTotal: zod.number(),
       checklistDone: zod.number(),
       commentCount: zod.number(),
+      plannedStartYear: zod.number(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
     }),
@@ -5403,6 +5542,7 @@ export const FinalizeRiskTreatmentResponse = zod.object({
   ]),
   mitigationControlDescription: zod.string(),
   createdProjectId: zod.number().nullish(),
+  reviewDecisionYear: zod.number(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   auditEvents: zod.array(

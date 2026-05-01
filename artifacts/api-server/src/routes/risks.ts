@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, or } from "drizzle-orm";
 import {
   db,
   risksTable,
@@ -22,6 +22,11 @@ import {
 } from "@workspace/api-zod";
 import { getCurrentUser, type SessionUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
+import {
+  currentPlanningYear,
+  resolveCreatePlanningYear,
+  validatePatchPlanningYear,
+} from "../lib/planningYear";
 import { fetchRiskWorkflowRuns } from "./workflows";
 
 const router: IRouter = Router();
@@ -35,6 +40,17 @@ type RiskStatus =
   | "transferred"
   | "avoided"
   | "closed";
+
+// Planning Year visibility — risks in any of these statuses count as
+// "closed" (a treatment outcome has been recorded) and disappear from
+// the current-year view unless their `reviewDecisionYear` matches.
+const CLOSED_RISK_STATUSES: RiskStatus[] = [
+  "mitigation",
+  "accepted",
+  "transferred",
+  "avoided",
+  "closed",
+];
 
 // Agents and admins both have access; end_users do not.
 function assertAgentOrAdmin(user: SessionUser): void {
@@ -313,6 +329,7 @@ async function hydrate(rows: RiskRow[]): Promise<unknown[]> {
     mitigationControlType: r.mitigationControlType,
     mitigationControlDescription: r.mitigationControlDescription,
     createdProjectId: r.createdProjectId ?? null,
+    reviewDecisionYear: r.reviewDecisionYear,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
     auditEvents: (auditByRisk.get(r.id) ?? []).map((e) => ({
@@ -347,6 +364,22 @@ router.get("/risks", async (req, res): Promise<void> => {
     conds.push(
       eq(risksTable.owningDepartmentId, params.data.owningDepartmentId),
     );
+  // Planning Year visibility filter (see openapi.yaml summary).
+  if (params.data.planningYear != null) {
+    const year = params.data.planningYear;
+    const now = currentPlanningYear();
+    if (year === now) {
+      // Current year: keep all not-closed rows OR rows with this review year.
+      conds.push(
+        or(
+          notInArray(risksTable.status, CLOSED_RISK_STATUSES),
+          eq(risksTable.reviewDecisionYear, year),
+        )!,
+      );
+    } else {
+      conds.push(eq(risksTable.reviewDecisionYear, year));
+    }
+  }
   const baseQuery = db.select().from(risksTable);
   const rows = await (conds.length
     ? baseQuery.where(and(...conds))
@@ -386,6 +419,14 @@ router.post("/risks", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
+  // Planning Year — default to current calendar year, allow ±3 override.
+  const planningYearResult = resolveCreatePlanningYear(
+    body.data.reviewDecisionYear,
+  );
+  if (!planningYearResult.ok) {
+    res.status(400).json({ error: planningYearResult.error });
+    return;
+  }
   const [created] = await db
     .insert(risksTable)
     .values({
@@ -396,6 +437,7 @@ router.post("/risks", async (req, res): Promise<void> => {
       riskOwnerUserId: body.data.riskOwnerUserId ?? null,
       reporterId: user.id,
       status: "identified",
+      reviewDecisionYear: planningYearResult.year,
     })
     .returning();
   await db.insert(riskAuditEventsTable).values({
@@ -648,6 +690,18 @@ router.patch("/risks/:id", async (req, res): Promise<void> => {
     }
     if (b.mitigationControlDescription !== undefined)
       patch.mitigationControlDescription = b.mitigationControlDescription;
+    // Planning Year (range-validated; out-of-range → 400).
+    if (b.reviewDecisionYear !== undefined) {
+      const check = validatePatchPlanningYear(b.reviewDecisionYear);
+      if (!check.ok) {
+        return {
+          kind: "needs_field",
+          field: "reviewDecisionYear",
+          message: check.error,
+        };
+      }
+      patch.reviewDecisionYear = b.reviewDecisionYear;
+    }
 
     let auditReason = "";
     if (incomingStatus && incomingStatus !== currentStatus && rule) {
@@ -876,6 +930,9 @@ router.post(
               `Created from finalized risk-mitigation decision (no approval required — ` +
               `Financial and Operational impact are both 'No'). Risk rating at decision ` +
               `time: ${risk.riskRating || "—"}.`,
+            // Carry the risk's planning year onto the new project so
+            // it shows up in the same Planning Year view.
+            plannedStartYear: risk.reviewDecisionYear,
           })
           .returning();
         createdProjectId = createdProject.id;

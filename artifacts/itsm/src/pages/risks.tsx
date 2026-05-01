@@ -93,6 +93,14 @@ import {
   Info,
 } from "lucide-react";
 import { RiskWorkflowApproval } from "@/components/risk-workflow-approval";
+import {
+  PlanningYearFilter,
+  PlanningYearMiniSelect,
+  usePlanningYear,
+  planningYearHelperText,
+  planningYearEmptyText,
+  currentPlanningYear,
+} from "@/components/planning-year-filter";
 
 // ---------- Constants ----------
 
@@ -442,7 +450,12 @@ export default function RisksPage() {
     });
   }
 
-  const { data: risks = [], isLoading } = useListRisks(undefined);
+  // Planning Year filter — server applies the visibility rule (current
+  // year shows all NOT-CLOSED risks plus those decided this year; any
+  // other year shows only risks whose reviewDecisionYear matches).
+  const [planningYear, setPlanningYear] = usePlanningYear("risks");
+  const { data: risks = [], isLoading } = useListRisks({ planningYear });
+  const isCurrentYear = planningYear === currentPlanningYear();
 
   // Risks store the team key as `owningDepartmentId`; the shared
   // team-scope helper expects `departmentId`. Map once here so the
@@ -659,14 +672,23 @@ export default function RisksPage() {
             ))}
           </div>
         </div>
-        <Button
-          onClick={() => setCreateOpen(true)}
-          data-testid="button-new-risk"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          New Risk
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <PlanningYearFilter value={planningYear} onChange={setPlanningYear} />
+          <Button
+            onClick={() => setCreateOpen(true)}
+            data-testid="button-new-risk"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            New Risk
+          </Button>
+        </div>
       </header>
+      <p
+        className="text-xs text-muted-foreground -mt-2"
+        data-testid="text-planning-year-helper"
+      >
+        {planningYearHelperText(planningYear)}
+      </p>
 
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -778,6 +800,26 @@ export default function RisksPage() {
           columns visible without cramping on smaller screens */}
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : filteredRisks.length === 0 ? (
+        <div
+          className="rounded-lg border border-dashed border-zinc-200 bg-white px-4 py-10 text-center text-sm text-muted-foreground"
+          data-testid="text-risks-empty"
+        >
+          {planningYearEmptyText(planningYear)}
+          {!isCurrentYear ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                className="text-foreground underline underline-offset-2 hover:text-primary"
+                onClick={() => setPlanningYear(currentPlanningYear())}
+                data-testid="button-jump-to-current-year"
+              >
+                Jump to {currentPlanningYear()} (current).
+              </button>
+            </>
+          ) : null}
+        </div>
       ) : (
         <div className="overflow-x-auto pb-2">
           <div className="flex items-stretch gap-2 min-w-max">
@@ -810,6 +852,7 @@ export default function RisksPage() {
             setCreateOpen(false);
             setSelectedId(id);
           }}
+          defaultPlanningYear={planningYear}
         />
       )}
 
@@ -999,10 +1042,14 @@ function CreateRiskDialog({
   open,
   onOpenChange,
   onCreated,
+  defaultPlanningYear,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onCreated: (id: number) => void;
+  // Page-level Planning Year. Inherited by new risks so the freshly
+  // created row is visible in the same view the user is on.
+  defaultPlanningYear: number;
 }) {
   const scope = useTeamScope();
   const { data: agents = [] } = useListAgents({});
@@ -1014,6 +1061,8 @@ function CreateRiskDialog({
   const [description, setDescription] = useState("");
   const [departmentId, setDepartmentId] = useState<string>("");
   const [ownerUserId, setOwnerUserId] = useState<string>("none");
+  const [reviewDecisionYear, setReviewDecisionYear] =
+    useState<number>(defaultPlanningYear);
 
   const teams = scope.accessible;
 
@@ -1031,6 +1080,7 @@ function CreateRiskDialog({
           owningDepartmentId: Number(departmentId),
           riskOwnerUserId:
             ownerUserId === "none" ? null : Number(ownerUserId),
+          reviewDecisionYear,
         },
       });
       qc.invalidateQueries({ queryKey: getListRisksQueryKey() });
@@ -1094,21 +1144,31 @@ function CreateRiskDialog({
               </Select>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Risk owner (optional)</Label>
-            <Select value={ownerUserId} onValueChange={setOwnerUserId}>
-              <SelectTrigger data-testid="select-risk-owner">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">— Unassigned —</SelectItem>
-                {agents.map((a: Agent) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Risk owner (optional)</Label>
+              <Select value={ownerUserId} onValueChange={setOwnerUserId}>
+                <SelectTrigger data-testid="select-risk-owner">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Unassigned —</SelectItem>
+                  {agents.map((a: Agent) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Planning year</Label>
+              <PlanningYearMiniSelect
+                value={reviewDecisionYear}
+                onChange={setReviewDecisionYear}
+                testId="select-create-risk-year"
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="risk-desc">Description</Label>
@@ -1337,6 +1397,7 @@ function RiskDetailContent({
     departmentId: String(r.owningDepartmentId),
     riskOwnerUserId:
       r.riskOwnerUserId == null ? "none" : String(r.riskOwnerUserId),
+    reviewDecisionYear: r.reviewDecisionYear,
   });
   const analysisSnapshot = (r: Risk) => ({
     likelihood: r.likelihood || "",
@@ -1379,6 +1440,9 @@ function RiskDetailContent({
   );
   const [riskOwnerUserId, setRiskOwnerUserId] = useState(
     overviewBaseline.riskOwnerUserId,
+  );
+  const [reviewDecisionYear, setReviewDecisionYear] = useState<number>(
+    overviewBaseline.reviewDecisionYear,
   );
 
   // Analysis / Under-Analysis-phase fields
@@ -1455,7 +1519,8 @@ function RiskDetailContent({
     riskType !== overviewBaseline.riskType ||
     description !== overviewBaseline.description ||
     departmentId !== overviewBaseline.departmentId ||
-    riskOwnerUserId !== overviewBaseline.riskOwnerUserId;
+    riskOwnerUserId !== overviewBaseline.riskOwnerUserId ||
+    reviewDecisionYear !== overviewBaseline.reviewDecisionYear;
 
   const analysisDirty =
     likelihood !== analysisBaseline.likelihood ||
@@ -1506,6 +1571,7 @@ function RiskDetailContent({
       setDescription(next.description);
       setDepartmentId(next.departmentId);
       setRiskOwnerUserId(next.riskOwnerUserId);
+      setReviewDecisionYear(next.reviewDecisionYear);
       setOverviewBaseline(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1515,6 +1581,7 @@ function RiskDetailContent({
     risk.description,
     risk.owningDepartmentId,
     risk.riskOwnerUserId,
+    risk.reviewDecisionYear,
   ]);
 
   useEffect(() => {
@@ -1605,6 +1672,7 @@ function RiskDetailContent({
           owningDepartmentId: Number(departmentId),
           riskOwnerUserId:
             riskOwnerUserId === "none" ? null : Number(riskOwnerUserId),
+          reviewDecisionYear,
         },
       });
       // Mirror server-side normalization (trim) into local + baseline so the
@@ -1617,6 +1685,7 @@ function RiskDetailContent({
         description: trimmedDescription,
         departmentId,
         riskOwnerUserId,
+        reviewDecisionYear,
       });
       refresh();
       toast.success("Risk details saved.");
@@ -1747,6 +1816,7 @@ function RiskDetailContent({
     description,
     departmentId,
     riskOwnerUserId,
+    reviewDecisionYear,
     likelihood,
     impact,
     analysisNotes,
@@ -1941,11 +2011,13 @@ function RiskDetailContent({
                 description={description}
                 departmentId={departmentId}
                 riskOwnerUserId={riskOwnerUserId}
+                reviewDecisionYear={reviewDecisionYear}
                 onTitleChange={setTitle}
                 onRiskTypeChange={setRiskType}
                 onDescriptionChange={setDescription}
                 onDepartmentChange={setDepartmentId}
                 onRiskOwnerChange={setRiskOwnerUserId}
+                onReviewDecisionYearChange={setReviewDecisionYear}
                 onSave={saveOverview}
                 onTransition={transition}
                 saving={updateRisk.isPending}
@@ -2091,11 +2163,13 @@ function OverviewTab({
   description,
   departmentId,
   riskOwnerUserId,
+  reviewDecisionYear,
   onTitleChange,
   onRiskTypeChange,
   onDescriptionChange,
   onDepartmentChange,
   onRiskOwnerChange,
+  onReviewDecisionYearChange,
   onSave,
   onTransition,
   saving,
@@ -2107,11 +2181,13 @@ function OverviewTab({
   description: string;
   departmentId: string;
   riskOwnerUserId: string;
+  reviewDecisionYear: number;
   onTitleChange: (v: string) => void;
   onRiskTypeChange: (v: string) => void;
   onDescriptionChange: (v: string) => void;
   onDepartmentChange: (v: string) => void;
   onRiskOwnerChange: (v: string) => void;
+  onReviewDecisionYearChange: (v: number) => void;
   onSave: () => Promise<boolean>;
   onTransition: (s: string, extra?: Record<string, unknown>) => void;
   saving: boolean;
@@ -2183,14 +2259,17 @@ function OverviewTab({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Status
-          </p>
-          <div className="text-sm pt-1">{statusLabel(risk.status)}</div>
+        <div className="space-y-1.5">
+          <Label>Planning year</Label>
+          <PlanningYearMiniSelect
+            value={reviewDecisionYear}
+            onChange={onReviewDecisionYearChange}
+            testId="select-edit-risk-year"
+          />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
+        <Field label="Status">{statusLabel(risk.status)}</Field>
         <Field label="Reporter">{risk.reporterName ?? "—"}</Field>
         <Field label="Created">
           {new Date(risk.createdAt).toLocaleString()}

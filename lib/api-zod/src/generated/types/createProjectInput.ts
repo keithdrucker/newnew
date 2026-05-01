@@ -45,6 +45,16 @@ export interface CreateProjectInput {
   additionalComments?: string;
   /** @nullable */
   completedYear?: number | null;
+  /**
+   * Optional on create; defaults to the server's current calendar year.
+On create or patch, the server enforces a runtime ±3-year window
+around the current calendar year and returns 400 outside it.
+The 2000..2100 bound is a static sanity guard.
+
+   * @minimum 2000
+   * @maximum 2100
+   */
+  plannedStartYear?: number;
   labels?: TaskLabel[];
   priority?: TaskPriority;
   checklist?: ChecklistItem[];

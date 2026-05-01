@@ -1,6 +1,17 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, max, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  max,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   db,
   projectsTable,
@@ -39,6 +50,11 @@ import {
 import { getCurrentUser, type SessionUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
 import {
+  currentPlanningYear,
+  resolveCreatePlanningYear,
+  validatePatchPlanningYear,
+} from "../lib/planningYear";
+import {
   getBoardRole,
   modifiableDepartmentIds,
   sectionModifiableDepartmentIds,
@@ -59,6 +75,12 @@ type ProjectPhase =
   | "closed"
   | "cancelled";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+// Planning Year visibility — projects in either of these PHASES count
+// as "closed" (terminal lifecycle) and disappear from the current-year
+// view unless their `plannedStartYear` matches. NB: `completed` is
+// the closeout-paperwork phase — still open work, not terminal.
+const CLOSED_PROJECT_PHASES: ProjectPhase[] = ["closed", "cancelled"];
 
 // Allowed phase transitions (the source of truth for the phase
 // state machine). Anything not present in this map → 409.
@@ -434,6 +456,7 @@ async function summarizeProjects(rows: ProjectRow[]) {
       checklistTotal: checklist.length,
       checklistDone,
       commentCount: commentCounts.get(r.id) ?? 0,
+      plannedStartYear: r.plannedStartYear,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -531,6 +554,23 @@ router.get("/projects", async (req, res): Promise<void> => {
     conds.push(eq(projectsTable.status, params.data.status));
   if (params.data.departmentId != null)
     conds.push(eq(projectsTable.departmentId, params.data.departmentId));
+  // Planning Year visibility filter (see openapi.yaml summary).
+  if (params.data.planningYear != null) {
+    const year = params.data.planningYear;
+    const now = currentPlanningYear();
+    if (year === now) {
+      // Current year: keep all not-terminal-phase rows OR rows planned
+      // for `year`. `completed` is paperwork (still open) so it stays.
+      conds.push(
+        or(
+          notInArray(projectsTable.phase, CLOSED_PROJECT_PHASES),
+          eq(projectsTable.plannedStartYear, year),
+        )!,
+      );
+    } else {
+      conds.push(eq(projectsTable.plannedStartYear, year));
+    }
+  }
 
   const visibility = await projectVisibilityWhere(user);
   const where = (() => {
@@ -654,6 +694,15 @@ router.post("/projects", async (req, res): Promise<void> => {
     closedByIdForInsert = user.id;
   }
 
+  // Planning Year — default to current calendar year, allow ±3 override.
+  const planningYearResult = resolveCreatePlanningYear(
+    parsed.data.plannedStartYear,
+  );
+  if (!planningYearResult.ok) {
+    res.status(400).json({ error: planningYearResult.error });
+    return;
+  }
+
   const row = await db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(projectsTable)
@@ -661,6 +710,7 @@ router.post("/projects", async (req, res): Promise<void> => {
         name: parsed.data.name,
         description: parsed.data.description ?? "",
         color: parsed.data.color ?? "#4B9CD3",
+        plannedStartYear: planningYearResult.year,
         phase: incomingPhase,
         status: parsed.data.status ?? "active",
         departmentId: parsed.data.departmentId ?? null,
@@ -877,6 +927,14 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     updates.additionalComments = parsed.data.additionalComments;
   if (parsed.data.completedYear !== undefined)
     updates.completedYear = parsed.data.completedYear;
+  if (parsed.data.plannedStartYear !== undefined) {
+    const check = validatePatchPlanningYear(parsed.data.plannedStartYear);
+    if (!check.ok) {
+      res.status(400).json({ error: check.error });
+      return;
+    }
+    updates.plannedStartYear = parsed.data.plannedStartYear;
+  }
   if (parsed.data.labels !== undefined) updates.labels = parsed.data.labels;
   if (parsed.data.priority !== undefined) updates.priority = parsed.data.priority;
   if (parsed.data.checklist !== undefined)

@@ -92,6 +92,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InitiativeWorkflowApproval } from "@/components/initiative-workflow-approval";
 import { downloadInitiativeReport } from "@/components/initiative-report";
+import {
+  PlanningYearFilter,
+  usePlanningYear,
+  planningYearOptions,
+  planningYearHelperText,
+  planningYearEmptyText,
+  currentPlanningYear,
+  PLANNING_YEAR_RADIUS,
+} from "@/components/planning-year-filter";
 
 // ---------- Constants ----------
 
@@ -254,7 +263,12 @@ const STATUS_CHIP_TONE: Record<InitiativeStatus, string> = {
 export default function InitiativesPage() {
   const { data: session, isLoading: sessionLoading } = useGetSession();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useListInitiatives();
+  // Planning year filter — see `planning-year-filter.tsx` for the
+  // visibility rule. The dropdown lives top-right in the header and
+  // we plumb the chosen year into the list query so the server does
+  // the actual filtering.
+  const [planningYear, setPlanningYear] = usePlanningYear("initiatives");
+  const { data, isLoading } = useListInitiatives({ planningYear });
   const initiatives = (data ?? []) as Initiative[];
   const { data: agents } = useListAgents({});
   const scope = useTeamScope();
@@ -697,15 +711,27 @@ export default function InitiativesPage() {
               ? `Initiatives belonging to the ${activeDept.name} team. Approved initiatives become Projects.`
               : "Decide whether work should be done — no planning, no execution. Approved initiatives automatically become Projects in the Improvements section."}
           </p>
+          <p
+            className="text-[12px] text-muted-foreground"
+            data-testid="text-planning-year-helper"
+          >
+            {planningYearHelperText(planningYear)}
+          </p>
         </div>
-        <Button
-          onClick={() => setCreateOpen(true)}
-          disabled={scope.loading || scope.accessible.length === 0}
-          data-testid="button-new-initiative"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          New initiative
-        </Button>
+        <div className="flex items-center gap-2">
+          <PlanningYearFilter
+            value={planningYear}
+            onChange={setPlanningYear}
+          />
+          <Button
+            onClick={() => setCreateOpen(true)}
+            disabled={scope.loading || scope.accessible.length === 0}
+            data-testid="button-new-initiative"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            New initiative
+          </Button>
+        </div>
       </header>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -937,6 +963,26 @@ export default function InitiativesPage() {
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : filtered.length === 0 ? (
+        <div
+          className="rounded-md border border-dashed bg-white px-4 py-8 text-center text-sm text-muted-foreground"
+          data-testid="empty-state-initiatives"
+        >
+          {planningYearEmptyText(planningYear)}
+          {planningYear !== currentPlanningYear() ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                className="text-foreground underline underline-offset-2 hover:text-primary"
+                onClick={() => setPlanningYear(currentPlanningYear())}
+                data-testid="button-jump-to-current-year"
+              >
+                Jump to {currentPlanningYear()} (current).
+              </button>
+            </>
+          ) : null}
+        </div>
       ) : (
         <div className="overflow-x-auto pb-2">
           <div className="flex items-stretch gap-2 min-w-max">
@@ -965,6 +1011,7 @@ export default function InitiativesPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         scope={scope}
+        defaultPlanningYear={planningYear}
       />
       {selected && (
         <DetailDialog
@@ -1158,10 +1205,12 @@ function CreateDialog({
   open,
   onOpenChange,
   scope,
+  defaultPlanningYear,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   scope: TeamScope;
+  defaultPlanningYear: number;
 }) {
   const qc = useQueryClient();
   const create = useCreateInitiative({
@@ -1197,6 +1246,11 @@ function CreateDialog({
   // multi-team mode only — single-team mode pins to the active team.
   const [departmentId, setDepartmentId] = useState<string>("none");
   const [additionalNotes, setAdditionalNotes] = useState("");
+  // Defaults to the year currently selected in the page filter so the
+  // newly-created initiative is immediately visible. User may override
+  // within the rolling ±3 window — future-year creation is allowed.
+  const [plannedStartYear, setPlannedStartYear] =
+    useState<number>(defaultPlanningYear);
 
   // Reset on close, and re-seed the team selector whenever the dialog
   // (re)opens. In single-team mode we lock to that team; otherwise we
@@ -1208,13 +1262,17 @@ function CreateDialog({
       setExpectedBenefit("");
       setImpactScope("");
       setAdditionalNotes("");
+    } else {
+      // Re-seed planning year on each open so the dropdown reflects
+      // the page filter's *current* value, not the value at mount.
+      setPlannedStartYear(defaultPlanningYear);
     }
     if (single && scope.singleId != null) {
       setDepartmentId(String(scope.singleId));
     } else {
       setDepartmentId("");
     }
-  }, [open, single, scope.singleId]);
+  }, [open, single, scope.singleId, defaultPlanningYear]);
 
   const teamValid = single
     ? scope.singleId != null
@@ -1244,6 +1302,7 @@ function CreateDialog({
         impactScope,
         additionalNotes: additionalNotes.trim(),
         departmentId: resolvedDeptId,
+        plannedStartYear,
       },
     });
   };
@@ -1324,6 +1383,13 @@ function CreateDialog({
               </Select>
             </Field>
           )}
+          <Field label="Planning Year">
+            <PlanningYearSelect
+              value={plannedStartYear}
+              onChange={setPlannedStartYear}
+              testId="select-create-planning-year"
+            />
+          </Field>
           <Field label="Additional Notes">
             <Textarea
               rows={2}
@@ -1348,6 +1414,51 @@ function CreateDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Compact ±3-year selector reused inside create + detail dialogs.
+// Lives in this file because it depends on the page-local select
+// component imports; the data shape comes from the shared filter
+// module.
+function PlanningYearSelect({
+  value,
+  onChange,
+  testId,
+}: {
+  value: number;
+  onChange: (year: number) => void;
+  testId?: string;
+}) {
+  const options = useMemo(() => planningYearOptions(), []);
+  const now = currentPlanningYear();
+  // If the persisted value is somehow outside the rolling window
+  // (e.g. an old record from a prior year that aged out), include it
+  // anyway so the user isn't forced into a silent change.
+  const includesValue = options.some((o) => o.year === value);
+  return (
+    <Select
+      value={String(value)}
+      onValueChange={(v) => {
+        const n = Number.parseInt(v, 10);
+        if (Number.isFinite(n)) onChange(n);
+      }}
+    >
+      <SelectTrigger data-testid={testId}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {!includesValue && (
+          <SelectItem value={String(value)}>{value} (out of range)</SelectItem>
+        )}
+        {options.map((o) => (
+          <SelectItem key={o.year} value={String(o.year)}>
+            {o.year}
+            {o.year === now ? " (current)" : ""}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -1423,6 +1534,12 @@ function DetailDialog({
     row.validationStatus,
   );
   const [impactedTeams, setImpactedTeams] = useState(row.impactedTeams);
+  // Planning year — surfaced as a compact inline editor in the
+  // triage section. Server enforces the ±3 range; the dropdown
+  // restricts the user to the same window.
+  const [plannedStartYear, setPlannedStartYear] = useState<number>(
+    row.plannedStartYear,
+  );
   // Final decision
   const [finalDecision, setFinalDecision] = useState(row.finalDecision);
   const [decisionReason, setDecisionReason] = useState(row.decisionReason);
@@ -1457,6 +1574,7 @@ function DetailDialog({
     setRiskNotes(row.riskNotes);
     setValidationStatus(row.validationStatus);
     setImpactedTeams(row.impactedTeams);
+    setPlannedStartYear(row.plannedStartYear);
     setFinalDecision(row.finalDecision);
     setDecisionReason(row.decisionReason);
     setRevisitDate(row.revisitDate ?? "");
@@ -1486,6 +1604,7 @@ function DetailDialog({
     riskNotes,
     validationStatus,
     impactedTeams,
+    plannedStartYear,
   });
 
   // ---- Unsaved-changes protection -----------------------------------
@@ -1517,6 +1636,7 @@ function DetailDialog({
       riskNotes: row.riskNotes,
       validationStatus: row.validationStatus,
       impactedTeams: row.impactedTeams,
+      plannedStartYear: row.plannedStartYear,
       finalDecision: row.finalDecision,
       decisionReason: row.decisionReason,
       revisitDate: row.revisitDate ?? "",
@@ -1547,6 +1667,7 @@ function DetailDialog({
     riskNotes,
     validationStatus,
     impactedTeams,
+    plannedStartYear,
     finalDecision,
     decisionReason,
     revisitDate,
@@ -1860,9 +1981,15 @@ function DetailDialog({
                 setReviewStartDate={setReviewStartDate}
                 anticipatedApprovalDate={anticipatedApprovalDate}
                 setAnticipatedApprovalDate={setAnticipatedApprovalDate}
+                plannedStartYear={plannedStartYear}
+                setPlannedStartYear={setPlannedStartYear}
               />
             ) : (
-              <BacklogTriageView row={row} />
+              <BacklogTriageView
+                row={row}
+                plannedStartYear={plannedStartYear}
+                setPlannedStartYear={setPlannedStartYear}
+              />
             )}
           </Section>
 
@@ -2527,6 +2654,8 @@ function BacklogTriageEditor(props: {
   setReviewStartDate: (v: string) => void;
   anticipatedApprovalDate: string;
   setAnticipatedApprovalDate: (v: string) => void;
+  plannedStartYear: number;
+  setPlannedStartYear: (v: number) => void;
 }) {
   // Inline validation hint: anticipated approval should be on or after
   // the review start date. Doesn't block save (the dates can be filled
@@ -2621,7 +2750,7 @@ function BacklogTriageEditor(props: {
           </SelectContent>
         </Select>
       </Field>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Start Review Date">
           <Input
             type="date"
@@ -2636,6 +2765,13 @@ function BacklogTriageEditor(props: {
             value={props.anticipatedApprovalDate}
             onChange={(e) => props.setAnticipatedApprovalDate(e.target.value)}
             data-testid="input-anticipated-approval-date"
+          />
+        </Field>
+        <Field label="Planning Year">
+          <PlanningYearSelect
+            value={props.plannedStartYear}
+            onChange={props.setPlannedStartYear}
+            testId="select-detail-planning-year"
           />
         </Field>
       </div>
@@ -2658,7 +2794,15 @@ function BacklogTriageEditor(props: {
   );
 }
 
-function BacklogTriageView({ row }: { row: Initiative }) {
+function BacklogTriageView({
+  row,
+  plannedStartYear,
+  setPlannedStartYear,
+}: {
+  row: Initiative;
+  plannedStartYear: number;
+  setPlannedStartYear: (v: number) => void;
+}) {
   const overdue = isInitiativeLate(row);
   return (
     <div className="grid grid-cols-2 gap-3 text-[13px]">
@@ -2716,6 +2860,17 @@ function BacklogTriageView({ row }: { row: Initiative }) {
           )}
         </div>
       </div>
+      <div className="space-y-1">
+        <Label className="text-[11px] uppercase tracking-wide text-zinc-500 font-medium">
+          Planning Year
+        </Label>
+        <PlanningYearSelect
+          value={plannedStartYear}
+          onChange={setPlannedStartYear}
+          testId="select-detail-planning-year-readview"
+        />
+      </div>
+      <div />
       <div className="col-span-2">
         <ReadField label="Backlog Notes" value={row.backlogNotes} />
       </div>

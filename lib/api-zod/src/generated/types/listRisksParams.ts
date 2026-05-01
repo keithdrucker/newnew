@@ -10,4 +10,15 @@ import type { RiskStatus } from "./riskStatus";
 export type ListRisksParams = {
   status?: RiskStatus;
   owningDepartmentId?: number;
+  /**
+ * Planning-year filter. Server expects values in the rolling
+window [currentCalendarYear-3, currentCalendarYear+3]; values
+outside that window will simply match no rows. The static
+2000..2100 sanity bound is a defensive guard, not the active
+policy.
+
+ * @minimum 2000
+ * @maximum 2100
+ */
+  planningYear?: number;
 };

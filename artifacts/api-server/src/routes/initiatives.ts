@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import {
   db,
   initiativesTable,
@@ -21,6 +21,11 @@ import {
 } from "@workspace/api-zod";
 import { getCurrentUser, type SessionUser } from "../lib/session";
 import { coerceQuery } from "../lib/queryCoerce";
+import {
+  currentPlanningYear,
+  resolveCreatePlanningYear,
+  validatePatchPlanningYear,
+} from "../lib/planningYear";
 import { fetchInitiativeWorkflowRuns } from "./workflows";
 
 const router: IRouter = Router();
@@ -30,6 +35,14 @@ type InitiativeStatus =
   | "under_review"
   | "approved"
   | "rejected_deferred";
+
+// Planning Year visibility — rows in any of these statuses count as
+// "closed" and disappear from the current-year view unless their
+// `plannedStartYear` matches.
+const CLOSED_INITIATIVE_STATUSES: InitiativeStatus[] = [
+  "approved",
+  "rejected_deferred",
+];
 
 // ---- Auth ----
 //
@@ -240,6 +253,7 @@ async function hydrate(rows: InitiativeRow[]) {
     decidedByName: nameOf(r.decidedById),
     revisitDate: r.revisitDate ?? null,
     createdProjectId: r.createdProjectId ?? null,
+    plannedStartYear: r.plannedStartYear,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
     auditEvents: (auditByInit.get(r.id) ?? []).map((e) => ({
@@ -272,6 +286,22 @@ router.get("/initiatives", async (req, res): Promise<void> => {
     conds.push(eq(initiativesTable.status, params.data.status));
   if (params.data.departmentId != null)
     conds.push(eq(initiativesTable.departmentId, params.data.departmentId));
+  // Planning Year visibility filter (see openapi.yaml summary).
+  if (params.data.planningYear != null) {
+    const year = params.data.planningYear;
+    const now = currentPlanningYear();
+    if (year === now) {
+      // Current year: keep all not-closed rows OR rows planned for `year`.
+      conds.push(
+        or(
+          notInArray(initiativesTable.status, CLOSED_INITIATIVE_STATUSES),
+          eq(initiativesTable.plannedStartYear, year),
+        )!,
+      );
+    } else {
+      conds.push(eq(initiativesTable.plannedStartYear, year));
+    }
+  }
   const baseQuery = db.select().from(initiativesTable);
   const rows = await (conds.length
     ? baseQuery.where(and(...conds))
@@ -311,6 +341,14 @@ router.post("/initiatives", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
+  // Planning Year — default to current calendar year, allow ±3 override.
+  const planningYearResult = resolveCreatePlanningYear(
+    body.data.plannedStartYear,
+  );
+  if (!planningYearResult.ok) {
+    res.status(400).json({ error: planningYearResult.error });
+    return;
+  }
   // Map intake → both new + legacy mirror so older readers still see
   // the data. Initial businessValueSummary mirrors expectedBenefit.
   const [created] = await db
@@ -327,6 +365,7 @@ router.post("/initiatives", async (req, res): Promise<void> => {
       departmentId: body.data.departmentId ?? null,
       reporterId: body.data.reporterId ?? user.id,
       assigneeId: body.data.assigneeId ?? null,
+      plannedStartYear: planningYearResult.year,
     })
     .returning();
   const [hydrated] = await hydrate([created]);
@@ -501,6 +540,15 @@ router.patch("/initiatives/:id", async (req, res): Promise<void> => {
           ? b.revisitDate.toISOString().slice(0, 10)
           : b.revisitDate;
     }
+    // Planning Year (range-validated outside the transaction would
+    // be cheaper, but keeping it here also catches the path-only patch).
+    if (b.plannedStartYear !== undefined) {
+      const check = validatePatchPlanningYear(b.plannedStartYear);
+      if (!check.ok) {
+        return { kind: "needs_field", field: "plannedStartYear", message: check.error };
+      }
+      patch.plannedStartYear = b.plannedStartYear;
+    }
 
     // Status-transition side effects.
     let createdProjectId: number | null = null;
@@ -606,6 +654,10 @@ router.patch("/initiatives/:id", async (req, res): Promise<void> => {
               patch.initialPriority ?? existing.initialPriority ?? "",
             initialEffort:
               patch.initialEffort ?? existing.initialEffort ?? "",
+            // Carry the initiative's planning year onto the new
+            // project so it shows up in the same Planning Year view.
+            plannedStartYear:
+              patch.plannedStartYear ?? existing.plannedStartYear,
             // Reverse link so the project's History panel shows where
             // it came from.
             linkedInitiativeId: existing.id,

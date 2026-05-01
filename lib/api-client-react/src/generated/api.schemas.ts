@@ -1915,6 +1915,7 @@ export interface ProjectSummary {
   checklistTotal: number;
   checklistDone: number;
   commentCount: number;
+  plannedStartYear: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -2003,6 +2004,16 @@ export interface CreateProjectInput {
   additionalComments?: string;
   /** @nullable */
   completedYear?: number | null;
+  /**
+   * Optional on create; defaults to the server's current calendar year.
+On create or patch, the server enforces a runtime ±3-year window
+around the current calendar year and returns 400 outside it.
+The 2000..2100 bound is a static sanity guard.
+
+   * @minimum 2000
+   * @maximum 2100
+   */
+  plannedStartYear?: number;
   labels?: TaskLabel[];
   priority?: TaskPriority;
   checklist?: ChecklistItem[];
@@ -2039,6 +2050,16 @@ export interface UpdateProjectInput {
   additionalComments?: string;
   /** @nullable */
   completedYear?: number | null;
+  /**
+   * Optional on create; defaults to the server's current calendar year.
+On create or patch, the server enforces a runtime ±3-year window
+around the current calendar year and returns 400 outside it.
+The 2000..2100 bound is a static sanity guard.
+
+   * @minimum 2000
+   * @maximum 2100
+   */
+  plannedStartYear?: number;
   labels?: TaskLabel[];
   priority?: TaskPriority;
   checklist?: ChecklistItem[];
@@ -2237,6 +2258,7 @@ export interface Initiative {
   revisitDate?: string | null;
   /** @nullable */
   createdProjectId?: number | null;
+  plannedStartYear: number;
   createdAt: string;
   updatedAt: string;
   auditEvents: InitiativeAuditEvent[];
@@ -2260,6 +2282,16 @@ export interface CreateInitiativeInput {
   reporterId?: number | null;
   /** @nullable */
   assigneeId?: number | null;
+  /**
+   * Optional on create; defaults to the server's current calendar year.
+On create or patch, the server enforces a runtime ±3-year window
+around the current calendar year and returns 400 outside it.
+The 2000..2100 bound is a static sanity guard.
+
+   * @minimum 2000
+   * @maximum 2100
+   */
+  plannedStartYear?: number;
 }
 
 /**
@@ -2308,6 +2340,16 @@ export interface UpdateInitiativeInput {
   decisionReason?: string;
   /** @nullable */
   revisitDate?: string | null;
+  /**
+   * Optional on create; defaults to the server's current calendar year.
+On create or patch, the server enforces a runtime ±3-year window
+around the current calendar year and returns 400 outside it.
+The 2000..2100 bound is a static sanity guard.
+
+   * @minimum 2000
+   * @maximum 2100
+   */
+  plannedStartYear?: number;
   transitionReason?: string;
 }
 
@@ -2419,6 +2461,7 @@ export interface Risk {
   mitigationControlDescription: string;
   /** @nullable */
   createdProjectId?: number | null;
+  reviewDecisionYear: number;
   createdAt: string;
   updatedAt: string;
   auditEvents: RiskAuditEvent[];
@@ -2434,6 +2477,16 @@ export interface CreateRiskInput {
   owningDepartmentId: number;
   /** @nullable */
   riskOwnerUserId?: number | null;
+  /**
+   * Optional on create; defaults to the server's current calendar year.
+On create or patch, the server enforces a runtime ±3-year window
+around the current calendar year and returns 400 outside it.
+The 2000..2100 bound is a static sanity guard.
+
+   * @minimum 2000
+   * @maximum 2100
+   */
+  reviewDecisionYear?: number;
 }
 
 export type UpdateRiskInputFinancialImpact =
@@ -2515,6 +2568,16 @@ export interface UpdateRiskInput {
   mitigationEstimatedCost?: string;
   mitigationControlType?: UpdateRiskInputMitigationControlType;
   mitigationControlDescription?: string;
+  /**
+   * Optional on create; defaults to the server's current calendar year.
+On create or patch, the server enforces a runtime ±3-year window
+around the current calendar year and returns 400 outside it.
+The 2000..2100 bound is a static sanity guard.
+
+   * @minimum 2000
+   * @maximum 2100
+   */
+  reviewDecisionYear?: number;
   transitionReason?: string;
 }
 
@@ -3078,6 +3141,17 @@ export type ListProjectsParams = {
   status?: ListProjectsStatus;
   departmentId?: number;
   q?: string;
+  /**
+ * Planning-year filter. Server expects values in the rolling
+window [currentCalendarYear-3, currentCalendarYear+3]; values
+outside that window will simply match no rows. The static
+2000..2100 sanity bound is a defensive guard, not the active
+policy.
+
+ * @minimum 2000
+ * @maximum 2100
+ */
+  planningYear?: number;
 };
 
 export type ListProjectsStatus =
@@ -3093,11 +3167,33 @@ export const ListProjectsStatus = {
 export type ListInitiativesParams = {
   status?: InitiativeStatus;
   departmentId?: number;
+  /**
+ * Planning-year filter. Server expects values in the rolling
+window [currentCalendarYear-3, currentCalendarYear+3]; values
+outside that window will simply match no rows. The static
+2000..2100 sanity bound is a defensive guard, not the active
+policy.
+
+ * @minimum 2000
+ * @maximum 2100
+ */
+  planningYear?: number;
 };
 
 export type ListRisksParams = {
   status?: RiskStatus;
   owningDepartmentId?: number;
+  /**
+ * Planning-year filter. Server expects values in the rolling
+window [currentCalendarYear-3, currentCalendarYear+3]; values
+outside that window will simply match no rows. The static
+2000..2100 sanity bound is a defensive guard, not the active
+policy.
+
+ * @minimum 2000
+ * @maximum 2100
+ */
+  planningYear?: number;
 };
 
 export type GetDashboardOverviewParams = {
